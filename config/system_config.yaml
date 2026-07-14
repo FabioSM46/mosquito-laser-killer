@@ -13,6 +13,14 @@ watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
 frame_width: 640
 frame_height: 480
 target_fps: 120
+# Use /dev/v4l/by-path/ symlinks for stable, USB-port-based camera identification.
+# These survive reboots and re-enumeration — critical for correct left/right assignment.
+# Run: ls -l /dev/v4l/by-path/  to discover the links for your cameras.
+# Example for Raspberry Pi 5 with two OV9281 cameras on specific USB ports:
+# left_camera_device: /dev/v4l/by-path/platform-3610000.usb-usb-0:1.1:1.0-video-index0
+# right_camera_device: /dev/v4l/by-path/platform-3610000.usb-usb-0:1.2:1.0-video-index0
+left_camera_device: ""
+right_camera_device: ""
 
 # --- Safe Firing Zone (meters, camera-centric coordinate system) ---
 bounding_box:
