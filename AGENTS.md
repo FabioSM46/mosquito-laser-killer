@@ -260,6 +260,7 @@ mosquito-laser-killer/
 4. **Indoor/controlled lighting** — detection assumes controlled background; outdoor use requires retuning
 5. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 6. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
+7. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
 
 ---
 
