@@ -2,6 +2,12 @@
 
 #include "hal/igpio.h"
 #include <string>
+#include <memory>
+
+namespace gpiod {
+class chip;
+class line;
+}
 
 class GpioImpl final : public IGpio {
 public:
@@ -21,8 +27,9 @@ public:
 
 private:
     unsigned int pin_{};
-    int fd_{-1};
+    std::unique_ptr<gpiod::chip> chip_;
+    std::unique_ptr<gpiod::line> line_;
     bool output_direction_{false};
 
-    auto cleanup() -> void;
+    auto release() -> void;
 };

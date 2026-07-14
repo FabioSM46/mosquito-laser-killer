@@ -19,6 +19,7 @@ find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBGPIOD REQUIRED libgpiod)
+pkg_check_modules(LIBGPIODCXX REQUIRED libgpiodcxx)
 
 add_compile_options(
     -Wall -Wextra -Wpedantic
@@ -59,6 +60,7 @@ target_include_directories(mosquito_hal PUBLIC
 )
 target_link_libraries(mosquito_hal PUBLIC
     ${LIBGPIOD_LIBRARIES}
+    ${LIBGPIODCXX_LIBRARIES}
     OpenCV::core
     OpenCV::imgproc
     Eigen3::Eigen

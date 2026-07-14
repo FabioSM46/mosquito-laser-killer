@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running standard (non-RTOS) Linux controls two OV9281 global-shutter cameras, a dual-channel 12-bit DAC (MCP4922) driving galvo mirrors, and a 2.5W Class 4 blue laser via TTL GPIO.
+This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running Raspberry Pi OS (64-bit, arm64, non-RTOS Linux kernel) controls two OV9281 global-shutter cameras, a dual-channel 12-bit DAC (MCP4922) driving galvo mirrors, and a 2.5W Class 4 blue laser via TTL GPIO.
 
 **Critical domain constraint:** A 2.5W Class 4 laser causes instantaneous, irreversible blindness and fire hazard. Every safety guard is **structurally enforced in code** — never documented as comments or convention.
 
@@ -247,27 +247,31 @@ mosquito-laser-killer/
 
 - **CMake 3.25+** with `CXX_STANDARD 23`
 - Compile flags: `-Wall -Wextra -Werror -Werror=unused-result -Wpedantic`
-- Dependencies: `libgpiod`, `OpenCV 4.8+` (stereo, Kalman), `Eigen3` (linear algebra), `yaml-cpp` (config parsing)
+- Architecture-specific tuning: `-march=native` — automatically targets the host CPU's full instruction set (arm64 NEON/v8 on RPi 5) without hardcoding architecture names
+- Release build: `-O3 -DNDEBUG` — aggressive optimization, assertions stripped
+- Debug build: `-O0 -g3` — no optimization, full debug symbols
+- Dependencies: `libgpiod` + `libgpiodcxx` (gpiod character device API, C++ bindings), `OpenCV 4.8+` (stereo, Kalman), `Eigen3` (linear algebra), `yaml-cpp` (config parsing)
 - Test dependencies: `GTest`, `GMock`
 
 ---
 
 ## 10. Design Assumptions & Constraints
 
-1. **Linux only** — uses `/dev/spidev*`, `/dev/gpiochip*`, `/dev/video*`
-2. **Non-RTOS** — worst-case scheduling latency ~10ms; watchdog tolerance accounts for this
-3. **Single target** — the system tracks one mosquito at a time; multi-target is future scope
-4. **Indoor/controlled lighting** — detection assumes controlled background; outdoor use requires retuning
-5. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
-6. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
-7. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
+1. **Raspberry Pi OS (64-bit, arm64) on Raspberry Pi 5** — all paths, bus topology, and hardware assumptions target this platform
+2. **Linux only** — uses `/dev/spidev*`, `/dev/gpiochip*`, `/dev/video*`
+3. **Non-RTOS** — worst-case scheduling latency ~10ms; watchdog tolerance accounts for this
+4. **Single target** — the system tracks one mosquito at a time; multi-target is future scope
+5. **Indoor/controlled lighting** — detection assumes controlled background; outdoor use requires retuning
+6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
+7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
+8. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
 
 ---
 
 ## 11. Communication Protocols
 
 - **SPI:** Mode 0, 20 MHz (MCP4922 max), CS0 on Bus 0
-- **TTL Laser:** GPIO 18, 3.3V logic → 5V level shifter → laser driver
+- **TTL Laser:** GPIO 18 via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3V logic → 5V level shifter → laser driver
 - **Cameras:** USB 3.0 UVC, YUYV→grayscale conversion, 640×480@120fps
 - **Config:** YAML file loaded at startup; bounding box, settle delays, PID gains
 
