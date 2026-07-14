@@ -1,0 +1,38 @@
+# System Configuration — Mosquito Laser Killer v1.0.0
+# WARNING: This is a safety-critical system. All fire-control parameters
+# are bounded by hardware limits. Do not modify without understanding
+# the safety implications of each parameter.
+
+# --- Laser Safety Parameters ---
+settle_delay_ms: 3.0          # Galvo mechanical settling time before laser fire
+max_pulse_duration_ms: 100.0  # Hard limit on consecutive laser emission
+cooldown_seconds: 10.0        # Mandatory cooldown period after each pulse
+watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
+
+# --- Camera Parameters ---
+frame_width: 640
+frame_height: 480
+target_fps: 120
+
+# --- Safe Firing Zone (meters, camera-centric coordinate system) ---
+bounding_box:
+  x_min: -1.0    # Left boundary
+  x_max: 1.0     # Right boundary
+  y_min: -1.0    # Bottom boundary
+  y_max: 1.0     # Top boundary
+  z_min: 0.5     # Minimum distance (too close = hazard)
+  z_max: 5.0     # Maximum distance (too far = ineffective)
+
+# --- Galvanometer Mechanical Limits ---
+galvo_limits:
+  angle_x_min_deg: -20.0
+  angle_x_max_deg: 20.0
+  angle_y_min_deg: -20.0
+  angle_y_max_deg: 20.0
+
+# --- Stereo Calibration ---
+stereo:
+  baseline_m: 0.12       # Distance between camera optical centers
+  focal_length_px: 800.0 # Calibrated focal length in pixels
+  cx: 320.0              # Principal point x
+  cy: 240.0              # Principal point y

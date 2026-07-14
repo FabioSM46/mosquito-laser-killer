@@ -1,0 +1,98 @@
+#include "hal/laser.h"
+#include "hal/igpio.h"
+#include "core/error.h"
+#include "core/print.h"
+
+Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin)
+    : gpio_(std::move(gpio)) {
+    println("[LASER] Initializing on GPIO pin {}...", pin);
+
+    if (!gpio_) {
+        println(stderr, "[LASER] FATAL: null GPIO interface");
+        emergency_shutdown_ = true;
+        return;
+    }
+
+    auto dir_result = gpio_->set_direction_output();
+    if (!dir_result.has_value()) {
+        println(stderr, "[LASER] FATAL: failed to set GPIO direction: {}",
+                     to_string(dir_result.error()));
+        emergency_shutdown_ = true;
+        return;
+    }
+
+    auto write_result = gpio_->write(false);
+    if (!write_result.has_value()) {
+        println(stderr, "[LASER] FATAL: failed to force pin LOW on init: {}",
+                     to_string(write_result.error()));
+        emergency_shutdown_ = true;
+        return;
+    }
+
+    firing_ = false;
+    println("[LASER] Initialized, pin forced LOW (safe state)");
+}
+
+Laser::~Laser() {
+    if (gpio_ && !emergency_shutdown_) {
+        auto result = gpio_->write(false);
+        if (!result.has_value()) {
+            println(stderr, "[LASER] Destructor: failed to force pin LOW: {}",
+                         to_string(result.error()));
+        }
+    }
+    println("[LASER] Shutdown complete, pin LOW confirmed");
+}
+
+auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
+    if (emergency_shutdown_) {
+        println(stderr, "[LASER] Fire rejected: emergency shutdown active");
+        return std::unexpected(HardwareError::LaserEmergencyShutdown);
+    }
+
+    if (!gpio_) {
+        println(stderr, "[LASER] Fire rejected: no GPIO interface");
+        return std::unexpected(HardwareError::GpioWriteFailed);
+    }
+
+    auto result = gpio_->write(enable);
+    if (!result.has_value()) {
+        println(stderr, "[LASER] GPIO write failed for fire({}): {}",
+                     enable, to_string(result.error()));
+        emergency_shutdown_ = true;
+        return std::unexpected(result.error());
+    }
+
+    firing_ = enable;
+
+    if (enable) {
+        println("[LASER] FIRING");
+    } else {
+        println("[LASER] OFF");
+    }
+
+    return {};
+}
+
+auto Laser::emergency_shutdown() -> std::expected<void, HardwareError> {
+    println(stderr, "[LASER] EMERGENCY SHUTDOWN TRIGGERED");
+
+    emergency_shutdown_ = true;
+
+    if (gpio_) {
+        auto result = gpio_->write(false);
+        if (!result.has_value()) {
+            println(stderr, "[LASER] Emergency shutdown: failed to force pin LOW: {}",
+                         to_string(result.error()));
+            return std::unexpected(result.error());
+        }
+    }
+
+    firing_ = false;
+    println(stderr, "[LASER] Emergency shutdown complete, pin forced LOW");
+    return {};
+}
+
+auto Laser::is_firing() const -> bool {
+    return firing_;
+}
