@@ -59,6 +59,30 @@ All runtime parameters are in `config/system_config.yaml`:
 | `bounding_box` | -1..1m xyz | 3D safe firing zone |
 | `galvo_limits` | ±20° | Galvanometer mechanical limits |
 | `stereo` | baseline, focal, principal point | Stereo camera calibration |
+| `left_camera_device` | `""` | Left camera device path (/dev/v4l/by-path/... or /dev/videoN) |
+| `right_camera_device` | `""` | Right camera device path (/dev/v4l/by-path/... or /dev/videoN) |
+
+### Camera Identification via USB Port
+
+Plugging two identical OV9281 cameras into a Raspberry Pi 5 produces two `/dev/videoN` nodes whose numbering can change across reboots or re-plugs. Swapping left and right cameras silently corrupts stereo disparity, causing the laser to fire at incorrect 3D positions.
+
+**Solution: `/dev/v4l/by-path/` symlinks.** Linux creates stable symlinks tied to physical USB port topology, not enumeration order.
+
+```bash
+# Discover your camera by-path symlinks
+ls -l /dev/v4l/by-path/
+
+# Example output on RPi 5 with two OV9281 on different USB ports:
+# platform-3610000.usb-usb-0:1.1:1.0-video-index0 -> ../../video0
+# platform-3610000.usb-usb-0:1.2:1.0-video-index0 -> ../../video2
+```
+
+To determine which symlink belongs to which physical camera:
+1. Unplug one camera, run `ls -l /dev/v4l/by-path/` — the remaining symlink is the plugged-in camera
+2. Physically label that camera "LEFT" or "RIGHT"
+3. Copy its full by-path symlink into `config/system_config.yaml`
+
+If `left_camera_device` or `right_camera_device` is left empty, the system falls back to `/dev/video0` and `/dev/video2` respectively.
 
 ## Safety Architecture
 

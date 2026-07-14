@@ -79,6 +79,12 @@ auto load_config() -> SystemConfig {
         if (yaml["target_fps"]) {
             config.target_fps = yaml["target_fps"].as<int>();
         }
+        if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
+            config.left_camera_device = yaml["left_camera_device"].as<std::string>();
+        }
+        if (yaml["right_camera_device"] && yaml["right_camera_device"].as<std::string>() != "") {
+            config.right_camera_device = yaml["right_camera_device"].as<std::string>();
+        }
 
         if (yaml["bounding_box"]) {
             auto bb = yaml["bounding_box"];
@@ -169,8 +175,16 @@ auto main(int argc, char* argv[]) -> int {
         println("[CAPTURE] Thread started");
         uint64_t frame_id = 0;
 
-        auto left_cam_ptr = std::make_unique<CameraImpl>("/dev/video0");
-        auto right_cam_ptr = std::make_unique<CameraImpl>("/dev/video2");
+        std::string left_dev = config.left_camera_device.empty()
+            ? "/dev/video0" : config.left_camera_device;
+        std::string right_dev = config.right_camera_device.empty()
+            ? "/dev/video2" : config.right_camera_device;
+
+        println("[CAPTURE] Left camera: {}", left_dev);
+        println("[CAPTURE] Right camera: {}", right_dev);
+
+        auto left_cam_ptr = std::make_unique<CameraImpl>(left_dev);
+        auto right_cam_ptr = std::make_unique<CameraImpl>(right_dev);
         auto& left_cam = *left_cam_ptr;
         auto& right_cam = *right_cam_ptr;
 

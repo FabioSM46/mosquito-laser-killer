@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <chrono>
 #include <array>
+#include <string>
 #include <Eigen/Dense>
 
 struct Point3D {
@@ -44,6 +45,8 @@ struct DacValues {
 };
 
 struct SystemConfig {
+    std::string left_camera_device{};
+    std::string right_camera_device{};
     double settle_delay_ms{3.0};
     double max_pulse_duration_ms{100.0};
     double cooldown_seconds{10.0};
