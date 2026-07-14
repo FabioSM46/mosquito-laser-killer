@@ -1,133 +1,122 @@
 #include "hal/gpio_impl.h"
 #include "core/error.h"
 #include "core/print.h"
-#include <fcntl.h>
-#include <unistd.h>
+#include <gpiod.hpp>
 #include <cstring>
 
 GpioImpl::GpioImpl(unsigned int pin) : pin_(pin) {
 }
 
 GpioImpl::~GpioImpl() {
-    cleanup();
+    release();
 }
 
 GpioImpl::GpioImpl(GpioImpl&& other) noexcept
-    : pin_(other.pin_), fd_(other.fd_), output_direction_(other.output_direction_) {
-    other.fd_ = -1;
+    : pin_(other.pin_)
+    , chip_(std::move(other.chip_))
+    , line_(std::move(other.line_))
+    , output_direction_(other.output_direction_) {
+    other.output_direction_ = false;
 }
 
 auto GpioImpl::operator=(GpioImpl&& other) noexcept -> GpioImpl& {
     if (this != &other) {
-        cleanup();
+        release();
         pin_ = other.pin_;
-        fd_ = other.fd_;
+        chip_ = std::move(other.chip_);
+        line_ = std::move(other.line_);
         output_direction_ = other.output_direction_;
-        other.fd_ = -1;
+        other.output_direction_ = false;
     }
     return *this;
 }
 
-auto GpioImpl::cleanup() -> void {
-    if (fd_ >= 0) {
+auto GpioImpl::release() -> void {
+    if (line_) {
         if (output_direction_) {
-            (void)write(false);
+            line_->set_value(0);
         }
-        close(fd_);
-        fd_ = -1;
+        line_->release();
+        line_.reset();
     }
+    chip_.reset();
 }
 
 auto GpioImpl::set_direction_output() -> std::expected<void, HardwareError> {
-    std::string path = "/sys/class/gpio/gpio" + std::to_string(pin_) + "/direction";
+    release();
 
-    int export_fd = open("/sys/class/gpio/export", O_WRONLY);
-    if (export_fd >= 0) {
-        std::string pin_str = std::to_string(pin_);
-        (void)!::write(export_fd, pin_str.c_str(), pin_str.size());
-        close(export_fd);
-    }
+    try {
+        chip_ = std::make_unique<gpiod::chip>("/dev/gpiochip0");
+        line_ = std::make_unique<gpiod::line>(chip_->get_line(pin_));
 
-    fd_ = open(path.c_str(), O_WRONLY);
-    if (fd_ < 0) {
-        println(stderr, "[GPIO {}] Failed to open direction file: {}", pin_, strerror(errno));
-        return std::unexpected(HardwareError::GpioOpenFailed);
-    }
-
-    if (::write(fd_, "out", 3) < 0) {
-        println(stderr, "[GPIO {}] Failed to set direction output: {}", pin_, strerror(errno));
-        close(fd_);
-        fd_ = -1;
-        return std::unexpected(HardwareError::GpioWriteFailed);
-    }
-    close(fd_);
-
-    std::string value_path = "/sys/class/gpio/gpio" + std::to_string(pin_) + "/value";
-    fd_ = open(value_path.c_str(), O_WRONLY);
-    if (fd_ < 0) {
-        println(stderr, "[GPIO {}] Failed to open value file: {}", pin_, strerror(errno));
+        line_->request({"mosquito-laser-killer",
+                        gpiod::line_request::DIRECTION_OUTPUT,
+                        0}, 0);
+    } catch (const std::exception& e) {
+        println(stderr, "[GPIO {}] Failed to configure as output: {}", pin_, e.what());
+        release();
         return std::unexpected(HardwareError::GpioOpenFailed);
     }
 
     output_direction_ = true;
-    auto result = write(false);
-    if (!result.has_value()) {
-        cleanup();
-        return std::unexpected(result.error());
-    }
 
-    println("[GPIO {}] Initialized as output, forced LOW", pin_);
+    line_->set_value(0);
+
+    println("[GPIO {}] Initialized as output via gpiod, forced LOW", pin_);
     return {};
 }
 
 auto GpioImpl::set_direction_input() -> std::expected<void, HardwareError> {
-    cleanup();
-    output_direction_ = false;
+    release();
 
-    std::string path = "/sys/class/gpio/gpio" + std::to_string(pin_) + "/value";
-    fd_ = open(path.c_str(), O_RDONLY);
-    if (fd_ < 0) {
-        println(stderr, "[GPIO {}] Failed to open value for input: {}", pin_, strerror(errno));
+    try {
+        chip_ = std::make_unique<gpiod::chip>("/dev/gpiochip0");
+        line_ = std::make_unique<gpiod::line>(chip_->get_line(pin_));
+
+        line_->request({"mosquito-laser-killer",
+                        gpiod::line_request::DIRECTION_INPUT,
+                        0});
+    } catch (const std::exception& e) {
+        println(stderr, "[GPIO {}] Failed to configure as input: {}", pin_, e.what());
+        release();
         return std::unexpected(HardwareError::GpioOpenFailed);
     }
 
+    output_direction_ = false;
     return {};
 }
 
 auto GpioImpl::write(bool value) -> std::expected<void, HardwareError> {
-    if (fd_ < 0 || !output_direction_) {
+    if (!line_ || !output_direction_) {
         println(stderr, "[GPIO {}] Write attempted on unconfigured pin", pin_);
         return std::unexpected(HardwareError::GpioWriteFailed);
     }
 
-    const char* val = value ? "1" : "0";
-    auto n = ::write(fd_, val, 1);
-    if (n < 0) {
-        println(stderr, "[GPIO {}] Write failed: {}", pin_, strerror(errno));
+    try {
+        line_->set_value(value ? 1 : 0);
+    } catch (const std::exception& e) {
+        println(stderr, "[GPIO {}] Write failed: {}", pin_, e.what());
         return std::unexpected(HardwareError::GpioWriteFailed);
     }
 
-    lseek(fd_, 0, SEEK_SET);
     return {};
 }
 
 auto GpioImpl::read() -> std::expected<bool, HardwareError> {
-    if (fd_ < 0) {
+    if (!line_) {
         println(stderr, "[GPIO {}] Read attempted on unconfigured pin", pin_);
         return std::unexpected(HardwareError::GpioReadFailed);
     }
 
-    char buf[2]{};
-    lseek(fd_, 0, SEEK_SET);
-    auto n = ::read(fd_, buf, 1);
-    if (n < 0) {
-        println(stderr, "[GPIO {}] Read failed: {}", pin_, strerror(errno));
+    try {
+        int val = line_->get_value();
+        return val != 0;
+    } catch (const std::exception& e) {
+        println(stderr, "[GPIO {}] Read failed: {}", pin_, e.what());
         return std::unexpected(HardwareError::GpioReadFailed);
     }
-
-    return buf[0] == '1';
 }
 
 auto GpioImpl::is_open() const -> bool {
-    return fd_ >= 0;
+    return chip_ != nullptr && line_ != nullptr;
 }

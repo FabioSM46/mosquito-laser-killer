@@ -73,8 +73,8 @@ Plugging two identical OV9281 cameras into a Raspberry Pi 5 produces two `/dev/v
 ls -l /dev/v4l/by-path/
 
 # Example output on RPi 5 with two OV9281 on different USB ports:
-# platform-3610000.usb-usb-0:1.1:1.0-video-index0 -> ../../video0
-# platform-3610000.usb-usb-0:1.2:1.0-video-index0 -> ../../video2
+# platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.1:1.0-video-index0 -> ../../video0
+# platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0-video-index0 -> ../../video2
 ```
 
 To determine which symlink belongs to which physical camera:
