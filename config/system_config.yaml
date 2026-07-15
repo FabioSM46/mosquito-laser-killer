@@ -16,11 +16,10 @@ e_stop_pin: 25                # GPIO pin for mushroom E-stop (active LOW, pulled
 # OV9281 global-shutter monochrome cameras, USB3 UVC, 1MP (1280x800 native).
 # Supported high-rate modes: 640x400@210fps, 640x360@210fps, 1280x720@120fps.
 # Default 640x400@120fps is a safe, validated OV9281 mode. To try higher rates,
-# set target_fps to 210 (the OV9281 max at this resolution). 640x480 is NOT a
-# supported OV9281 mode — do not use it.
+# set target_fps to 210 (the OV9281 max at this resolution) or 120 to be more conservative.
 frame_width: 640
 frame_height: 400
-target_fps: 120
+target_fps: 210
 # Use /dev/v4l/by-path/ symlinks for stable, USB-port-based camera identification.
 # These survive reboots and re-enumeration — critical for correct left/right assignment.
 # Run: ls -l /dev/v4l/by-path/  to discover the links for your cameras.
