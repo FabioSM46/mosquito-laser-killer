@@ -91,6 +91,7 @@ add_executable(mosquito_laser_killer src/main.cpp
     src/safety/system_state.cpp
     src/safety/watchdog.cpp
     src/safety/bounding_box.cpp
+    src/safety/arm_switch.cpp
 )
 target_link_libraries(mosquito_laser_killer PRIVATE
     mosquito_hal

@@ -8,6 +8,7 @@ settle_delay_ms: 3.0          # Galvo mechanical settling time before laser fire
 max_pulse_duration_ms: 100.0  # Hard limit on consecutive laser emission
 cooldown_seconds: 10.0        # Mandatory cooldown period after each pulse
 watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
+arm_switch_pin: 24            # GPIO pin for arming key switch (reads HIGH when armed)
 
 # --- Camera Parameters ---
 # OV9281 global-shutter monochrome cameras, USB3 UVC, 1MP (1280x800 native).

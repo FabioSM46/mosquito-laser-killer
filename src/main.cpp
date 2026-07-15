@@ -17,6 +17,7 @@
 #include "safety/system_state.h"
 #include "safety/watchdog.h"
 #include "safety/bounding_box.h"
+#include "safety/arm_switch.h"
 
 #include "vision/detector.h"
 #include "vision/stereo_matcher.h"
@@ -92,6 +93,9 @@ auto load_config() -> SystemConfig {
         }
         if (yaml["dac_reference_voltage"]) {
             config.dac_ref_voltage = yaml["dac_reference_voltage"].as<double>();
+        }
+        if (yaml["arm_switch_pin"]) {
+            config.arm_switch_pin = yaml["arm_switch_pin"].as<unsigned int>();
         }
         if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
             config.left_camera_device = yaml["left_camera_device"].as<std::string>();
@@ -170,6 +174,15 @@ auto main(int argc, char* argv[]) -> int {
     println("[MAIN] SPI X-axis DAC: {} (CS0)", config.spi_device_x);
     println("[MAIN] SPI Y-axis DAC: {} (CS1)", config.spi_device_y);
     println("[MAIN] SPI speed: {} Hz", config.spi_speed_hz);
+
+    auto gpio_arm = std::make_unique<GpioImpl>(config.arm_switch_pin);
+    ArmSwitch arm_switch(std::move(gpio_arm));
+    auto arm_init = arm_switch.initialize();
+    if (!arm_init.has_value()) {
+        println(stderr, "[MAIN] Arm switch init failed: {}. Continuing without arm switch.",
+                     to_string(arm_init.error()));
+    }
+    println("[MAIN] Arm switch on GPIO {}", config.arm_switch_pin);
 
     BoundingBox3D bounding_box(config.bounding_box);
     CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage);
@@ -343,6 +356,22 @@ auto main(int argc, char* argv[]) -> int {
             if (!watchdog.check(now)) {
                 println(stderr, "[CONTROL] Watchdog triggered, halting");
                 break;
+            }
+
+            arm_switch.update();
+            bool is_armed = arm_switch.is_armed();
+            auto cs = state_machine.current();
+
+            if (!is_armed && cs != SystemState::IDLE &&
+                cs != SystemState::SAFE_HALT) {
+                println("[CONTROL] Arm switch OFF, disarming");
+                firing_controller.disarm();
+                (void)state_machine.transition(SystemState::IDLE);
+            }
+
+            if (is_armed && cs == SystemState::IDLE) {
+                println("[CONTROL] Arm switch ON, arming");
+                (void)state_machine.transition(SystemState::ARMED);
             }
 
             auto cmd_opt = target_queue.pop(max_wait);

@@ -48,6 +48,23 @@ target_link_libraries(test_watchdog PRIVATE
 )
 gtest_discover_tests(test_watchdog)
 
+add_executable(test_arm_switch
+    unit/test_arm_switch.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/arm_switch.cpp
+)
+target_include_directories(test_arm_switch PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_arm_switch PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_arm_switch)
+
 add_executable(test_coordinate_mapper
     unit/test_coordinate_mapper.cpp
     ${CONTROL_SOURCES}

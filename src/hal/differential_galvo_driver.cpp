@@ -15,6 +15,8 @@ DifferentialGalvoDriver::DifferentialGalvoDriver(std::unique_ptr<IDac> dac_x,
         return;
     }
 
+    initialized_ = true;
+
     auto zero_result = zero();
     if (!zero_result.has_value()) {
         println(stderr, "[GALVO] Failed to zero on init: {}",
@@ -73,7 +75,7 @@ auto DifferentialGalvoDriver::set_position(uint16_t x, uint16_t y)
 }
 
 auto DifferentialGalvoDriver::zero() -> std::expected<void, HardwareError> {
-    uint16_t center = dac_max_ / 2;
+    uint16_t center = 2048;
     return set_position(center, center);
 }
 

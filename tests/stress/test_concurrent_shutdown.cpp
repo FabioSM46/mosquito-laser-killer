@@ -153,7 +153,7 @@ TEST_F(ConcurrentShutdownStressTest, DestructorCascadePreservesLaserOffOrder) {
     auto local_laser = std::make_unique<NiceMock<MockLaser>>();
     auto local_galvo = std::make_unique<NiceMock<MockGalvoDriver>>();
 
-    EXPECT_CALL(*local_laser, fire(false))
+    EXPECT_CALL(*local_laser, emergency_shutdown())
         .Times(AtLeast(1))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 

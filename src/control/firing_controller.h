@@ -25,6 +25,7 @@ public:
 
     auto set_target(const Point3D& position) -> void;
     auto clear_target() -> void;
+    auto disarm() -> void;
 
     [[nodiscard]] auto execute_cycle(std::chrono::steady_clock::time_point now)
         -> bool;
