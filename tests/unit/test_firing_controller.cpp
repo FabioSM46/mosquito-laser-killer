@@ -72,17 +72,16 @@ TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
 }
 
 TEST_F(FiringControllerTest, DacWriteBeforeFire) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .Times(AtLeast(1))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
     controller_->set_target({0.0, 0.0, 1.0});
 
     std::this_thread::sleep_for(1100ms);
+
+    InSequence seq;
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
 
     auto now = std::chrono::steady_clock::now();
     (void)controller_->execute_cycle(now);

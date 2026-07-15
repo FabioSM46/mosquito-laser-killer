@@ -93,6 +93,8 @@ add_executable(mosquito_laser_killer src/main.cpp
     src/safety/bounding_box.cpp
     src/safety/arm_switch.cpp
     src/safety/e_stop.cpp
+    src/safety/signal_handler.cpp
+    src/safety/config_validator.cpp
 )
 target_link_libraries(mosquito_laser_killer PRIVATE
     mosquito_hal

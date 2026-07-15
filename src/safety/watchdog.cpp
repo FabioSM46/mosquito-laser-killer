@@ -39,19 +39,13 @@ auto Watchdog::check(std::chrono::steady_clock::time_point now) -> bool {
     auto expected_cycles = static_cast<uint32_t>(
         elapsed / frame_period);
 
-    if (expected_cycles > 0) {
-        auto current_missed = missed_count_.load(std::memory_order_acquire);
-        current_missed += expected_cycles;
-        missed_count_.store(current_missed, std::memory_order_release);
+    missed_count_.store(expected_cycles, std::memory_order_release);
 
-        if (current_missed >= missed_threshold_) {
-            println(stderr, "[WATCHDOG] Heartbeat lost for {} cycles (threshold: {}). "
-                         "Triggering SAFE_HALT.", current_missed, missed_threshold_);
-            trigger_safe_halt();
-            return false;
-        }
-
-        last_heartbeat_.store(now, std::memory_order_release);
+    if (expected_cycles >= missed_threshold_) {
+        println(stderr, "[WATCHDOG] Heartbeat lost for {} cycles (threshold: {}). "
+                     "Triggering SAFE_HALT.", expected_cycles, missed_threshold_);
+        trigger_safe_halt();
+        return false;
     }
 
     return true;

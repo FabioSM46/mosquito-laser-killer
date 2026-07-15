@@ -6,6 +6,8 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 
 **Critical domain constraint:** A 2.5W Class 4 laser causes instantaneous, irreversible blindness and fire hazard. Every safety guard is **structurally enforced in code** — never documented as comments or convention.
 
+> Full galvanometer / camera / laser parameter tables and the derived engagement envelope live in [`docs/HARDWARE_PARAMETERS.md`](docs/HARDWARE_PARAMETERS.md). Runtime values are validated at startup by `validate_engagement_volume()` (`src/safety/config_validator.cpp`).
+
 ### 1.1 Hardware Bill of Materials
 
 | Component | Specification | Purpose |

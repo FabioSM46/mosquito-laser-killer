@@ -8,11 +8,13 @@
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 
-CameraImpl::CameraImpl(const std::string& device, int width, int height, int fps)
+CameraImpl::CameraImpl(const std::string& device, int width, int height, int fps,
+                       const SystemConfig::CameraControls& controls)
     : device_(device)
     , width_(width)
     , height_(height)
-    , fps_(fps) {
+    , fps_(fps)
+    , controls_(controls) {
 }
 
 CameraImpl::~CameraImpl() {
@@ -24,6 +26,7 @@ CameraImpl::CameraImpl(CameraImpl&& other) noexcept
     , width_(other.width_)
     , height_(other.height_)
     , fps_(other.fps_)
+    , controls_(other.controls_)
     , fd_(other.fd_) {
     other.fd_ = -1;
 }
@@ -35,6 +38,7 @@ auto CameraImpl::operator=(CameraImpl&& other) noexcept -> CameraImpl& {
         width_ = other.width_;
         height_ = other.height_;
         fps_ = other.fps_;
+        controls_ = other.controls_;
         fd_ = other.fd_;
         other.fd_ = -1;
     }
@@ -84,7 +88,27 @@ auto CameraImpl::open(int /*device_index*/) -> std::expected<void, HardwareError
             fmt.fmt.pix.width, fmt.fmt.pix.height,
             parm.parm.capture.timeperframe.denominator,
             parm.parm.capture.timeperframe.numerator);
+
+    apply_controls();
     return {};
+}
+
+auto CameraImpl::apply_controls() -> void {
+    auto set_ctrl = [this](uint32_t id, int value, const char* name) {
+        v4l2_control ctrl{};
+        ctrl.id = id;
+        ctrl.value = value;
+        if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
+            println(stderr, "[Camera] {} set failed on {}: {}", name, device_, strerror(errno));
+        }
+    };
+
+    set_ctrl(V4L2_CID_EXPOSURE_AUTO, controls_.exposure_auto, "exposure_auto");
+    set_ctrl(V4L2_CID_EXPOSURE_ABSOLUTE, controls_.exposure_absolute_us, "exposure_absolute");
+    set_ctrl(V4L2_CID_BRIGHTNESS, controls_.brightness, "brightness");
+    set_ctrl(V4L2_CID_GAMMA, controls_.gamma, "gamma");
+    set_ctrl(V4L2_CID_SHARPNESS, controls_.sharpness, "sharpness");
+    set_ctrl(V4L2_CID_GAIN, controls_.gain, "gain");
 }
 
 auto CameraImpl::capture(uint8_t* buffer, size_t size) -> std::expected<void, HardwareError> {

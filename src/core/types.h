@@ -43,6 +43,8 @@ struct TargetCommand {
 struct DacValues {
     uint16_t channel_a{0};
     uint16_t channel_b{0};
+
+    [[nodiscard]] friend auto operator<=>(const DacValues&, const DacValues&) = default;
 };
 
 struct SystemConfig {
@@ -64,24 +66,45 @@ struct SystemConfig {
     int target_fps{120};
 
     struct BoundingBox {
-        double x_min{-1.0};
-        double x_max{1.0};
-        double y_min{-1.0};
-        double y_max{1.0};
+        double x_min{-0.09};
+        double x_max{0.09};
+        double y_min{-0.09};
+        double y_max{0.09};
         double z_min{0.5};
-        double z_max{5.0};
+        double z_max{1.0};
     } bounding_box;
 
     struct GalvoLimits {
-        double angle_x_min_deg{-20.0};
-        double angle_x_max_deg{20.0};
-        double angle_y_min_deg{-20.0};
-        double angle_y_max_deg{20.0};
+        double angle_x_min_deg{-15.0};
+        double angle_x_max_deg{15.0};
+        double angle_y_min_deg{-15.0};
+        double angle_y_max_deg{15.0};
     } galvo_limits;
+
+    struct GalvoDriver {
+        double input_scale_v_per_deg{0.33};
+        double dac_max_diff_voltage{5.0};
+        double driver_input_voltage{15.0};
+    } galvo_driver;
+
+    struct CameraOptics {
+        double lens_focal_length_mm{3.0};
+        double image_sensor_width_mm{3.84};
+        double image_sensor_height_mm{2.4};
+    } camera_optics;
+
+    struct CameraControls {
+        int exposure_auto{1};
+        int exposure_absolute_us{156};
+        int brightness{0};
+        int gamma{100};
+        int sharpness{0};
+        int gain{0};
+    } camera_controls;
 
     struct Stereo {
         double baseline_m{0.12};
-        double focal_length_px{800.0};
+        double focal_length_px{500.0};
         double cx{320.0};
         double cy{240.0};
     } stereo;

@@ -1,69 +1,93 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <chrono>
-#include <thread>
 #include <csignal>
 #include <atomic>
 #include <memory>
 
 #include "mocks/mock_gpio.h"
-#include "mocks/mock_dac.h"
-#include "mocks/mock_laser.h"
 #include "hal/laser.h"
+#include "safety/signal_handler.h"
 #include "core/error.h"
 
 using namespace testing;
-using namespace std::chrono_literals;
 
-class SignalHandlingTest : public Test {
-protected:
-    void SetUp() override {
-        mock_gpio_ = std::make_unique<NiceMock<MockGpio>>();
-        mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
-        mock_dac_ = std::make_unique<NiceMock<MockDac>>();
-    }
-
-    std::unique_ptr<MockGpio> mock_gpio_;
-    std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockDac> mock_dac_;
-};
-
-TEST_F(SignalHandlingTest, LaserPinLowAfterEmergencyShutdownSignal) {
-    EXPECT_CALL(*mock_laser_, emergency_shutdown())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-
-    auto result = mock_laser_->emergency_shutdown();
-    EXPECT_TRUE(result.has_value());
+namespace {
+constexpr auto kOk = std::expected<void, HardwareError>{};
 }
 
-TEST_F(SignalHandlingTest, DacZeroedAfterEmergencyShutdown) {
-    EXPECT_CALL(*mock_dac_, zero())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
+TEST(SignalHandlerTest, SigIntSetsShutdownFlag) {
+    SignalHandler sh;
+    sh.install();
+    sh.reset();
 
-    auto result = mock_dac_->zero();
-    EXPECT_TRUE(result.has_value());
+    std::raise(SIGINT);
+
+    EXPECT_TRUE(sh.is_shutdown_requested());
 }
 
-TEST_F(SignalHandlingTest, LaserDestructorForcesPinLow) {
-    EXPECT_CALL(*mock_gpio_, set_direction_output())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_gpio_, write(false))
+TEST(SignalHandlerTest, SigTermSetsShutdownFlag) {
+    SignalHandler sh;
+    sh.install();
+    sh.reset();
+
+    std::raise(SIGTERM);
+
+    EXPECT_TRUE(sh.is_shutdown_requested());
+}
+
+TEST(SignalHandlerTest, ResetClearsFlag) {
+    SignalHandler sh;
+    sh.install();
+    sh.reset();
+
+    std::raise(SIGINT);
+    ASSERT_TRUE(sh.is_shutdown_requested());
+
+    sh.reset();
+    EXPECT_FALSE(sh.is_shutdown_requested());
+}
+
+TEST(SignalHandlerTest, ProgrammaticRequestInvokesCallback) {
+    SignalHandler sh;
+
+    std::atomic<bool> callback_fired{false};
+    sh.set_shutdown_callback([&] { callback_fired.store(true); });
+
+    sh.request_shutdown();
+
+    EXPECT_TRUE(sh.is_shutdown_requested());
+    EXPECT_TRUE(callback_fired.load());
+}
+
+TEST(SignalHandlerTest, SignalThenLaserEmergencyShutdownForcesPinLow) {
+    auto mock_gpio = std::make_unique<StrictMock<MockGpio>>();
+
+    EXPECT_CALL(*mock_gpio, set_direction_output()).WillOnce(Return(kOk));
+    EXPECT_CALL(*mock_gpio, write(false))
         .Times(AtLeast(2))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+        .WillRepeatedly(Return(kOk));
 
-    auto laser = std::make_unique<Laser>(std::move(mock_gpio_), 18);
-    laser.reset();
+    auto laser = std::make_unique<Laser>(std::move(mock_gpio), 18);
+
+    SignalHandler sh;
+    sh.install();
+    sh.reset();
+
+    std::raise(SIGINT);
+    ASSERT_TRUE(sh.is_shutdown_requested());
+
+    auto result = laser->emergency_shutdown();
+    EXPECT_TRUE(result.has_value());
 }
 
-TEST_F(SignalHandlingTest, EmergencyShutdownDuringActiveFire) {
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, emergency_shutdown())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
+TEST(SignalHandlerTest, LaserDestructorForcesPinLow) {
+    auto mock_gpio = std::make_unique<StrictMock<MockGpio>>();
 
-    auto fire_result = mock_laser_->fire(true);
-    EXPECT_TRUE(fire_result.has_value());
+    EXPECT_CALL(*mock_gpio, set_direction_output()).WillOnce(Return(kOk));
+    EXPECT_CALL(*mock_gpio, write(false))
+        .Times(AtLeast(2))
+        .WillRepeatedly(Return(kOk));
 
-    auto shutdown_result = mock_laser_->emergency_shutdown();
-    EXPECT_TRUE(shutdown_result.has_value());
+    auto laser = std::make_unique<Laser>(std::move(mock_gpio), 18);
+    laser.reset();
 }

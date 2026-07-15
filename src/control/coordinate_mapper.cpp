@@ -50,11 +50,6 @@ auto CoordinateMapper::map_to_dac(const Point3D& target)
 
 auto CoordinateMapper::point_to_angles(const Point3D& p)
     -> std::expected<std::pair<double, double>, MappingError> {
-    if (p.z <= 0.0) {
-        println(stderr, "[MAPPER] Target behind baseline: z={:.3f}", p.z);
-        return std::unexpected(MappingError::TargetBehindBaseline);
-    }
-
     double angle_x = std::atan2(p.x, p.z) * (180.0 / M_PI);
     double angle_y = std::atan2(p.y, p.z) * (180.0 / M_PI);
 
@@ -74,10 +69,6 @@ auto CoordinateMapper::angles_to_dac(double angle_x, double angle_y)
 
     dac_x = std::clamp(dac_x, 0, 4095);
     dac_y = std::clamp(dac_y, 0, 4095);
-
-    if (dac_x > 4095 || dac_y > 4095) {
-        return std::unexpected(MappingError::DacRangeInvalid);
-    }
 
     return DacValues{
         static_cast<uint16_t>(dac_x),

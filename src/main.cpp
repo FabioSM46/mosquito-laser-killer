@@ -19,6 +19,8 @@
 #include "safety/watchdog.h"
 #include "safety/bounding_box.h"
 #include "safety/arm_switch.h"
+#include "safety/signal_handler.h"
+#include "safety/config_validator.h"
 
 #include "vision/detector.h"
 #include "vision/stereo_matcher.h"
@@ -38,23 +40,6 @@
 namespace {
 
 std::atomic<bool> g_shutdown_requested{false};
-
-void signal_handler(int signal) {
-    println(stderr, "\n[SIGNAL] Received signal {} ({})", signal, strsignal(signal));
-    g_shutdown_requested.store(true, std::memory_order_release);
-}
-
-auto setup_signal_handlers() -> void {
-    struct sigaction sa{};
-    sa.sa_handler = signal_handler;
-    sa.sa_flags = SA_RESTART;
-    sigemptyset(&sa.sa_mask);
-
-    sigaction(SIGINT, &sa, nullptr);
-    sigaction(SIGTERM, &sa, nullptr);
-
-    signal(SIGPIPE, SIG_IGN);
-}
 
 auto load_config() -> SystemConfig {
     SystemConfig config{};
@@ -124,13 +109,49 @@ auto load_config() -> SystemConfig {
         if (yaml["galvo_limits"]) {
             auto gl = yaml["galvo_limits"];
             config.galvo_limits.angle_x_min_deg = gl["angle_x_min_deg"]
-                ? gl["angle_x_min_deg"].as<double>() : -20.0;
+                ? gl["angle_x_min_deg"].as<double>() : -15.0;
             config.galvo_limits.angle_x_max_deg = gl["angle_x_max_deg"]
-                ? gl["angle_x_max_deg"].as<double>() : 20.0;
+                ? gl["angle_x_max_deg"].as<double>() : 15.0;
             config.galvo_limits.angle_y_min_deg = gl["angle_y_min_deg"]
-                ? gl["angle_y_min_deg"].as<double>() : -20.0;
+                ? gl["angle_y_min_deg"].as<double>() : -15.0;
             config.galvo_limits.angle_y_max_deg = gl["angle_y_max_deg"]
-                ? gl["angle_y_max_deg"].as<double>() : 20.0;
+                ? gl["angle_y_max_deg"].as<double>() : 15.0;
+        }
+
+        if (yaml["galvo_driver"]) {
+            auto gd = yaml["galvo_driver"];
+            config.galvo_driver.input_scale_v_per_deg = gd["input_scale_v_per_deg"]
+                ? gd["input_scale_v_per_deg"].as<double>() : 0.33;
+            config.galvo_driver.dac_max_diff_voltage = gd["dac_max_diff_voltage"]
+                ? gd["dac_max_diff_voltage"].as<double>() : 5.0;
+            config.galvo_driver.driver_input_voltage = gd["driver_input_voltage"]
+                ? gd["driver_input_voltage"].as<double>() : 15.0;
+        }
+
+        if (yaml["camera_optics"]) {
+            auto co = yaml["camera_optics"];
+            config.camera_optics.lens_focal_length_mm = co["lens_focal_length_mm"]
+                ? co["lens_focal_length_mm"].as<double>() : 3.0;
+            config.camera_optics.image_sensor_width_mm = co["image_sensor_width_mm"]
+                ? co["image_sensor_width_mm"].as<double>() : 3.84;
+            config.camera_optics.image_sensor_height_mm = co["image_sensor_height_mm"]
+                ? co["image_sensor_height_mm"].as<double>() : 2.4;
+        }
+
+        if (yaml["camera_controls"]) {
+            auto cc = yaml["camera_controls"];
+            config.camera_controls.exposure_auto = cc["exposure_auto"]
+                ? cc["exposure_auto"].as<int>() : 1;
+            config.camera_controls.exposure_absolute_us = cc["exposure_absolute_us"]
+                ? cc["exposure_absolute_us"].as<int>() : 156;
+            config.camera_controls.brightness = cc["brightness"]
+                ? cc["brightness"].as<int>() : 0;
+            config.camera_controls.gamma = cc["gamma"]
+                ? cc["gamma"].as<int>() : 100;
+            config.camera_controls.sharpness = cc["sharpness"]
+                ? cc["sharpness"].as<int>() : 0;
+            config.camera_controls.gain = cc["gain"]
+                ? cc["gain"].as<int>() : 0;
         }
 
         if (yaml["stereo"]) {
@@ -144,6 +165,11 @@ auto load_config() -> SystemConfig {
         }
 
         println("[CONFIG] Loaded config/system_config.yaml");
+
+        auto validation_warnings = validate_engagement_volume(config);
+        for (const auto& w : validation_warnings) {
+            println(stderr, "[CONFIG] WARNING [{}]: {}", w.category, w.message);
+        }
     } catch (const YAML::Exception& e) {
         println(stderr, "[CONFIG] Failed to load config: {}. Using defaults.", e.what());
     }
@@ -163,7 +189,12 @@ auto main(int argc, char* argv[]) -> int {
     println("  Differential Galvo Driver (Dual-DAC)");
     println("===========================================");
 
-    setup_signal_handlers();
+    SignalHandler signal_handler;
+    signal_handler.set_shutdown_callback([&] {
+        println(stderr, "\n[SIGNAL] Shutdown requested");
+        g_shutdown_requested.store(true, std::memory_order_release);
+    });
+    signal_handler.install();
 
     auto config = load_config();
 
@@ -257,9 +288,11 @@ auto main(int argc, char* argv[]) -> int {
         println("[CAPTURE] Right camera: {}", right_dev);
 
         auto left_cam_ptr = std::make_unique<CameraImpl>(
-            left_dev, config.frame_width, config.frame_height, config.target_fps);
+            left_dev, config.frame_width, config.frame_height, config.target_fps,
+            config.camera_controls);
         auto right_cam_ptr = std::make_unique<CameraImpl>(
-            right_dev, config.frame_width, config.frame_height, config.target_fps);
+            right_dev, config.frame_width, config.frame_height, config.target_fps,
+            config.camera_controls);
         auto& left_cam = *left_cam_ptr;
         auto& right_cam = *right_cam_ptr;
 
@@ -426,9 +459,11 @@ auto main(int argc, char* argv[]) -> int {
             }
 
             auto cmd_opt = target_queue.pop(max_wait);
+
+            watchdog.feed(heartbeat.load(std::memory_order_acquire));
+
             if (cmd_opt.has_value()) {
                 auto& cmd = cmd_opt.value();
-                watchdog.feed(heartbeat.load(std::memory_order_acquire));
 
                 if (cmd.target_valid && cmd.target_position.has_value()) {
                     auto current_state = state_machine.current();
@@ -452,7 +487,8 @@ auto main(int argc, char* argv[]) -> int {
             }
 
             bool pulse_was_active = firing_controller.is_firing();
-            bool pulse_ended = firing_controller.execute_cycle(now);
+            const auto exec_now = std::chrono::steady_clock::now();
+            bool pulse_ended = firing_controller.execute_cycle(exec_now);
             if (pulse_ended && state_machine.current() == SystemState::FIRING) {
                 (void)state_machine.transition(SystemState::COOLDOWN);
             } else if (!pulse_was_active && firing_controller.is_firing() &&

@@ -15,14 +15,16 @@ DifferentialGalvoDriver::DifferentialGalvoDriver(std::unique_ptr<IDac> dac_x,
         return;
     }
 
+    initialized_ = true;
+
     auto zero_result = zero();
     if (!zero_result.has_value()) {
+        initialized_ = false;
         println(stderr, "[GALVO] Failed to zero on init: {}",
                      to_string(zero_result.error()));
         return;
     }
 
-    initialized_ = true;
     println("[GALVO] Differential driver initialized");
     println("[GALVO] X axis on DAC0 (A=positive, B=inverted), Y axis on DAC1 (A=positive, B=inverted)");
     println("[GALVO] Center position: DAC=2048 on both channels -> 0V differential");
