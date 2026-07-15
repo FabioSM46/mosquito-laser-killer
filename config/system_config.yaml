@@ -10,18 +10,40 @@ cooldown_seconds: 10.0        # Mandatory cooldown period after each pulse
 watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
 
 # --- Camera Parameters ---
+# OV9281 global-shutter monochrome cameras, USB3 UVC, 1MP (1280x800 native).
+# Supported UVC modes: 640x480@120fps (default, practical for real-time stereo),
+# 1280x720@60fps. Keep 640x480 for 120 FPS capture — 720p@120fps exceeds RPi 5
+# processing capacity for dual-camera stereo pipelines.
 frame_width: 640
 frame_height: 480
 target_fps: 120
 # Use /dev/v4l/by-path/ symlinks for stable, USB-port-based camera identification.
 # These survive reboots and re-enumeration — critical for correct left/right assignment.
 # Run: ls -l /dev/v4l/by-path/  to discover the links for your cameras.
-# Example for Raspberry Pi 5 with two OV9281 cameras:
-#   ls -l /dev/v4l/by-path/
-#   left_camera_device: /dev/v4l/by-path/platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.1:1.0-video-index0
-#   right_camera_device: /dev/v4l/by-path/platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0-video-index0
 left_camera_device: ""
 right_camera_device: ""
+
+# --- SPI / DAC / Galvanometer Parameters ---
+# Two MCP4922 12-bit dual-channel DACs on SPI0, one per axis, for differential
+# ±5V galvo drive (Option A: dual-DAC):
+#
+#   DAC0 (X-axis, CS0): ChA = X+, ChB = X- (inverted)
+#   DAC1 (Y-axis, CS1): ChA = Y+, ChB = Y- (inverted)
+#
+# Each axis channel pair produces complementary outputs:
+#   DAC=2048 → ChA=2.5V, ChB=2.5V → 0V differential (center)
+#   DAC=4095 → ChA=5.0V, ChB=0.0V → +5V differential (full positive)
+#   DAC=0    → ChA=0.0V, ChB=5.0V → -5V differential (full negative)
+#
+# Wiring (RPi 5 GPIO header):
+#   SPI0 MOSI (pin 19) → both MCP4922 SDI
+#   SPI0 SCLK (pin 23) → both MCP4922 SCK
+#   SPI0 CE0  (pin 24) → MCP4922#1 /CS (X-axis)
+#   SPI0 CE1  (pin 26) → MCP4922#2 /CS (Y-axis)
+spi_device_x: /dev/spidev0.0     # X-axis DAC (CS0)
+spi_device_y: /dev/spidev0.1     # Y-axis DAC (CS1)
+spi_speed_hz: 20000000           # SPI clock (20 MHz, MCP4922 max)
+dac_reference_voltage: 5.0       # MCP4922 Vref voltage (default 5.0V)
 
 # --- Safe Firing Zone (meters, camera-centric coordinate system) ---
 bounding_box:
@@ -40,8 +62,10 @@ galvo_limits:
   angle_y_max_deg: 20.0
 
 # --- Stereo Calibration ---
+# IMPORTANT: Calibrate your specific rig. Update after running a chessboard
+# calibration (OpenCV calibrate.py or MATLAB Stereo Camera Calibrator).
 stereo:
   baseline_m: 0.12       # Distance between camera optical centers
   focal_length_px: 800.0 # Calibrated focal length in pixels
-  cx: 320.0              # Principal point x
-  cy: 240.0              # Principal point y
+  cx: 320.0              # Principal point x (= frame_width / 2)
+  cy: 240.0              # Principal point y (= frame_height / 2)

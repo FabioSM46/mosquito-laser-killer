@@ -6,10 +6,12 @@
 #include "hal/ispi.h"
 #include "hal/idac.h"
 #include "hal/ilaser.h"
+#include "hal/igalvo_driver.h"
 #include "hal/gpio_impl.h"
 #include "hal/spi_impl.h"
 #include "hal/camera_impl.h"
 #include "hal/mcp4922.h"
+#include "hal/differential_galvo_driver.h"
 #include "hal/laser.h"
 
 #include "safety/system_state.h"
@@ -79,6 +81,18 @@ auto load_config() -> SystemConfig {
         if (yaml["target_fps"]) {
             config.target_fps = yaml["target_fps"].as<int>();
         }
+        if (yaml["spi_device_x"]) {
+            config.spi_device_x = yaml["spi_device_x"].as<std::string>();
+        }
+        if (yaml["spi_device_y"]) {
+            config.spi_device_y = yaml["spi_device_y"].as<std::string>();
+        }
+        if (yaml["spi_speed_hz"]) {
+            config.spi_speed_hz = yaml["spi_speed_hz"].as<int>();
+        }
+        if (yaml["dac_reference_voltage"]) {
+            config.dac_ref_voltage = yaml["dac_reference_voltage"].as<double>();
+        }
         if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
             config.left_camera_device = yaml["left_camera_device"].as<std::string>();
         }
@@ -126,7 +140,7 @@ auto load_config() -> SystemConfig {
     return config;
 }
 
-} 
+}
 
 auto main(int argc, char* argv[]) -> int {
     (void)argc;
@@ -135,6 +149,7 @@ auto main(int argc, char* argv[]) -> int {
     println("===========================================");
     println("  Mosquito Laser Killer v1.0.0");
     println("  Stereoscopic Laser Targeting System");
+    println("  Differential Galvo Driver (Dual-DAC)");
     println("===========================================");
 
     setup_signal_handlers();
@@ -144,17 +159,25 @@ auto main(int argc, char* argv[]) -> int {
     SystemStateMachine state_machine;
 
     auto gpio_laser = std::make_unique<GpioImpl>(18);
-    auto spi_device = std::make_unique<SpiImpl>("/dev/spidev0.0", 20'000'000);
-    auto dac = std::make_unique<MCP4922>(std::move(spi_device));
     auto laser = std::make_unique<Laser>(std::move(gpio_laser), 18);
 
+    auto spi_x = std::make_unique<SpiImpl>(config.spi_device_x, config.spi_speed_hz);
+    auto spi_y = std::make_unique<SpiImpl>(config.spi_device_y, config.spi_speed_hz);
+    auto dac_x = std::make_unique<MCP4922>(std::move(spi_x));
+    auto dac_y = std::make_unique<MCP4922>(std::move(spi_y));
+    auto galvo = std::make_unique<DifferentialGalvoDriver>(std::move(dac_x), std::move(dac_y));
+
+    println("[MAIN] SPI X-axis DAC: {} (CS0)", config.spi_device_x);
+    println("[MAIN] SPI Y-axis DAC: {} (CS1)", config.spi_device_y);
+    println("[MAIN] SPI speed: {} Hz", config.spi_speed_hz);
+
     BoundingBox3D bounding_box(config.bounding_box);
-    CoordinateMapper mapper(bounding_box, config.galvo_limits);
-    FiringController firing_controller(*laser, *dac, mapper,
+    CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage);
+    FiringController firing_controller(*laser, *galvo, mapper,
         config.max_pulse_duration_ms,
         config.cooldown_seconds,
         config.settle_delay_ms);
-    Watchdog watchdog(state_machine, *laser, *dac,
+    Watchdog watchdog(state_machine, *laser, *galvo,
         config.watchdog_missed_threshold);
 
     Detector detector_left;
@@ -372,10 +395,10 @@ auto main(int argc, char* argv[]) -> int {
             println(stderr, "[CONTROL] Final emergency shutdown failed: {}",
                          to_string(halt_result.error()));
         }
-        auto dac_result = dac->zero();
-        if (!dac_result.has_value()) {
-            println(stderr, "[CONTROL] Final DAC zero failed: {}",
-                         to_string(dac_result.error()));
+        auto galvo_result = galvo->zero();
+        if (!galvo_result.has_value()) {
+            println(stderr, "[CONTROL] Final galvo zero failed: {}",
+                         to_string(galvo_result.error()));
         }
 
         println("[CONTROL] Thread exiting");
@@ -386,7 +409,7 @@ auto main(int argc, char* argv[]) -> int {
     control_thread.join();
 
     println("[MAIN] All threads joined. System shutdown complete.");
-    println("[MAIN] Laser GPIO LOW, DAC at (0,0)");
+    println("[MAIN] Laser GPIO LOW, galvos at center (0V differential)");
 
     return 0;
 }

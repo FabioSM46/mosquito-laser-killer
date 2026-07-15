@@ -2,7 +2,7 @@
 
 #include "core/types.h"
 #include "hal/ilaser.h"
-#include "hal/idac.h"
+#include "hal/igalvo_driver.h"
 #include "control/coordinate_mapper.h"
 #include <chrono>
 #include <atomic>
@@ -11,7 +11,7 @@
 class FiringController {
 public:
     FiringController(ILaser& laser,
-                     IDac& dac,
+                     IGalvoDriver& galvo,
                      CoordinateMapper& mapper,
                      double max_pulse_ms = 100.0,
                      double cooldown_s = 10.0,
@@ -33,7 +33,7 @@ public:
 
 private:
     ILaser& laser_;
-    IDac& dac_;
+    IGalvoDriver& galvo_;
     CoordinateMapper& mapper_;
 
     double max_pulse_ms_;

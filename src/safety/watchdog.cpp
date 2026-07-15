@@ -3,11 +3,11 @@
 
 Watchdog::Watchdog(SystemStateMachine& state_machine,
                    ILaser& laser,
-                   IDac& dac,
+                   IGalvoDriver& galvo,
                    uint32_t missed_threshold)
     : state_machine_(state_machine)
     , laser_(laser)
-    , dac_(dac)
+    , galvo_(galvo)
     , missed_threshold_(missed_threshold) {
     auto now = std::chrono::steady_clock::now();
     last_heartbeat_.store(now, std::memory_order_release);
@@ -70,11 +70,11 @@ auto Watchdog::trigger_safe_halt() -> void {
                      to_string(laser_result.error()));
     }
 
-    println(stderr, "[WATCHDOG] Commanding DAC to (0,0)");
-    auto dac_result = dac_.zero();
-    if (!dac_result.has_value()) {
-        println(stderr, "[WATCHDOG] DAC zero failed: {}",
-                     to_string(dac_result.error()));
+    println(stderr, "[WATCHDOG] Commanding galvos to (0V differential)");
+    auto galvo_result = galvo_.zero();
+    if (!galvo_result.has_value()) {
+        println(stderr, "[WATCHDOG] Galvo zero failed: {}",
+                     to_string(galvo_result.error()));
     }
 
     (void)state_machine_.transition(SystemState::SAFE_HALT);

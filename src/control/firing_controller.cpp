@@ -3,13 +3,13 @@
 #include <thread>
 
 FiringController::FiringController(ILaser& laser,
-                                   IDac& dac,
+                                   IGalvoDriver& galvo,
                                    CoordinateMapper& mapper,
                                    double max_pulse_ms,
                                    double cooldown_s,
                                    double settle_ms)
     : laser_(laser)
-    , dac_(dac)
+    , galvo_(galvo)
     , mapper_(mapper)
     , max_pulse_ms_(max_pulse_ms)
     , cooldown_s_(cooldown_s)
@@ -70,9 +70,9 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
         if (dac_result.has_value()) {
             auto values = dac_result.value();
-            auto write_result = dac_.write(values);
+            auto write_result = galvo_.set_position(values.channel_a, values.channel_b);
             if (!write_result.has_value()) {
-                println(stderr, "[FIRING] DAC write failed: {}",
+                println(stderr, "[FIRING] Galvo set_position failed: {}",
                              to_string(write_result.error()));
                 emergency_stop_ = true;
                 laser_.emergency_shutdown();

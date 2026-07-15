@@ -47,6 +47,10 @@ struct DacValues {
 struct SystemConfig {
     std::string left_camera_device{};
     std::string right_camera_device{};
+    std::string spi_device_x{"/dev/spidev0.0"};
+    std::string spi_device_y{"/dev/spidev0.1"};
+    int spi_speed_hz{20'000'000};
+    double dac_ref_voltage{5.0};
     double settle_delay_ms{3.0};
     double max_pulse_duration_ms{100.0};
     double cooldown_seconds{10.0};

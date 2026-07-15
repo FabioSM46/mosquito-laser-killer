@@ -2,7 +2,7 @@
 
 #include "safety/system_state.h"
 #include "hal/ilaser.h"
-#include "hal/idac.h"
+#include "hal/igalvo_driver.h"
 #include <chrono>
 #include <atomic>
 #include "core/print.h"
@@ -11,7 +11,7 @@ class Watchdog {
 public:
     Watchdog(SystemStateMachine& state_machine,
              ILaser& laser,
-             IDac& dac,
+             IGalvoDriver& galvo,
              uint32_t missed_threshold = 3);
 
     Watchdog(const Watchdog&) = delete;
@@ -28,7 +28,7 @@ public:
 private:
     SystemStateMachine& state_machine_;
     ILaser& laser_;
-    IDac& dac_;
+    IGalvoDriver& galvo_;
     uint32_t missed_threshold_;
 
     std::atomic<std::chrono::steady_clock::time_point> last_heartbeat_{

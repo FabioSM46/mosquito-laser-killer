@@ -6,7 +6,7 @@
 #include <atomic>
 
 #include "mocks/mock_gpio.h"
-#include "mocks/mock_dac.h"
+#include "mocks/mock_galvo_driver.h"
 #include "mocks/mock_laser.h"
 #include "safety/system_state.h"
 #include "safety/watchdog.h"
@@ -19,18 +19,18 @@ class WatchdogJitterStressTest : public Test {
 protected:
     void SetUp() override {
         mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
-        mock_dac_ = std::make_unique<NiceMock<MockDac>>();
+        mock_galvo_ = std::make_unique<NiceMock<MockGalvoDriver>>();
     }
 
     std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockDac> mock_dac_;
+    std::unique_ptr<MockGalvoDriver> mock_galvo_;
 };
 
 TEST_F(WatchdogJitterStressTest, TwentyMsJitterDoesNotTrigger) {
     SystemStateMachine sm;
     (void)sm.transition(SystemState::IDLE);
 
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
 
     auto t0 = std::chrono::steady_clock::now();
     wd.feed(t0);
@@ -46,10 +46,10 @@ TEST_F(WatchdogJitterStressTest, ThirtyMsJitterTriggersSafeHalt) {
 
     EXPECT_CALL(*mock_laser_, emergency_shutdown())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_dac_, zero())
+    EXPECT_CALL(*mock_galvo_, zero())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
 
     auto t0 = std::chrono::steady_clock::now();
     wd.feed(t0);
@@ -65,10 +65,10 @@ TEST_F(WatchdogJitterStressTest, FiftyMsJitterDefinitelyTriggersSafeHalt) {
 
     EXPECT_CALL(*mock_laser_, emergency_shutdown())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_dac_, zero())
+    EXPECT_CALL(*mock_galvo_, zero())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
 
     auto t0 = std::chrono::steady_clock::now();
     wd.feed(t0);
@@ -82,7 +82,7 @@ TEST_F(WatchdogJitterStressTest, IntermittentJitterWithFeedsDoesNotTrigger) {
     SystemStateMachine sm;
     (void)sm.transition(SystemState::IDLE);
 
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
 
     auto t0 = std::chrono::steady_clock::now();
 
@@ -105,10 +105,10 @@ TEST_F(WatchdogJitterStressTest, FourthMissTriggersSafeHalt) {
 
     EXPECT_CALL(*mock_laser_, emergency_shutdown())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_dac_, zero())
+    EXPECT_CALL(*mock_galvo_, zero())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
 
     auto t0 = std::chrono::steady_clock::now();
     wd.feed(t0);

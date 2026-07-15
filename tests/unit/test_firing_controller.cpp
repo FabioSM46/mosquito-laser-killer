@@ -7,6 +7,7 @@
 #include "mocks/mock_gpio.h"
 #include "mocks/mock_spi.h"
 #include "mocks/mock_dac.h"
+#include "mocks/mock_galvo_driver.h"
 #include "mocks/mock_laser.h"
 #include "core/types.h"
 #include "core/error.h"
@@ -21,7 +22,7 @@ class FiringControllerTest : public Test {
 protected:
     void SetUp() override {
         mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
-        mock_dac_ = std::make_unique<NiceMock<MockDac>>();
+        mock_galvo_ = std::make_unique<NiceMock<MockGalvoDriver>>();
 
         SystemConfig::BoundingBox bb;
         bb.x_min = -2.0;
@@ -40,12 +41,12 @@ protected:
         bbox_ = std::make_unique<BoundingBox3D>(bb);
         mapper_ = std::make_unique<CoordinateMapper>(*bbox_, gl);
         controller_ = std::make_unique<FiringController>(
-            *mock_laser_, *mock_dac_, *mapper_,
+            *mock_laser_, *mock_galvo_, *mapper_,
             100.0, 10.0, 3.0);
     }
 
     std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockDac> mock_dac_;
+    std::unique_ptr<MockGalvoDriver> mock_galvo_;
     std::unique_ptr<BoundingBox3D> bbox_;
     std::unique_ptr<CoordinateMapper> mapper_;
     std::unique_ptr<FiringController> controller_;
@@ -61,7 +62,7 @@ TEST_F(FiringControllerTest, MayFireAfterStartupCooldown) {
 }
 
 TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     controller_->set_target({0.0, 0.0, 1.0});
@@ -71,7 +72,7 @@ TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
 }
 
 TEST_F(FiringControllerTest, DacWriteBeforeFire) {
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .Times(AtLeast(1))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_laser_, fire(true))
@@ -105,7 +106,7 @@ TEST_F(FiringControllerTest, EmergencyStopForcesLaserOff) {
 }
 
 TEST_F(FiringControllerTest, ClearTargetPreventsFiring) {
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     controller_->set_target({0.0, 0.0, 1.0});

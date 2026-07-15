@@ -39,6 +39,7 @@ set(HAL_SOURCES
     src/hal/spi_impl.cpp
     src/hal/camera_impl.cpp
     src/hal/mcp4922.cpp
+    src/hal/differential_galvo_driver.cpp
     src/hal/laser.cpp
 )
 

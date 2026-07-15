@@ -7,7 +7,7 @@
 #include <csignal>
 
 #include "mocks/mock_gpio.h"
-#include "mocks/mock_dac.h"
+#include "mocks/mock_galvo_driver.h"
 #include "mocks/mock_laser.h"
 #include "core/thread_safe_queue.h"
 #include "core/types.h"
@@ -26,7 +26,7 @@ class ConcurrentShutdownStressTest : public Test {
 protected:
     void SetUp() override {
         mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
-        mock_dac_ = std::make_unique<NiceMock<MockDac>>();
+        mock_galvo_ = std::make_unique<NiceMock<MockGalvoDriver>>();
 
         SystemConfig::BoundingBox bb;
         bb.x_min = -2.0; bb.x_max = 2.0;
@@ -44,7 +44,7 @@ protected:
     }
 
     std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockDac> mock_dac_;
+    std::unique_ptr<MockGalvoDriver> mock_galvo_;
     std::unique_ptr<BoundingBox3D> bbox_;
     std::unique_ptr<CoordinateMapper> mapper_;
 };
@@ -52,19 +52,19 @@ protected:
 TEST_F(ConcurrentShutdownStressTest, ShutdownWhileAllThreadsActive) {
     EXPECT_CALL(*mock_laser_, emergency_shutdown())
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_dac_, zero())
+    EXPECT_CALL(*mock_galvo_, zero())
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_laser_, fire(false))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     SystemStateMachine sm;
     sm.transition(SystemState::IDLE);
     sm.transition(SystemState::ARMED);
 
-    Watchdog watchdog(sm, *mock_laser_, *mock_dac_, 50);
-    FiringController fc(*mock_laser_, *mock_dac_, *mapper_, 100.0, 10.0, 3.0);
+    Watchdog watchdog(sm, *mock_laser_, *mock_galvo_, 50);
+    FiringController fc(*mock_laser_, *mock_galvo_, *mapper_, 100.0, 10.0, 3.0);
 
     ThreadSafeQueue<StereoFrame> frame_queue;
     ThreadSafeQueue<TargetCommand> target_queue;
@@ -119,7 +119,7 @@ TEST_F(ConcurrentShutdownStressTest, ShutdownWhileAllThreadsActive) {
         }
 
         mock_laser_->emergency_shutdown();
-        mock_dac_->zero();
+        mock_galvo_->zero();
     });
 
     std::this_thread::sleep_for(50ms);
@@ -137,8 +137,8 @@ TEST_F(ConcurrentShutdownStressTest, SignalInterruptForcesLaserOffWithinOneCycle
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     SystemStateMachine sm;
-    Watchdog wd(sm, *mock_laser_, *mock_dac_, 3);
-    FiringController fc(*mock_laser_, *mock_dac_, *mapper_);
+    Watchdog wd(sm, *mock_laser_, *mock_galvo_, 3);
+    FiringController fc(*mock_laser_, *mock_galvo_, *mapper_);
 
     auto now = std::chrono::steady_clock::now();
     fc.set_target({0.0, 0.0, 1.0});
@@ -151,7 +151,7 @@ TEST_F(ConcurrentShutdownStressTest, SignalInterruptForcesLaserOffWithinOneCycle
 
 TEST_F(ConcurrentShutdownStressTest, DestructorCascadePreservesLaserOffOrder) {
     auto local_laser = std::make_unique<NiceMock<MockLaser>>();
-    auto local_dac = std::make_unique<NiceMock<MockDac>>();
+    auto local_galvo = std::make_unique<NiceMock<MockGalvoDriver>>();
 
     EXPECT_CALL(*local_laser, fire(false))
         .Times(AtLeast(1))
@@ -159,7 +159,7 @@ TEST_F(ConcurrentShutdownStressTest, DestructorCascadePreservesLaserOffOrder) {
 
     {
         auto fc = std::make_unique<FiringController>(
-            *local_laser, *local_dac, *mapper_);
+            *local_laser, *local_galvo, *mapper_);
 
         fc->emergency_stop();
     }
