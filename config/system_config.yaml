@@ -14,11 +14,12 @@ e_stop_pin: 25                # GPIO pin for mushroom E-stop (active LOW, pulled
 
 # --- Camera Parameters ---
 # OV9281 global-shutter monochrome cameras, USB3 UVC, 1MP (1280x800 native).
-# Supported UVC modes: 640x480@120fps (default, practical for real-time stereo),
-# 1280x720@60fps. Keep 640x480 for 120 FPS capture — 720p@120fps exceeds RPi 5
-# processing capacity for dual-camera stereo pipelines.
+# Supported high-rate modes: 640x400@210fps, 640x360@210fps, 1280x720@120fps.
+# Default 640x400@120fps is a safe, validated OV9281 mode. To try higher rates,
+# set target_fps to 210 (the OV9281 max at this resolution). 640x480 is NOT a
+# supported OV9281 mode — do not use it.
 frame_width: 640
-frame_height: 480
+frame_height: 400
 target_fps: 120
 # Use /dev/v4l/by-path/ symlinks for stable, USB-port-based camera identification.
 # These survive reboots and re-enumeration — critical for correct left/right assignment.
@@ -106,4 +107,4 @@ stereo:
   baseline_m: 0.12       # Distance between camera optical centers
   focal_length_px: 500.0 # Calibrated focal length in pixels (3mm lens @ 640-wide full sensor ~= 500; override with chessboard calibration)
   cx: 320.0              # Principal point x (= frame_width / 2)
-  cy: 240.0              # Principal point y (= frame_height / 2)
+  cy: 200.0              # Principal point y (= frame_height / 2)

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <chrono>
-#include <array>
+#include <vector>
 #include <string>
 #include <optional>
 #include <Eigen/Dense>
@@ -29,8 +29,8 @@ struct Pixel2D {
 struct StereoFrame {
     uint64_t frame_id{0};
     std::chrono::steady_clock::time_point timestamp{};
-    std::array<uint8_t, 640 * 480> left_frame{};
-    std::array<uint8_t, 640 * 480> right_frame{};
+    std::vector<uint8_t> left_frame{};
+    std::vector<uint8_t> right_frame{};
 };
 
 struct TargetCommand {
@@ -62,7 +62,7 @@ struct SystemConfig {
     double cooldown_seconds{10.0};
     uint32_t watchdog_missed_threshold{3};
     int frame_width{640};
-    int frame_height{480};
+    int frame_height{400};
     int target_fps{120};
 
     struct BoundingBox {
@@ -106,6 +106,6 @@ struct SystemConfig {
         double baseline_m{0.12};
         double focal_length_px{500.0};
         double cx{320.0};
-        double cy{240.0};
+        double cy{200.0};
     } stereo;
 };

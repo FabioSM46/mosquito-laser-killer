@@ -109,12 +109,27 @@ not the FOV-based coverage validation (which uses the physical lens).
 
 ### 2.3 Default capture mode
 
-`640×480@120` is configured by default to stay within the Raspberry Pi 5
-real-time dual-camera processing budget. **Note:** the OV9281's listed
-high-rate modes are 640×400 and 640×360 (not 640×480); if your particular module
-rejects 640×480, switch `frame_width`/`frame_height` to a supported mode and
-update the `StereoFrame` buffer in `src/core/types.h` accordingly. (Resolution
-parameterization is a planned follow-up.)
+`640×400@120` is the default capture mode. This is a **validated OV9281 binned
+mode** (2×2 binning of the native 1280×800, full FOV, half resolution). The
+`StereoFrame` buffers are dynamically sized (`std::vector<uint8_t>`) to match
+the configured `frame_width × frame_height`, so any supported OV9281 mode works
+without code changes.
+
+**Supported high-rate modes** (set `frame_width`, `frame_height`, `target_fps`):
+
+| Mode | Max FPS | Bandwidth (×2 cams) | Use case |
+|------|---------|---------------------|----------|
+| 640×400 | 210 | ~108 MB/s @210 | default; best balance |
+| 640×360 | 210 | ~97 MB/s @210 | 16:9 crop; slightly less vertical |
+| 1280×720 | 120 | ~221 MB/s @120 | full resolution; heavier CPU |
+
+> **640×480 is NOT a supported OV9281 mode.** The V4L2 driver will reject it or
+> silently remap. Always use 640×400 or 640×360.
+
+**FPS guidance:** higher FPS reduces tracking latency (4.8 ms at 210 FPS vs
+8.3 ms at 120 FPS). USB 3.0 bandwidth (~400 MB/s usable) and RPi 5 CPU are not
+bottlenecks even at 210 FPS — the detector's 256K-pixel scan is <1 % of NEON
+throughput. The watchdog's heartbeat period auto-derives from `target_fps`.
 
 ### 2.4 Image controls (dark-field detection)
 

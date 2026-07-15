@@ -34,7 +34,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 - RPi 5 SPI0 CE0 (pin 24) → MCP4922 #1 `/CS` (X-axis); SPI0 CE1 (pin 26) → MCP4922 #2 `/CS` (Y-axis).
 - Both MCP4922 Vref pins tied to 5 V, producing a 0–5 V unipolar output per channel and a ±5 V differential swing per axis.
 - Galvo scanner powered by 15 V; laser driver powered by 12 V from the Mean Well supply.
-- The OV9281 cameras are capable of 1280×720; the default configuration runs them at **640×480 @ 120 FPS** to stay within the RPi 5 real-time processing budget.
+- The OV9281 cameras are capable of 1280×720; the default configuration runs them at **640×400 @ 120 FPS** (a validated OV9281 binned mode; 640×480 is not supported by this sensor). The `StereoFrame` buffers are dynamically sized so any supported mode works without code changes.
 
 ---
 
@@ -307,7 +307,7 @@ mosquito-laser-killer/
 6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
 8. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
-9. **Default camera mode 640×480@120fps** — the OV9281 hardware supports 1280×720; the default 640×480 mode is chosen for real-time dual-camera processing on the RPi 5
+9. **Default camera mode 640×400@120fps** — the OV9281 hardware supports 1280×720; the default 640×400 mode is a validated OV9281 binned mode (640×480 is not supported). The `StereoFrame` buffers are dynamically sized (`std::vector`) so any supported mode works without code changes. Higher rates (up to 210 FPS at 640×400) are configurable via `target_fps`.
 
 ---
 
@@ -317,7 +317,7 @@ mosquito-laser-killer/
 - **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3V logic → 5V level shifter → laser driver
 - **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH
 - **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW mushroom DPST
-- **Cameras:** USB 3.0 UVC, grayscale capture, 640×480@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`)
+- **Cameras:** USB 3.0 UVC, grayscale capture, 640×400@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`; OV9281 supports up to 210 FPS at 640×400)
 - **Config:** YAML file loaded at startup; bounding box, settle delays, pulse/cooldown limits, GPIO pins, camera device paths
 
 ---

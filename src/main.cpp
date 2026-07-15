@@ -255,10 +255,10 @@ auto main(int argc, char* argv[]) -> int {
         config.cooldown_seconds,
         config.settle_delay_ms);
     Watchdog watchdog(state_machine, *laser, *galvo,
-        config.watchdog_missed_threshold);
+        config.watchdog_missed_threshold, config.target_fps);
 
-    Detector detector_left;
-    Detector detector_right;
+    Detector detector_left(config.frame_width, config.frame_height);
+    Detector detector_right(config.frame_width, config.frame_height);
     StereoMatcher stereo_matcher(config.stereo);
     KalmanTracker tracker;
 
@@ -309,7 +309,7 @@ auto main(int argc, char* argv[]) -> int {
             return;
         }
 
-        auto cycle_period = std::chrono::microseconds(8333);
+        auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire)) {
@@ -318,6 +318,8 @@ auto main(int argc, char* argv[]) -> int {
             StereoFrame frame;
             frame.frame_id = frame_id++;
             frame.timestamp = cycle_start;
+            frame.left_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
+            frame.right_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
 
             auto left_result = left_cam.capture(frame.left_frame.data(),
                                                  frame.left_frame.size());
@@ -377,8 +379,10 @@ auto main(int argc, char* argv[]) -> int {
             auto& frame = latest_frame.value();
             heartbeat.store(std::chrono::steady_clock::now(), std::memory_order_release);
 
-            auto left_detection = detector_left.detect(frame.left_frame);
-            auto right_detection = detector_right.detect(frame.right_frame);
+            auto left_detection = detector_left.detect(frame.left_frame.data(),
+                                                          frame.left_frame.size());
+            auto right_detection = detector_right.detect(frame.right_frame.data(),
+                                                           frame.right_frame.size());
 
             TargetCommand cmd;
             cmd.frame_id = frame.frame_id;
@@ -418,7 +422,7 @@ auto main(int argc, char* argv[]) -> int {
     std::jthread control_thread([&](std::stop_token stoken) {
         println("[CONTROL] Thread started");
         auto max_wait = std::chrono::milliseconds(16);
-        auto cycle_period = std::chrono::microseconds(8333);
+        auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire)) {

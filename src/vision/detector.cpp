@@ -2,24 +2,28 @@
 #include "core/print.h"
 #include <algorithm>
 
-Detector::Detector() {
-    println("[DETECTOR] Initialized, threshold={}", threshold_);
+Detector::Detector(int width, int height)
+    : width_(width)
+    , height_(height) {
+    println("[DETECTOR] Initialized {}x{}, threshold={}", width_, height_, threshold_);
 }
 
-auto Detector::detect(const std::array<uint8_t, 640 * 480>& frame)
+auto Detector::detect(const uint8_t* data, size_t size)
     -> std::optional<Pixel2D> {
     int sum_x = 0;
     int sum_y = 0;
     int count = 0;
 
-    for (int y = 0; y < 480; ++y) {
-        for (int x = 0; x < 640; ++x) {
-            uint8_t px = frame.at(y * 640 + x);
-            if (px > threshold_) {
-                sum_x += x;
-                sum_y += y;
-                ++count;
-            }
+    const size_t expected = static_cast<size_t>(width_) * static_cast<size_t>(height_);
+    const size_t usable = std::min(size, expected);
+
+    for (size_t i = 0; i < usable; ++i) {
+        if (data[i] > threshold_) {
+            const int x = static_cast<int>(i % width_);
+            const int y = static_cast<int>(i / width_);
+            sum_x += x;
+            sum_y += y;
+            ++count;
         }
     }
 

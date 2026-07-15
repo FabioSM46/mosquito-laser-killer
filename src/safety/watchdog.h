@@ -12,7 +12,8 @@ public:
     Watchdog(SystemStateMachine& state_machine,
              ILaser& laser,
              IGalvoDriver& galvo,
-             uint32_t missed_threshold = 3);
+             uint32_t missed_threshold = 3,
+             int target_fps = 120);
 
     Watchdog(const Watchdog&) = delete;
     auto operator=(const Watchdog&) -> Watchdog& = delete;
@@ -30,6 +31,7 @@ private:
     ILaser& laser_;
     IGalvoDriver& galvo_;
     uint32_t missed_threshold_;
+    std::chrono::microseconds frame_period_;
 
     std::atomic<std::chrono::steady_clock::time_point> last_heartbeat_{
         std::chrono::steady_clock::time_point::min()};
