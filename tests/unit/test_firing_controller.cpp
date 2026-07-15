@@ -210,3 +210,29 @@ TEST_F(FiringControllerTest, ClearTargetAbortsPulseAndCooldown) {
 
     EXPECT_FALSE(controller_->may_fire());
 }
+
+TEST_F(FiringControllerTest, SetTargetDuringPulseAbortsPulseAndCooldown) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(_))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    controller_->set_target({0.0, 0.0, 1.0});
+
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    EXPECT_TRUE(controller_->is_firing());
+
+    controller_->set_target({0.5, 0.0, 1.0});
+
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->may_fire());
+}
+
+TEST_F(FiringControllerTest, IsFiringFalseInitially) {
+    EXPECT_FALSE(controller_->is_firing());
+}

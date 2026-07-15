@@ -8,7 +8,11 @@
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 
-CameraImpl::CameraImpl(const std::string& device) : device_(device) {
+CameraImpl::CameraImpl(const std::string& device, int width, int height, int fps)
+    : device_(device)
+    , width_(width)
+    , height_(height)
+    , fps_(fps) {
 }
 
 CameraImpl::~CameraImpl() {
@@ -16,7 +20,11 @@ CameraImpl::~CameraImpl() {
 }
 
 CameraImpl::CameraImpl(CameraImpl&& other) noexcept
-    : device_(std::move(other.device_)), fd_(other.fd_) {
+    : device_(std::move(other.device_))
+    , width_(other.width_)
+    , height_(other.height_)
+    , fps_(other.fps_)
+    , fd_(other.fd_) {
     other.fd_ = -1;
 }
 
@@ -24,6 +32,9 @@ auto CameraImpl::operator=(CameraImpl&& other) noexcept -> CameraImpl& {
     if (this != &other) {
         close();
         device_ = std::move(other.device_);
+        width_ = other.width_;
+        height_ = other.height_;
+        fps_ = other.fps_;
         fd_ = other.fd_;
         other.fd_ = -1;
     }
@@ -46,8 +57,8 @@ auto CameraImpl::open(int /*device_index*/) -> std::expected<void, HardwareError
 
     v4l2_format fmt{};
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    fmt.fmt.pix.width = 640;
-    fmt.fmt.pix.height = 480;
+    fmt.fmt.pix.width = static_cast<uint32_t>(width_);
+    fmt.fmt.pix.height = static_cast<uint32_t>(height_);
     fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
     fmt.fmt.pix.field = V4L2_FIELD_NONE;
 
@@ -57,7 +68,22 @@ auto CameraImpl::open(int /*device_index*/) -> std::expected<void, HardwareError
         return std::unexpected(HardwareError::CameraOpenFailed);
     }
 
-    println("[Camera] Opened {} at {}x{}", device_, fmt.fmt.pix.width, fmt.fmt.pix.height);
+    v4l2_streamparm parm{};
+    parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    parm.parm.capture.timeperframe.numerator = 1;
+    parm.parm.capture.timeperframe.denominator = static_cast<uint32_t>(fps_);
+
+    if (ioctl(fd_, VIDIOC_S_PARM, &parm) < 0) {
+        println(stderr, "[Camera] VIDIOC_S_PARM failed: {}", strerror(errno));
+        close();
+        return std::unexpected(HardwareError::CameraOpenFailed);
+    }
+
+    println("[Camera] Opened {} at {}x{}@{} (actual {}x{}@{}/{})",
+            device_, width_, height_, fps_,
+            fmt.fmt.pix.width, fmt.fmt.pix.height,
+            parm.parm.capture.timeperframe.denominator,
+            parm.parm.capture.timeperframe.numerator);
     return {};
 }
 
@@ -69,6 +95,11 @@ auto CameraImpl::capture(uint8_t* buffer, size_t size) -> std::expected<void, Ha
     auto bytes_read = ::read(fd_, buffer, size);
     if (bytes_read < 0) {
         println(stderr, "[Camera] Capture read failed: {}", strerror(errno));
+        return std::unexpected(HardwareError::CameraCaptureFailed);
+    }
+
+    if (bytes_read != static_cast<ssize_t>(size)) {
+        println(stderr, "[Camera] Capture incomplete: read {} of {} bytes", bytes_read, size);
         return std::unexpected(HardwareError::CameraCaptureFailed);
     }
 

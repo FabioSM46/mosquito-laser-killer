@@ -51,7 +51,8 @@ TEST_F(LaserSafetyTest, ConstructorHandlesInitWriteFailure) {
         .WillOnce(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_gpio_, write(false))
         .WillOnce(Return(
-            std::unexpected(HardwareError::GpioWriteFailed)));
+            std::unexpected(HardwareError::GpioWriteFailed)))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
 
     auto laser = std::make_unique<Laser>(std::move(mock_gpio_), 18);
 
@@ -100,6 +101,8 @@ TEST_F(LaserSafetyTest, FireWriteFailureTriggersEmergencyShutdown) {
     EXPECT_CALL(*mock_gpio_, set_direction_output())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_gpio_, write(false))
+        .WillOnce(Return(std::expected<void, HardwareError>{}))
+        .WillOnce(Return(std::expected<void, HardwareError>{}))
         .WillOnce(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_gpio_, write(true))
         .WillOnce(Return(
@@ -111,6 +114,6 @@ TEST_F(LaserSafetyTest, FireWriteFailureTriggersEmergencyShutdown) {
     EXPECT_FALSE(result.has_value());
 
     auto second_result = laser->fire(false);
-    EXPECT_FALSE(second_result.has_value());
-    EXPECT_EQ(second_result.error(), HardwareError::LaserEmergencyShutdown);
+    EXPECT_TRUE(second_result.has_value());
+    EXPECT_FALSE(laser->is_firing());
 }

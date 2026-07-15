@@ -9,8 +9,8 @@ Watchdog::Watchdog(SystemStateMachine& state_machine,
     , laser_(laser)
     , galvo_(galvo)
     , missed_threshold_(missed_threshold) {
-    auto now = std::chrono::steady_clock::now();
-    last_heartbeat_.store(now, std::memory_order_release);
+    last_heartbeat_.store(std::chrono::steady_clock::time_point::min(),
+                          std::memory_order_release);
     println("[WATCHDOG] Initialized, threshold: {} missed cycles", missed_threshold_);
 }
 

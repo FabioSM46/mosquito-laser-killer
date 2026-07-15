@@ -22,6 +22,7 @@ public:
     auto operator=(const FiringController&) -> FiringController& = delete;
 
     [[nodiscard]] auto may_fire() const -> bool;
+    [[nodiscard]] auto is_firing() const -> bool;
 
     auto set_target(const Point3D& position) -> void;
     auto clear_target() -> void;
@@ -55,4 +56,6 @@ private:
 
     [[nodiscard]] auto enforce_timing_limits(std::chrono::steady_clock::time_point now)
         -> bool;
+
+    auto abort_active_pulse(const char* reason) -> void;
 };

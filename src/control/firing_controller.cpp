@@ -33,10 +33,18 @@ auto FiringController::may_fire() const -> bool {
     return true;
 }
 
+auto FiringController::is_firing() const -> bool {
+    return pulse_active_;
+}
+
 auto FiringController::set_target(const Point3D& position) -> void {
     if (emergency_stop_) {
         println(stderr, "[FIRING] Target rejected: emergency stop active");
         return;
+    }
+
+    if (pulse_active_) {
+        abort_active_pulse("Target changed while pulse active, aborting pulse");
     }
 
     current_target_ = position;
@@ -46,20 +54,7 @@ auto FiringController::set_target(const Point3D& position) -> void {
 }
 
 auto FiringController::clear_target() -> void {
-    if (pulse_active_) {
-        println("[FIRING] Target lost while pulse active, aborting pulse");
-        auto result = laser_.fire(false);
-        if (!result.has_value()) {
-            println(stderr, "[FIRING] Laser off failed: {}",
-                         to_string(result.error()));
-        }
-        pulse_active_ = false;
-
-        auto now = std::chrono::steady_clock::now();
-        cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double>(cooldown_s_));
-        println("[FIRING] Cooldown started after pulse abort ({}s)", cooldown_s_);
-    }
+    abort_active_pulse("Target lost while pulse active, aborting pulse");
 
     current_target_.reset();
     target_valid_ = false;
@@ -69,20 +64,33 @@ auto FiringController::clear_target() -> void {
 auto FiringController::disarm() -> void {
     println("[FIRING] Disarming (immediate laser OFF)");
 
-    if (pulse_active_) {
-        auto result = laser_.fire(false);
-        if (!result.has_value()) {
-            println(stderr, "[FIRING] Disarm laser off failed: {}",
-                         to_string(result.error()));
-        }
-        pulse_active_ = false;
-    }
+    abort_active_pulse("Disarming while pulse active");
 
     current_target_.reset();
     target_valid_ = false;
     galvo_settled_ = false;
 
     println("[FIRING] Disarmed, ready for re-arm");
+}
+
+auto FiringController::abort_active_pulse(const char* reason) -> void {
+    if (!pulse_active_) {
+        return;
+    }
+
+    println("[FIRING] {}", reason);
+
+    auto result = laser_.fire(false);
+    if (!result.has_value()) {
+        println(stderr, "[FIRING] Pulse abort laser off failed: {}",
+                     to_string(result.error()));
+    }
+    pulse_active_ = false;
+
+    auto now = std::chrono::steady_clock::now();
+    cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(cooldown_s_));
+    println("[FIRING] Cooldown started after pulse abort ({}s)", cooldown_s_);
 }
 
 auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) -> bool {

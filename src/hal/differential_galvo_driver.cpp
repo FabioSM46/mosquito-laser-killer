@@ -15,8 +15,6 @@ DifferentialGalvoDriver::DifferentialGalvoDriver(std::unique_ptr<IDac> dac_x,
         return;
     }
 
-    initialized_ = true;
-
     auto zero_result = zero();
     if (!zero_result.has_value()) {
         println(stderr, "[GALVO] Failed to zero on init: {}",

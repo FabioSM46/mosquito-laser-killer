@@ -14,6 +14,7 @@
 #include "hal/differential_galvo_driver.h"
 #include "hal/laser.h"
 
+#include "safety/e_stop.h"
 #include "safety/system_state.h"
 #include "safety/watchdog.h"
 #include "safety/bounding_box.h"
@@ -94,8 +95,14 @@ auto load_config() -> SystemConfig {
         if (yaml["dac_reference_voltage"]) {
             config.dac_ref_voltage = yaml["dac_reference_voltage"].as<double>();
         }
+        if (yaml["laser_pin"]) {
+            config.laser_pin = yaml["laser_pin"].as<unsigned int>();
+        }
         if (yaml["arm_switch_pin"]) {
             config.arm_switch_pin = yaml["arm_switch_pin"].as<unsigned int>();
+        }
+        if (yaml["e_stop_pin"]) {
+            config.e_stop_pin = yaml["e_stop_pin"].as<unsigned int>();
         }
         if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
             config.left_camera_device = yaml["left_camera_device"].as<std::string>();
@@ -162,8 +169,8 @@ auto main(int argc, char* argv[]) -> int {
 
     SystemStateMachine state_machine;
 
-    auto gpio_laser = std::make_unique<GpioImpl>(18);
-    auto laser = std::make_unique<Laser>(std::move(gpio_laser), 18);
+    auto gpio_laser = std::make_unique<GpioImpl>(config.laser_pin);
+    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin);
 
     auto spi_x = std::make_unique<SpiImpl>(config.spi_device_x, config.spi_speed_hz);
     auto spi_y = std::make_unique<SpiImpl>(config.spi_device_y, config.spi_speed_hz);
@@ -171,6 +178,7 @@ auto main(int argc, char* argv[]) -> int {
     auto dac_y = std::make_unique<MCP4922>(std::move(spi_y));
     auto galvo = std::make_unique<DifferentialGalvoDriver>(std::move(dac_x), std::move(dac_y));
 
+    println("[MAIN] Laser TTL on GPIO {}", config.laser_pin);
     println("[MAIN] SPI X-axis DAC: {} (CS0)", config.spi_device_x);
     println("[MAIN] SPI Y-axis DAC: {} (CS1)", config.spi_device_y);
     println("[MAIN] SPI speed: {} Hz", config.spi_speed_hz);
@@ -179,10 +187,35 @@ auto main(int argc, char* argv[]) -> int {
     ArmSwitch arm_switch(std::move(gpio_arm));
     auto arm_init = arm_switch.initialize();
     if (!arm_init.has_value()) {
-        println(stderr, "[MAIN] Arm switch init failed: {}. Continuing without arm switch.",
+        println(stderr, "[MAIN] Arm switch init failed: {}",
                      to_string(arm_init.error()));
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
     }
     println("[MAIN] Arm switch on GPIO {}", config.arm_switch_pin);
+
+    auto gpio_estop = std::make_unique<GpioImpl>(config.e_stop_pin);
+    EStop e_stop(std::move(gpio_estop));
+    auto estop_init = e_stop.initialize();
+    if (!estop_init.has_value()) {
+        println(stderr, "[MAIN] E-stop init failed: {}",
+                     to_string(estop_init.error()));
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
+    println("[MAIN] E-stop on GPIO {}", config.e_stop_pin);
+
+    if (!laser->is_initialized()) {
+        println(stderr, "[MAIN] Laser hardware initialization failed");
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
+
+    if (!galvo->is_initialized()) {
+        println(stderr, "[MAIN] Galvo driver initialization failed");
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
 
     BoundingBox3D bounding_box(config.bounding_box);
     CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage);
@@ -203,7 +236,11 @@ auto main(int argc, char* argv[]) -> int {
     std::atomic<std::chrono::steady_clock::time_point> heartbeat{
         std::chrono::steady_clock::now()};
 
-    (void)state_machine.transition(SystemState::IDLE);
+    auto init_ok = state_machine.transition(SystemState::IDLE);
+    if (!init_ok) {
+        println(stderr, "[MAIN] Failed to enter IDLE state");
+        return 1;
+    }
     println("[MAIN] System ready in IDLE state");
 
     println("[MAIN] Starting capture thread...");
@@ -219,8 +256,10 @@ auto main(int argc, char* argv[]) -> int {
         println("[CAPTURE] Left camera: {}", left_dev);
         println("[CAPTURE] Right camera: {}", right_dev);
 
-        auto left_cam_ptr = std::make_unique<CameraImpl>(left_dev);
-        auto right_cam_ptr = std::make_unique<CameraImpl>(right_dev);
+        auto left_cam_ptr = std::make_unique<CameraImpl>(
+            left_dev, config.frame_width, config.frame_height, config.target_fps);
+        auto right_cam_ptr = std::make_unique<CameraImpl>(
+            right_dev, config.frame_width, config.frame_height, config.target_fps);
         auto& left_cam = *left_cam_ptr;
         auto& right_cam = *right_cam_ptr;
 
@@ -303,7 +342,7 @@ auto main(int argc, char* argv[]) -> int {
             }
 
             auto& frame = latest_frame.value();
-            heartbeat.store(frame.timestamp, std::memory_order_release);
+            heartbeat.store(std::chrono::steady_clock::now(), std::memory_order_release);
 
             auto left_detection = detector_left.detect(frame.left_frame);
             auto right_detection = detector_right.detect(frame.right_frame);
@@ -358,6 +397,14 @@ auto main(int argc, char* argv[]) -> int {
                 break;
             }
 
+            e_stop.update();
+            if (e_stop.is_pressed()) {
+                println(stderr, "[CONTROL] E-STOP PRESSED, halting");
+                firing_controller.emergency_stop();
+                (void)state_machine.transition(SystemState::SAFE_HALT);
+                break;
+            }
+
             arm_switch.update();
             bool is_armed = arm_switch.is_armed();
             auto cs = state_machine.current();
@@ -366,7 +413,11 @@ auto main(int argc, char* argv[]) -> int {
                 cs != SystemState::SAFE_HALT) {
                 println("[CONTROL] Arm switch OFF, disarming");
                 firing_controller.disarm();
-                (void)state_machine.transition(SystemState::IDLE);
+                if (cs == SystemState::FIRING) {
+                    (void)state_machine.transition(SystemState::COOLDOWN);
+                } else {
+                    (void)state_machine.transition(SystemState::IDLE);
+                }
             }
 
             if (is_armed && cs == SystemState::IDLE) {
@@ -377,7 +428,7 @@ auto main(int argc, char* argv[]) -> int {
             auto cmd_opt = target_queue.pop(max_wait);
             if (cmd_opt.has_value()) {
                 auto& cmd = cmd_opt.value();
-                watchdog.feed(cmd.timestamp);
+                watchdog.feed(heartbeat.load(std::memory_order_acquire));
 
                 if (cmd.target_valid && cmd.target_position.has_value()) {
                     auto current_state = state_machine.current();
@@ -390,16 +441,23 @@ auto main(int argc, char* argv[]) -> int {
                         firing_controller.set_target(cmd.target_position.value());
                     }
                 } else {
-                    if (state_machine.current() == SystemState::TRACKING) {
+                    auto current_state = state_machine.current();
+                    if (current_state == SystemState::TRACKING) {
                         (void)state_machine.transition(SystemState::ARMED);
+                    } else if (current_state == SystemState::FIRING) {
+                        (void)state_machine.transition(SystemState::COOLDOWN);
                     }
                     firing_controller.clear_target();
                 }
             }
 
+            bool pulse_was_active = firing_controller.is_firing();
             bool pulse_ended = firing_controller.execute_cycle(now);
-            if (pulse_ended) {
+            if (pulse_ended && state_machine.current() == SystemState::FIRING) {
                 (void)state_machine.transition(SystemState::COOLDOWN);
+            } else if (!pulse_was_active && firing_controller.is_firing() &&
+                       state_machine.current() == SystemState::TRACKING) {
+                (void)state_machine.transition(SystemState::FIRING);
             }
 
             if (state_machine.current() == SystemState::COOLDOWN &&

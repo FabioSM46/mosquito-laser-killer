@@ -6,6 +6,7 @@ set(SAFETY_SOURCES
     ${CMAKE_SOURCE_DIR}/src/safety/system_state.cpp
     ${CMAKE_SOURCE_DIR}/src/safety/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/safety/bounding_box.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/e_stop.cpp
 )
 
 set(CONTROL_SOURCES
@@ -64,6 +65,23 @@ target_link_libraries(test_arm_switch PRIVATE
     pthread
 )
 gtest_discover_tests(test_arm_switch)
+
+add_executable(test_e_stop
+    unit/test_e_stop.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/e_stop.cpp
+)
+target_include_directories(test_e_stop PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_e_stop PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_e_stop)
 
 add_executable(test_coordinate_mapper
     unit/test_coordinate_mapper.cpp
