@@ -326,12 +326,14 @@ mosquito-laser-killer/
 
 ## 11. Communication Protocols
 
-- **SPI:** Mode 0, 20 MHz (MCP4922 max), CS0 on Bus 0 for X-axis DAC, CS1 for Y-axis DAC
-- **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3V logic → 5V level shifter → laser driver
-- **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH
-- **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW mushroom DPST
-- **Cameras:** USB 3.0 UVC, grayscale capture, 640×400@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`; OV9281 supports up to 210 FPS at 640×400)
-- **Config:** YAML file loaded at startup; bounding box, settle delays, pulse/cooldown limits, GPIO pins, camera device paths
+For the physical wiring corresponding to these protocols, see `docs/HARDWARE_WIRING.md`.
+
+- **SPI:** Mode 0, 20 MHz (MCP4922 max). Two MCP4922 dual-channel DACs on Bus 0: CS0 for the X-axis DAC, CS1 for the Y-axis DAC. Within each DAC, channel A is the positive side and channel B is the inverted side of the differential pair, producing a true ±5 V swing.
+- **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3 V logic → 5 V level shifter → laser driver TTL input.
+- **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH. The same lever SPST switch also switches 12 V power to the laser driver as a hardware interlock.
+- **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW mushroom DPST. One pole breaks mains Live to the power supplies; the second pole drives the GPIO sense circuit for redundancy.
+- **Cameras:** USB 3.0 UVC, grayscale capture, 640×400@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`; OV9281 supports up to 210 FPS at 640×400).
+- **Config:** YAML file loaded at startup; bounding box, settle delays, pulse/cooldown limits, GPIO pins, camera device paths.
 
 ---
 
