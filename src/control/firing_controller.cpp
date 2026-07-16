@@ -80,10 +80,18 @@ auto FiringController::set_target(const Point3D& position) -> void {
         abort_active_pulse("Target changed while pulse active, aborting pulse");
     }
 
+    bool position_changed = !current_target_.has_value() ||
+                            current_target_->x != position.x ||
+                            current_target_->y != position.y ||
+                            current_target_->z != position.z;
+
+    if (position_changed) {
+        galvo_settled_ = false;
+        target_just_set_ = true;
+    }
+
     current_target_ = position;
     target_valid_ = true;
-    galvo_settled_ = false;
-    target_just_set_ = true;
 }
 
 auto FiringController::clear_target() -> void {
@@ -205,7 +213,7 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
                 return false;
             }
 
-            if (galvo_settled_ || target_just_set_) {
+            if (target_just_set_) {
                 galvo_command_time_ = now;
                 galvo_settled_ = false;
                 target_just_set_ = false;

@@ -36,6 +36,7 @@ TEST_F(EStopTest, InitializeFailureReturnsError) {
     auto result = e_stop.initialize();
     EXPECT_FALSE(result.has_value());
     EXPECT_FALSE(e_stop.is_initialized());
+    EXPECT_TRUE(e_stop.is_pressed()) << "Uninitialized E-stop must be treated as pressed";
 }
 
 TEST_F(EStopTest, ReleasedInitially) {
@@ -133,7 +134,7 @@ TEST_F(EStopTest, SingleGlitchDoesNotChangeState) {
 TEST_F(EStopTest, UpdateWithoutInitDoesNotCrash) {
     EStop e_stop(std::move(mock_gpio_), 3);
     e_stop.update();
-    EXPECT_FALSE(e_stop.is_pressed());
+    EXPECT_TRUE(e_stop.is_pressed()) << "Uninitialized E-stop must be treated as pressed";
 }
 
 TEST_F(EStopTest, GpioReadFailureForcesPressed) {

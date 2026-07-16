@@ -1,4 +1,6 @@
 #include "safety/config_validator.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace {

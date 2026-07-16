@@ -355,3 +355,50 @@ TEST_F(FiringControllerTest, LaserOffFailureTriggersEmergencyHalt) {
     EXPECT_FALSE(fc->is_firing());
     EXPECT_FALSE(fc->may_fire());
 }
+
+TEST_F(FiringControllerTest, RepeatedSetTargetSamePositionStillFires) {
+    controller_->set_armed(true);
+
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+
+    auto t0 = std::chrono::steady_clock::now();
+
+    // Simulate the production control loop calling set_target every cycle.
+    controller_->set_target({0.0, 0.0, 1.0});
+    (void)controller_->execute_cycle(t0);
+
+    controller_->set_target({0.0, 0.0, 1.0});
+    (void)controller_->execute_cycle(t0 + 4ms);
+
+    EXPECT_TRUE(controller_->is_firing())
+        << "Repeated set_target with the same position should not reset the settle timer";
+}
+
+TEST_F(FiringControllerTest, SetTargetWithChangedPositionResetsSettle) {
+    controller_->set_armed(true);
+
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    auto t0 = std::chrono::steady_clock::now();
+
+    controller_->set_target({0.0, 0.0, 1.0});
+    (void)controller_->execute_cycle(t0);
+
+    // Changing the target position before the first settle completes resets the timer,
+    // so no fire occurs at t0+4ms.
+    // Choose a position within the galvo cone: ~11.3 deg < 25 deg limit.
+    controller_->set_target({0.2, 0.0, 1.0});
+    (void)controller_->execute_cycle(t0 + 4ms);
+
+    EXPECT_FALSE(controller_->is_firing())
+        << "A changed target position should restart the settle timer";
+
+    EXPECT_CALL(*mock_laser_, fire(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+    (void)controller_->execute_cycle(t0 + 8ms);
+    EXPECT_TRUE(controller_->is_firing());
+}

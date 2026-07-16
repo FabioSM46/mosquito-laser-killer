@@ -98,12 +98,12 @@ auto load_config() -> SystemConfig {
 
         if (yaml["bounding_box"]) {
             auto bb = yaml["bounding_box"];
-            config.bounding_box.x_min = bb["x_min"] ? bb["x_min"].as<double>() : -1.0;
-            config.bounding_box.x_max = bb["x_max"] ? bb["x_max"].as<double>() : 1.0;
-            config.bounding_box.y_min = bb["y_min"] ? bb["y_min"].as<double>() : -1.0;
-            config.bounding_box.y_max = bb["y_max"] ? bb["y_max"].as<double>() : 1.0;
+            config.bounding_box.x_min = bb["x_min"] ? bb["x_min"].as<double>() : -0.09;
+            config.bounding_box.x_max = bb["x_max"] ? bb["x_max"].as<double>() : 0.09;
+            config.bounding_box.y_min = bb["y_min"] ? bb["y_min"].as<double>() : -0.09;
+            config.bounding_box.y_max = bb["y_max"] ? bb["y_max"].as<double>() : 0.09;
             config.bounding_box.z_min = bb["z_min"] ? bb["z_min"].as<double>() : 0.5;
-            config.bounding_box.z_max = bb["z_max"] ? bb["z_max"].as<double>() : 5.0;
+            config.bounding_box.z_max = bb["z_max"] ? bb["z_max"].as<double>() : 1.0;
         }
 
         if (yaml["galvo_limits"]) {
@@ -159,7 +159,7 @@ auto load_config() -> SystemConfig {
             config.stereo.baseline_m = st["baseline_m"]
                 ? st["baseline_m"].as<double>() : 0.12;
             config.stereo.focal_length_px = st["focal_length_px"]
-                ? st["focal_length_px"].as<double>() : 800.0;
+                ? st["focal_length_px"].as<double>() : 500.0;
             config.stereo.cx = st["cx"] ? st["cx"].as<double>() : 320.0;
             config.stereo.cy = st["cy"] ? st["cy"].as<double>() : 240.0;
         }
@@ -186,10 +186,6 @@ auto main(int argc, char* argv[]) -> int {
     println("===========================================");
 
     SignalHandler signal_handler;
-    signal_handler.set_shutdown_callback([&] {
-        println(stderr, "\n[SIGNAL] Shutdown requested");
-        g_shutdown_requested.store(true, std::memory_order_release);
-    });
     signal_handler.install();
 
     auto config = load_config();
@@ -298,10 +294,15 @@ auto main(int argc, char* argv[]) -> int {
         println("[CAPTURE] Thread started");
         uint64_t frame_id = 0;
 
-        std::string left_dev = config.left_camera_device.empty()
-            ? "/dev/video0" : config.left_camera_device;
-        std::string right_dev = config.right_camera_device.empty()
-            ? "/dev/video2" : config.right_camera_device;
+        std::string left_dev = config.left_camera_device;
+        std::string right_dev = config.right_camera_device;
+
+        if (left_dev.empty() || right_dev.empty()) {
+            println(stderr, "[CAPTURE] Camera device paths are not configured. "
+                            "Use stable /dev/v4l/by-path/ symlinks in config/system_config.yaml");
+            request_system_halt("camera device paths not configured");
+            return;
+        }
 
         println("[CAPTURE] Left camera: {}", left_dev);
         println("[CAPTURE] Right camera: {}", right_dev);
@@ -458,6 +459,7 @@ auto main(int argc, char* argv[]) -> int {
             laser->enforce_max_pulse(now);
             if (!watchdog.check(now)) {
                 println(stderr, "[CONTROL] Watchdog triggered, halting");
+                g_shutdown_requested.store(true, std::memory_order_release);
                 firing_controller.emergency_stop();
                 (void)state_machine.transition(SystemState::SAFE_HALT);
                 break;
@@ -466,6 +468,7 @@ auto main(int argc, char* argv[]) -> int {
             e_stop.update();
             if (e_stop.is_pressed()) {
                 println(stderr, "[CONTROL] E-STOP PRESSED, halting");
+                g_shutdown_requested.store(true, std::memory_order_release);
                 firing_controller.emergency_stop();
                 (void)state_machine.transition(SystemState::SAFE_HALT);
                 break;

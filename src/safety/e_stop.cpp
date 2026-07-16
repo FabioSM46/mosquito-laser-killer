@@ -67,7 +67,7 @@ auto EStop::update() -> void {
 }
 
 auto EStop::is_pressed() const -> bool {
-    return initialized_ && pressed_;
+    return pressed_ || !initialized_;
 }
 
 auto EStop::is_initialized() const -> bool {
