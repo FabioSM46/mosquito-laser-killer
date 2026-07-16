@@ -86,12 +86,13 @@ Implementation: `ThreadSafeQueue::drain_all()` returns all queued items; caller 
 
 **Transitions:**
 - `INIT → IDLE`: Hardware initialization complete, self-test passed
-- `IDLE → ARMED`: User/external arm command received
+- `IDLE → ARMED`: Arm switch ON (debounced)
 - `ARMED → TRACKING`: Valid target detected within bounding box
 - `TRACKING → FIRING`: Galvo settled at target coordinates, cooldown expired
-- `FIRING → COOLDOWN`: Pulse complete or max pulse duration exceeded
-- `COOLDOWN → IDLE`: 10-second cooldown elapsed
-- `ANY → SAFE_HALT`: Watchdog timeout, bounds violation, hardware error, signal received
+- `TRACKING → IDLE` / `ARMED → IDLE`: Arm switch OFF (disarm)
+- `FIRING → COOLDOWN`: Pulse complete, abort, or max pulse duration exceeded
+- `COOLDOWN → IDLE`: 10-second cooldown elapsed (re-arms to ARMED if switch still ON)
+- `ANY → SAFE_HALT`: Watchdog timeout, E-stop, hardware error, capture failure, signal shutdown
 
 No transition from `SAFE_HALT` back to any operational state — requires full system restart.
 
@@ -109,20 +110,19 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 ### 4.3 Motion Blanking
 
-**Enforced by:** `FiringController` tracks `galvo_settled_` flag. The execution order in `ControlThread::run()` is:
-1. Write new DAC values for target position
-2. Wait `settle_delay_ms_` (configurable, default 3ms)
-3. Set `galvo_settled_ = true`
-4. Only then evaluate `may_fire() && target_valid_ && galvo_settled_`
-5. **After** pulse, set `galvo_settled_ = false` before next DAC write
+**Enforced by:** `FiringController::execute_cycle()`:
+1. If a pulse is active, only enforce max pulse duration — **no galvo writes** while the laser is ON
+2. When not firing: write DAC for the target, wait `settle_delay_ms_`, set `galvo_settled_`
+3. Fire only when `armed_ && target_valid_ && galvo_settled_ && may_fire()`
+4. After pulse ends, clear settle/target before the next DAC command
 
-The laser write path is dead code when `galvo_settled_ == false`.
+The galvo command path is dead code while `pulse_active_ == true`.
 
 ### 4.4 Software Watchdog
 
 **Enforced by:** `Watchdog` class in the Control Thread reads `heartbeat_atomic_`. If three consecutive cycles pass without an updated heartbeat, `SystemStateMachine::transition(SAFE_HALT)` is called, which:
 1. Forces laser GPIO LOW via `Laser::emergency_shutdown()`
-2. Commands DAC to (0,0) center
+2. Commands galvos to mid-scale center (0 V differential)
 3. Sets internal state to `SAFE_HALT`
 4. Logs the event with timestamp
 
@@ -130,11 +130,15 @@ The laser write path is dead code when `galvo_settled_ == false`.
 
 ### 4.5 Coordinate Bounds Checking
 
-**Enforced by:** `CoordinateMapper::map_to_dac()` returns `std::expected<std::pair<uint16_t, uint16_t>, MappingError>`. The validation chain:
+**Enforced by:** `CoordinateMapper::map_to_dac()` returns `std::expected<DacValues, MappingError>`. The validation chain:
 1. Check 3D point against `BoundingBox3D` (safe firing volume)
 2. Convert to angles, verify within galvo mechanical limits
-3. Convert to DAC integers, verify 0–4095 range
+3. Convert via driver scale (`θ · V/° → V_diff → DAC code`); reject if `|V_diff|` exceeds `dac_max_diff_voltage` or code is outside 0–4095 (**no silent clamp**)
 4. If any step fails, return `std::unexpected(error)` → no DAC write occurs
+
+### 4.5b Arm Switch Gating
+
+**Enforced by:** `FiringController::set_armed(false)` disarms and clears targets; `set_target` / fire path reject when `!armed_`. Control thread calls `set_armed(arm_switch.is_armed())` every cycle. GPIO read failure forces **disarmed** (fail-safe).
 
 ### 4.6 Deterministic Initialization & RAII Shutdown
 
@@ -142,7 +146,7 @@ The laser write path is dead code when `galvo_settled_ == false`.
 - `Laser` constructor: `gpio_.set_direction(output)` then `gpio_.write(LOW)` — pin LOW before any other initialization
 - `SystemController` destructor order (C++ guarantees reverse declaration order):
   1. `laser_` destructor writes GPIO LOW (via RAII)
-  2. `dac_` destructor commands (0,0)
+  2. `dac_` destructor commands mid-scale (2048) center
   3. `spi_` handle closed
 - `sigaction` handlers set `shutdown_requested` atomic flag; threads exit gracefully; destructors fire
 
@@ -152,7 +156,15 @@ The laser write path is dead code when `galvo_settled_ == false`.
 
 ### 4.8 Hardware Emergency Stop (E-Stop)
 
-**Enforced by:** The `EStop` class reads a dedicated GPIO input (active LOW) from a mushroom DPST button. The `ControlThread` checks `e_stop.is_pressed()` every cycle before any arm/fire logic. If pressed, it calls `FiringController::emergency_stop()` to force the laser off and transitions the state machine to `SAFE_HALT`, then breaks the control loop. The E-stop is independent of the arm switch and the watchdog, and it bypasses all state transitions via the `ANY → SAFE_HALT` path.
+**Enforced by:** The `EStop` class reads a dedicated GPIO input (active LOW) from a mushroom DPST button. The `ControlThread` checks `e_stop.is_pressed()` every cycle before any arm/fire logic. If pressed, it calls `FiringController::emergency_stop()` to force the laser off and transitions the state machine to `SAFE_HALT`, then breaks the control loop. The E-stop is independent of the arm switch and the watchdog, and it bypasses all state transitions via the `ANY → SAFE_HALT` path. GPIO read failure forces **pressed** (fail-safe).
+
+### 4.9 Signal Shutdown
+
+**Enforced by:** `SignalHandler` installs async-signal-safe handlers that only set an atomic flag (`is_shutdown_requested()`). All three worker threads poll this flag (and `g_shutdown_requested`) each cycle. Callbacks are **not** invoked from the signal context. Control-thread exit always runs `laser->emergency_shutdown()` and `galvo->zero()`.
+
+### 4.10 Config Engagement Validation
+
+**Enforced by:** `validate_engagement_volume()` at startup. Critical findings (box beyond galvo cone, galvo limits beyond DAC voltage budget, invalid stereo/pulse limits) **abort** process start. Non-critical findings (e.g. camera FOV narrower than galvo cone) log warnings only.
 
 ---
 
@@ -201,8 +213,9 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 | `WatchdogTest` | Heartbeat timeout detection, SAFE_HALT transition, tolerance for 3 missed cycles |
 | `ArmSwitchTest` | Debounce HIGH→armed, LOW→disarmed, glitch rejection, init failure |
 | `EStopTest` | Active-low debounce, press/release detection, init failure |
-| `CoordinateMapperTest` | Bounds validation, bounding box rejection, DAC range clamping |
-| `FiringControllerTest` | Motion blanking ordering, cooldown gating, state transitions |
+| `CoordinateMapperTest` | Bounds validation, voltage-scale mapping, DAC range **rejection** (no clamp) |
+| `FiringControllerTest` | Motion blanking (no galvo while firing), arm gate, cooldown, pulse limits |
+| `ControlArmGatingTest` | TRACKING disarm → IDLE, re-arm, no fire when disarmed |
 | `SystemStateMachineTest` | All valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
 | `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness, backpressure behavior |
 | `StereoMatcherTest` | Disparity calculation correctness, invalid match rejection |

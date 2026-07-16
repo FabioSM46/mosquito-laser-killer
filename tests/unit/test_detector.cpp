@@ -101,3 +101,12 @@ TEST_F(DetectorTest, CustomResolutionWorks) {
     EXPECT_NEAR(result->u, 154.5, 0.5);
     EXPECT_NEAR(result->v, 104.5, 0.5);
 }
+
+TEST_F(DetectorTest, NullDataReturnsNullopt) {
+    EXPECT_FALSE(detector_->detect(nullptr, kFrameSize).has_value());
+}
+
+TEST_F(DetectorTest, EmptySizeReturnsNullopt) {
+    uint8_t dummy = 0;
+    EXPECT_FALSE(detector_->detect(&dummy, 0).has_value());
+}

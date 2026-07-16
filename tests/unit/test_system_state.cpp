@@ -105,3 +105,12 @@ TEST(SystemStateMachineTest, TrackingToArmedIsValid) {
     EXPECT_TRUE(sm.transition(SystemState::ARMED));
     EXPECT_EQ(sm.current(), SystemState::ARMED);
 }
+
+TEST(SystemStateMachineTest, TrackingToIdleIsValid) {
+    SystemStateMachine sm;
+    (void)sm.transition(SystemState::IDLE);
+    (void)sm.transition(SystemState::ARMED);
+    (void)sm.transition(SystemState::TRACKING);
+    EXPECT_TRUE(sm.transition(SystemState::IDLE));
+    EXPECT_EQ(sm.current(), SystemState::IDLE);
+}

@@ -54,7 +54,7 @@ TEST_F(ConcurrentShutdownStressTest, ShutdownWhileAllThreadsActive) {
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_galvo_, zero())
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
+    EXPECT_CALL(*mock_laser_, fire(_))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
     EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
@@ -64,7 +64,8 @@ TEST_F(ConcurrentShutdownStressTest, ShutdownWhileAllThreadsActive) {
     sm.transition(SystemState::ARMED);
 
     Watchdog watchdog(sm, *mock_laser_, *mock_galvo_, 50);
-    FiringController fc(*mock_laser_, *mock_galvo_, *mapper_, 100.0, 10.0, 3.0);
+    FiringController fc(*mock_laser_, *mock_galvo_, *mapper_, 100.0, 0.0, 3.0);
+    fc.set_armed(true);
 
     ThreadSafeQueue<StereoFrame> frame_queue;
     ThreadSafeQueue<TargetCommand> target_queue;
@@ -112,10 +113,14 @@ TEST_F(ConcurrentShutdownStressTest, ShutdownWhileAllThreadsActive) {
             auto cmd = target_queue.pop(5ms);
             if (cmd.has_value()) {
                 watchdog.feed(cmd->timestamp);
-                fc.set_target(cmd->target_position.value());
+                if (cmd->target_valid && cmd->target_position.has_value()) {
+                    fc.set_target(cmd->target_position.value());
+                } else {
+                    fc.clear_target();
+                }
             }
 
-            fc.execute_cycle(now);
+            (void)fc.execute_cycle(now);
         }
 
         mock_laser_->emergency_shutdown();

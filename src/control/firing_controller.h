@@ -5,7 +5,6 @@
 #include "hal/igalvo_driver.h"
 #include "control/coordinate_mapper.h"
 #include <chrono>
-#include <atomic>
 #include "core/print.h"
 
 class FiringController {
@@ -23,7 +22,9 @@ public:
 
     [[nodiscard]] auto may_fire() const -> bool;
     [[nodiscard]] auto is_firing() const -> bool;
+    [[nodiscard]] auto is_armed() const -> bool;
 
+    auto set_armed(bool armed) -> void;
     auto set_target(const Point3D& position) -> void;
     auto clear_target() -> void;
     auto disarm() -> void;
@@ -44,6 +45,7 @@ private:
 
     std::optional<Point3D> current_target_{};
     bool target_valid_{false};
+    bool armed_{false};
 
     std::chrono::steady_clock::time_point cooldown_until_{};
     std::chrono::steady_clock::time_point pulse_start_{};
@@ -58,4 +60,6 @@ private:
         -> bool;
 
     auto abort_active_pulse(const char* reason) -> void;
+    auto force_laser_off_and_halt(const char* reason) -> void;
+    auto end_pulse(std::chrono::steady_clock::time_point now) -> bool;
 };

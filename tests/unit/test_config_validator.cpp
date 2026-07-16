@@ -34,17 +34,19 @@ protected:
 TEST_F(ConfigValidatorTest, DefaultRealisticConfigHasNoWarnings) {
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(warnings.empty());
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
 }
 
-TEST_F(ConfigValidatorTest, BoxCornerBeyondGalvoConeWarns) {
+TEST_F(ConfigValidatorTest, BoxCornerBeyondGalvoConeIsCritical) {
     config_.bounding_box.x_max = 0.3;
     config_.bounding_box.y_max = 0.3;
 
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "bounding-box"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
 }
 
-TEST_F(ConfigValidatorTest, GalvoConeExceedingDriverVoltageWarns) {
+TEST_F(ConfigValidatorTest, GalvoConeExceedingDriverVoltageIsCritical) {
     config_.galvo_limits.angle_x_min_deg = -20.0;
     config_.galvo_limits.angle_x_max_deg = 20.0;
     config_.galvo_limits.angle_y_min_deg = -20.0;
@@ -52,13 +54,15 @@ TEST_F(ConfigValidatorTest, GalvoConeExceedingDriverVoltageWarns) {
 
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "galvo-voltage"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
 }
 
-TEST_F(ConfigValidatorTest, NarrowLensFovWarns) {
+TEST_F(ConfigValidatorTest, NarrowLensFovIsNonCriticalWarning) {
     config_.camera_optics.lens_focal_length_mm = 10.0;
 
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "camera-fov"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
 }
 
 TEST_F(ConfigValidatorTest, ThreeMmLensFovIsConsistent) {
@@ -78,10 +82,11 @@ TEST_F(ConfigValidatorTest, SixMmLensFovIsNarrower) {
     EXPECT_LT(fov6, fov3);
 }
 
-TEST_F(ConfigValidatorTest, InvalidStereoBaselineWarns) {
+TEST_F(ConfigValidatorTest, InvalidStereoBaselineIsCritical) {
     config_.stereo.baseline_m = 0.0;
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "stereo"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
 }
 
 TEST_F(ConfigValidatorTest, MaxCommandableAngleMatchesDriverScale) {
@@ -90,4 +95,12 @@ TEST_F(ConfigValidatorTest, MaxCommandableAngleMatchesDriverScale) {
 
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "galvo-voltage"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, InvalidPulseDurationIsCritical) {
+    config_.max_pulse_duration_ms = 250.0;
+    auto warnings = validate_engagement_volume(config_);
+    EXPECT_TRUE(find_warning(warnings, "pulse"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
 }

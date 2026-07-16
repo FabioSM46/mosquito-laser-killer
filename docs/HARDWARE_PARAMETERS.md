@@ -6,7 +6,7 @@ enforces. The runtime configuration lives in `config/system_config.yaml`; a
 startup validator (`src/safety/config_validator.cpp`, see
 `validate_engagement_volume`) checks that the configured safe firing volume,
 galvo limits, and camera field of view are mutually consistent and prints
-warnings on mismatch.
+warnings on mismatch. **Critical** mismatches abort startup.
 
 ---
 
@@ -155,12 +155,14 @@ tunable in `camera_controls`.
 
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
-| Max pulse ≤ 100 ms | per-cycle duration check forces `laser.fire(false)` | `FiringController::execute_cycle` |
+| Max pulse ≤ 100 ms | per-cycle duration check + `Laser::enforce_max_pulse` | `FiringController`, `Laser` |
 | Cooldown ≥ 10 s | `cooldown_until_` gates `may_fire()` | `FiringController` |
-| Motion blanking | galvo must be `settled` before fire; fire path is dead code otherwise | `FiringController` |
+| Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
+| Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
 | Watchdog | 3 missed heartbeats → `emergency_shutdown()` + `SAFE_HALT` | `Watchdog` |
-| Coordinate bounds | all 3D targets validated against the safe box and galvo cone | `CoordinateMapper`, `BoundingBox3D` |
-| E-stop | hardware mushroom button (active-low GPIO) bypasses all states → `SAFE_HALT` | `EStop` |
+| Coordinate bounds | safe box + galvo cone + voltage-scale DAC (reject, no clamp) | `CoordinateMapper`, `BoundingBox3D` |
+| E-stop | active-low mushroom → `SAFE_HALT`; GPIO fault → pressed | `EStop` |
+| Config validation | critical engagement mismatches abort startup | `validate_engagement_volume` |
 | RAII shutdown | laser GPIO forced LOW on init, on error, and on destruction | `Laser`, `~GpioImpl` |
 
 ---

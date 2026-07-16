@@ -56,8 +56,9 @@ private:
             return to == SystemState::TRACKING || to == SystemState::IDLE ||
                    to == SystemState::SAFE_HALT;
         case SystemState::TRACKING:
+            // IDLE allowed for arm-switch disarm (operator gate).
             return to == SystemState::FIRING || to == SystemState::ARMED ||
-                   to == SystemState::SAFE_HALT;
+                   to == SystemState::IDLE || to == SystemState::SAFE_HALT;
         case SystemState::FIRING:
             return to == SystemState::COOLDOWN || to == SystemState::SAFE_HALT;
         case SystemState::COOLDOWN:

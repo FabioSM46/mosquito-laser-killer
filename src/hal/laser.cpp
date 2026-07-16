@@ -3,8 +3,9 @@
 #include "core/error.h"
 #include "core/print.h"
 
-Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin)
-    : gpio_(std::move(gpio)) {
+Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin, double max_pulse_ms)
+    : gpio_(std::move(gpio))
+    , max_pulse_ms_(max_pulse_ms) {
     println("[LASER] Initializing on GPIO pin {}...", pin);
 
     if (!gpio_) {
@@ -30,7 +31,8 @@ Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin)
     }
 
     firing_ = false;
-    println("[LASER] Initialized, pin forced LOW (safe state)");
+    println("[LASER] Initialized, pin forced LOW (safe state), max_pulse={:.0f}ms",
+                 max_pulse_ms_);
 }
 
 Laser::~Laser() {
@@ -55,12 +57,32 @@ auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
         return std::unexpected(HardwareError::GpioWriteFailed);
     }
 
+    if (enable && firing_) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration<double, std::milli>(now - pulse_start_);
+        if (elapsed.count() >= max_pulse_ms_) {
+            println(stderr, "[LASER] Max pulse exceeded ({:.0f}ms), forcing OFF",
+                         max_pulse_ms_);
+            auto off = gpio_->write(false);
+            firing_ = false;
+            if (!off.has_value()) {
+                emergency_shutdown_ = true;
+                return std::unexpected(off.error());
+            }
+            return std::unexpected(HardwareError::LaserEmergencyShutdown);
+        }
+    }
+
     auto result = gpio_->write(enable);
     if (!result.has_value()) {
         println(stderr, "[LASER] GPIO write failed for fire({}): {}",
                      enable, to_string(result.error()));
         emergency_shutdown_ = true;
         return std::unexpected(result.error());
+    }
+
+    if (enable && !firing_) {
+        pulse_start_ = std::chrono::steady_clock::now();
     }
 
     firing_ = enable;
@@ -72,6 +94,27 @@ auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
     }
 
     return {};
+}
+
+auto Laser::enforce_max_pulse(std::chrono::steady_clock::time_point now) -> void {
+    if (!firing_ || emergency_shutdown_ || !gpio_) {
+        return;
+    }
+
+    auto elapsed = std::chrono::duration<double, std::milli>(now - pulse_start_);
+    if (elapsed.count() < max_pulse_ms_) {
+        return;
+    }
+
+    println(stderr, "[LASER] enforce_max_pulse: duration {:.0f}ms exceeded, forcing OFF",
+                 max_pulse_ms_);
+    auto result = gpio_->write(false);
+    firing_ = false;
+    if (!result.has_value()) {
+        emergency_shutdown_ = true;
+        println(stderr, "[LASER] enforce_max_pulse write failed: {}",
+                     to_string(result.error()));
+    }
 }
 
 auto Laser::emergency_shutdown() -> std::expected<void, HardwareError> {

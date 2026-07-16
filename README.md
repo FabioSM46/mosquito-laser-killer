@@ -134,17 +134,18 @@ If `left_camera_device` or `right_camera_device` is left empty, the system falls
 
 ## Safety Architecture
 
-The system implements seven structurally-enforced safety guards:
+The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration ≤ 100ms** — enforced by timer check in the same function that writes the pin
+1. **Laser pulse duration ≤ 100ms** — control-loop + HAL max-pulse enforcement
 2. **10-second firing cooldown** — `may_fire()` gate with no bypass path
-3. **Motion blanking** — laser TTL LOW during galvo slewing, fires only after settling
-4. **Software watchdog** — 3 missed heartbeats (~25ms) triggers SAFE_HALT
-5. **Coordinate bounds checking** — `std::expected` chain validates 3D point → bounding box → galvo limits → DAC range (0-4095)
-6. **RAII deterministic shutdown** — destructor order guarantees laser LOW, DAC zeroed, SPI closed
-7. **Hardware error propagation** — all HAL operations return `std::expected<T, HardwareError>`
-
-See `AGENTS.md` for the full safety enforcement strategy.
+3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
+4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
+5. **Software watchdog** — 3 missed heartbeats (~25ms) triggers SAFE_HALT
+6. **Coordinate bounds** — box + galvo cone + voltage-scale DAC (**reject**, no clamp)
+7. **E-stop** — active-low mushroom → SAFE_HALT; GPIO fault → pressed
+8. **Config validation** — critical engagement mismatches abort startup
+9. **RAII shutdown** — destructor order guarantees laser LOW, galvos centered
+10. **Signal shutdown** — SIGINT/SIGTERM polled by all worker threads
 
 ## Building and Running Tests
 
@@ -163,6 +164,7 @@ ctest --output-on-failure
 ./tests/test_e_stop
 ./tests/test_coordinate_mapper
 ./tests/test_firing_controller
+./tests/test_control_arm_gating
 ./tests/test_system_state
 ./tests/test_thread_safe_queue
 ./tests/test_stereo_matcher

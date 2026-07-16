@@ -135,3 +135,18 @@ TEST_F(EStopTest, UpdateWithoutInitDoesNotCrash) {
     e_stop.update();
     EXPECT_FALSE(e_stop.is_pressed());
 }
+
+TEST_F(EStopTest, GpioReadFailureForcesPressed) {
+    EXPECT_CALL(*mock_gpio_, set_direction_input())
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+
+    MockGpio* raw_ptr = mock_gpio_.get();
+    EStop e_stop(std::move(mock_gpio_), 3);
+    e_stop.initialize();
+
+    EXPECT_CALL(*raw_ptr, read())
+        .WillOnce(Return(std::unexpected(HardwareError::GpioReadFailed)));
+
+    e_stop.update();
+    EXPECT_TRUE(e_stop.is_pressed());
+}

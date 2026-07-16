@@ -32,8 +32,11 @@ auto ArmSwitch::update() -> void {
 
     auto read_result = gpio_->read();
     if (!read_result.has_value()) {
-        println(stderr, "[ARM] GPIO read failed: {}",
+        // Fail-safe: treat GPIO faults as disarmed.
+        println(stderr, "[ARM] GPIO read failed: {} — forcing DISARMED",
                      to_string(read_result.error()));
+        armed_ = false;
+        armed_counter_ = 0;
         return;
     }
 

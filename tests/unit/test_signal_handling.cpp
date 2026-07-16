@@ -59,6 +59,21 @@ TEST(SignalHandlerTest, ProgrammaticRequestInvokesCallback) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+TEST(SignalHandlerTest, SignalDoesNotInvokeCallbackButSetsFlag) {
+    // Async-signal-safe path must only set an atomic; main threads poll
+    // is_shutdown_requested() (see main.cpp worker loops).
+    SignalHandler sh;
+    std::atomic<bool> callback_fired{false};
+    sh.set_shutdown_callback([&] { callback_fired.store(true); });
+    sh.install();
+    sh.reset();
+
+    std::raise(SIGINT);
+
+    EXPECT_TRUE(sh.is_shutdown_requested());
+    EXPECT_FALSE(callback_fired.load());
+}
+
 TEST(SignalHandlerTest, SignalThenLaserEmergencyShutdownForcesPinLow) {
     auto mock_gpio = std::make_unique<StrictMock<MockGpio>>();
 

@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <chrono>
-#include <thread>
 #include <memory>
 
 #include "mocks/mock_gpio.h"
@@ -115,5 +114,24 @@ TEST_F(LaserSafetyTest, FireWriteFailureTriggersEmergencyShutdown) {
 
     auto second_result = laser->fire(false);
     EXPECT_TRUE(second_result.has_value());
+    EXPECT_FALSE(laser->is_firing());
+}
+
+TEST_F(LaserSafetyTest, EnforceMaxPulseForcesPinLow) {
+    EXPECT_CALL(*mock_gpio_, set_direction_output())
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_gpio_, write(false))
+        .Times(AtLeast(2))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_gpio_, write(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+
+    auto laser = std::make_unique<Laser>(std::move(mock_gpio_), 18, 10.0);
+
+    ASSERT_TRUE(laser->fire(true).has_value());
+    EXPECT_TRUE(laser->is_firing());
+
+    auto later = std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+    laser->enforce_max_pulse(later);
     EXPECT_FALSE(laser->is_firing());
 }

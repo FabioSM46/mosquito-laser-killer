@@ -10,6 +10,10 @@ Detector::Detector(int width, int height)
 
 auto Detector::detect(const uint8_t* data, size_t size)
     -> std::optional<Pixel2D> {
+    if (data == nullptr || size == 0 || width_ <= 0 || height_ <= 0) {
+        return std::nullopt;
+    }
+
     int sum_x = 0;
     int sum_y = 0;
     int count = 0;

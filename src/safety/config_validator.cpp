@@ -40,6 +40,15 @@ auto vertical_fov_deg(const SystemConfig::CameraOptics& optics) -> double {
            * (180.0 / M_PI);
 }
 
+auto has_critical_validation_errors(const std::vector<ValidationWarning>& warnings) -> bool {
+    for (const auto& w : warnings) {
+        if (w.critical) {
+            return true;
+        }
+    }
+    return false;
+}
+
 auto validate_engagement_volume(const SystemConfig& config)
     -> std::vector<ValidationWarning> {
     std::vector<ValidationWarning> warnings;
@@ -59,25 +68,32 @@ auto validate_engagement_volume(const SystemConfig& config)
                 " deg) exceeds the angle commandable by the DAC/driver chain (" +
                 std::to_string(max_commandable_deg) + " deg = " +
                 std::to_string(config.galvo_driver.dac_max_diff_voltage) + "V / " +
-                std::to_string(config.galvo_driver.input_scale_v_per_deg) + "V/deg)."
+                std::to_string(config.galvo_driver.input_scale_v_per_deg) + "V/deg).",
+            true
         });
     }
 
     const double hfov = horizontal_fov_deg(config.camera_optics);
     const double half_hfov = hfov / 2.0;
     if (half_hfov < galvo_half_cone_deg) {
+        // Informational: targets commandable by galvo may be outside camera FOV.
         warnings.push_back({
             "camera-fov",
             "Camera horizontal half-FOV (" + std::to_string(half_hfov) +
                 " deg) is narrower than the galvo half-cone (" +
                 std::to_string(galvo_half_cone_deg) +
-                " deg). Targets reachable by the galvo may be outside the camera view."
+                " deg). Targets reachable by the galvo may be outside the camera view.",
+            false
         });
     }
 
     for (const auto& c : box_corners(config.bounding_box)) {
         if (c.z <= 0.0) {
-            warnings.push_back({"bounding-box", "Bounding-box corner has non-positive z."});
+            warnings.push_back({
+                "bounding-box",
+                "Bounding-box corner has non-positive z.",
+                true
+            });
             continue;
         }
         const double lateral = std::sqrt(c.x * c.x + c.y * c.y);
@@ -89,16 +105,30 @@ auto validate_engagement_volume(const SystemConfig& config)
                     std::to_string(c.y) + ", " + std::to_string(c.z) +
                     ") requires " + std::to_string(angle_deg) +
                     " deg, beyond the " + std::to_string(galvo_half_cone_deg) +
-                    " deg galvo half-cone."
+                    " deg galvo half-cone.",
+                true
             });
         }
     }
 
     if (config.stereo.baseline_m <= 0.0) {
-        warnings.push_back({"stereo", "Stereo baseline must be positive."});
+        warnings.push_back({"stereo", "Stereo baseline must be positive.", true});
     }
     if (config.stereo.focal_length_px <= 0.0) {
-        warnings.push_back({"stereo", "Stereo focal_length_px must be positive."});
+        warnings.push_back({"stereo", "Stereo focal_length_px must be positive.", true});
+    }
+    if (config.galvo_driver.input_scale_v_per_deg <= 0.0) {
+        warnings.push_back({"galvo-voltage", "input_scale_v_per_deg must be positive.", true});
+    }
+    if (config.galvo_driver.dac_max_diff_voltage <= 0.0) {
+        warnings.push_back({"galvo-voltage", "dac_max_diff_voltage must be positive.", true});
+    }
+    if (config.max_pulse_duration_ms <= 0.0 || config.max_pulse_duration_ms > 100.0) {
+        warnings.push_back({
+            "pulse",
+            "max_pulse_duration_ms must be in (0, 100].",
+            true
+        });
     }
 
     return warnings;

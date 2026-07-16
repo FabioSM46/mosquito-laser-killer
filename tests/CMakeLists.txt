@@ -261,6 +261,26 @@ target_link_libraries(test_config_validator PRIVATE
 )
 gtest_discover_tests(test_config_validator)
 
+add_executable(test_control_arm_gating
+    unit/test_control_arm_gating.cpp
+    ${CONTROL_SOURCES}
+    ${CMAKE_SOURCE_DIR}/src/safety/bounding_box.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/system_state.cpp
+)
+target_include_directories(test_control_arm_gating PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_control_arm_gating PRIVATE
+    mosquito_hal
+    Eigen3::Eigen
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_control_arm_gating)
+
 #
 # Stress Tests
 #
