@@ -3,15 +3,18 @@
 
 Watchdog::Watchdog(SystemStateMachine& state_machine,
                    ILaser& laser,
-                   IDac& dac,
-                   uint32_t missed_threshold)
+                   IGalvoDriver& galvo,
+                   uint32_t missed_threshold,
+                   int target_fps)
     : state_machine_(state_machine)
     , laser_(laser)
-    , dac_(dac)
-    , missed_threshold_(missed_threshold) {
-    auto now = std::chrono::steady_clock::now();
-    last_heartbeat_.store(now, std::memory_order_release);
-    println("[WATCHDOG] Initialized, threshold: {} missed cycles", missed_threshold_);
+    , galvo_(galvo)
+    , missed_threshold_(missed_threshold)
+    , frame_period_(target_fps > 0 ? 1'000'000 / target_fps : 8333) {
+    last_heartbeat_.store(std::chrono::steady_clock::time_point::min(),
+                          std::memory_order_release);
+    println("[WATCHDOG] Initialized, threshold: {} missed cycles, frame period: {}us "
+                 "(target_fps: {})", missed_threshold_, frame_period_.count(), target_fps);
 }
 
 auto Watchdog::feed(std::chrono::steady_clock::time_point heartbeat) -> void {
@@ -35,23 +38,16 @@ auto Watchdog::check(std::chrono::steady_clock::time_point now) -> bool {
     }
 
     auto elapsed = now - last;
-    auto frame_period = std::chrono::microseconds(8333);
     auto expected_cycles = static_cast<uint32_t>(
-        elapsed / frame_period);
+        elapsed / frame_period_);
 
-    if (expected_cycles > 0) {
-        auto current_missed = missed_count_.load(std::memory_order_acquire);
-        current_missed += expected_cycles;
-        missed_count_.store(current_missed, std::memory_order_release);
+    missed_count_.store(expected_cycles, std::memory_order_release);
 
-        if (current_missed >= missed_threshold_) {
-            println(stderr, "[WATCHDOG] Heartbeat lost for {} cycles (threshold: {}). "
-                         "Triggering SAFE_HALT.", current_missed, missed_threshold_);
-            trigger_safe_halt();
-            return false;
-        }
-
-        last_heartbeat_.store(now, std::memory_order_release);
+    if (expected_cycles >= missed_threshold_) {
+        println(stderr, "[WATCHDOG] Heartbeat lost for {} cycles (threshold: {}). "
+                     "Triggering SAFE_HALT.", expected_cycles, missed_threshold_);
+        trigger_safe_halt();
+        return false;
     }
 
     return true;
@@ -70,11 +66,11 @@ auto Watchdog::trigger_safe_halt() -> void {
                      to_string(laser_result.error()));
     }
 
-    println(stderr, "[WATCHDOG] Commanding DAC to (0,0)");
-    auto dac_result = dac_.zero();
-    if (!dac_result.has_value()) {
-        println(stderr, "[WATCHDOG] DAC zero failed: {}",
-                     to_string(dac_result.error()));
+    println(stderr, "[WATCHDOG] Commanding galvos to (0V differential)");
+    auto galvo_result = galvo_.zero();
+    if (!galvo_result.has_value()) {
+        println(stderr, "[WATCHDOG] Galvo zero failed: {}",
+                     to_string(galvo_result.error()));
     }
 
     (void)state_machine_.transition(SystemState::SAFE_HALT);

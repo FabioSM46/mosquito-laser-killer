@@ -34,7 +34,7 @@ Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin)
 }
 
 Laser::~Laser() {
-    if (gpio_ && !emergency_shutdown_) {
+    if (gpio_) {
         auto result = gpio_->write(false);
         if (!result.has_value()) {
             println(stderr, "[LASER] Destructor: failed to force pin LOW: {}",
@@ -45,7 +45,7 @@ Laser::~Laser() {
 }
 
 auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
-    if (emergency_shutdown_) {
+    if (emergency_shutdown_ && enable) {
         println(stderr, "[LASER] Fire rejected: emergency shutdown active");
         return std::unexpected(HardwareError::LaserEmergencyShutdown);
     }
@@ -95,4 +95,8 @@ auto Laser::emergency_shutdown() -> std::expected<void, HardwareError> {
 
 auto Laser::is_firing() const -> bool {
     return firing_;
+}
+
+auto Laser::is_initialized() const -> bool {
+    return gpio_ != nullptr && !emergency_shutdown_;
 }

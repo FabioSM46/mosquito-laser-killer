@@ -63,9 +63,16 @@ TEST_F(CoordinateMapperTest, TargetTooFarRejected) {
     EXPECT_EQ(result.error(), MappingError::OutOfBounds);
 }
 
-TEST_F(CoordinateMapperTest, TargetBehindBaselineRejected) {
+TEST_F(CoordinateMapperTest, NegativeZRejectedAsOutOfBounds) {
     auto result = mapper_->map_to_dac({0.0, 0.0, -1.0});
     EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MappingError::OutOfBounds);
+}
+
+TEST_F(CoordinateMapperTest, TargetInBoxButBeyondGalvoConeRejected) {
+    auto result = mapper_->map_to_dac({1.0, 0.0, 0.3});
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MappingError::GalvoAngleLimitExceeded);
 }
 
 TEST_F(CoordinateMapperTest, DacValuesWithin12BitRange) {

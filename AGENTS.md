@@ -2,9 +2,39 @@
 
 ## 1. System Overview
 
-This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running Raspberry Pi OS (64-bit, arm64, non-RTOS Linux kernel) controls two OV9281 global-shutter cameras, a dual-channel 12-bit DAC (MCP4922) driving galvo mirrors, and a 2.5W Class 4 blue laser via TTL GPIO.
+This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running Raspberry Pi OS (64-bit, arm64, non-RTOS Linux kernel) controls two OV9281 global-shutter cameras, a dual-channel 12-bit DAC (MCP4922) driving galvo mirrors, and a 2.5W Class 4 blue laser via TTL GPIO. A lever SPST arm switch and a mushroom DPST emergency-stop button provide hardwired operator control.
 
 **Critical domain constraint:** A 2.5W Class 4 laser causes instantaneous, irreversible blindness and fire hazard. Every safety guard is **structurally enforced in code** — never documented as comments or convention.
+
+> Full galvanometer / camera / laser parameter tables and the derived engagement envelope live in [`docs/HARDWARE_PARAMETERS.md`](docs/HARDWARE_PARAMETERS.md). Runtime values are validated at startup by `validate_engagement_volume()` (`src/safety/config_validator.cpp`).
+
+### 1.1 Hardware Bill of Materials
+
+| Component | Specification | Purpose |
+|-----------|-------------|---------|
+| Host | Raspberry Pi 5 | Real-time control and stereo vision processing |
+| Cameras | 2× OV9281 global-shutter monochrome 720P USB3 UVC (120 FPS) | Stereoscopic target detection |
+| Laser | 2.5W focusable TTL/PWM 450 nm blue Class 4 | Target neutralization |
+| Laser power supply | Mean Well LRS-50-12 12 VDC / 4.2 A / 50 W | Laser driver power |
+| Galvo scanner | 20 kpps 400–700 nm, powered by 15 V | Laser beam steering |
+| X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
+| Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
+| Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | TTL level translation for laser driver |
+| Arm switch | Lever SPST | System arm input (active HIGH on GPIO 24) |
+| E-stop | Mushroom DPST push-button | Emergency stop (active LOW on GPIO 25) |
+| Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
+| Resistor | 1/2 W 3.3 kΩ | E-stop pull-up/pull-down |
+| Resistors | 2× 1/2 W 10 kΩ | E-stop series/input protection |
+| Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
+
+**Power and signal wiring:**
+- RPi 5 GPIO 18 → level shifter → laser TTL input (configurable via `laser_pin`).
+- RPi 5 GPIO 24 → lever SPST arm switch (configurable via `arm_switch_pin`).
+- RPi 5 GPIO 25 → mushroom DPST E-stop (configurable via `e_stop_pin`).
+- RPi 5 SPI0 CE0 (pin 24) → MCP4922 #1 `/CS` (X-axis); SPI0 CE1 (pin 26) → MCP4922 #2 `/CS` (Y-axis).
+- Both MCP4922 Vref pins tied to 5 V, producing a 0–5 V unipolar output per channel and a ±5 V differential swing per axis.
+- Galvo scanner powered by 15 V; laser driver powered by 12 V from the Mean Well supply.
+- The OV9281 cameras are capable of 1280×720; the default configuration runs them at **640×400 @ 120 FPS** (a validated OV9281 binned mode; 640×480 is not supported by this sensor). The `StereoFrame` buffers are dynamically sized so any supported mode works without code changes.
 
 ---
 
@@ -120,6 +150,10 @@ The laser write path is dead code when `galvo_settled_ == false`.
 
 **Enforced by:** All HAL operations return `std::expected<T, HardwareError>`. Callers MUST handle the error — the `std::expected` API forces explicit `.value()` or `.and_then()` calls. Unchecked errors are a compile-time warning (via `-Werror=unused-result`). Failures propagate to `SAFE_HALT` transition.
 
+### 4.8 Hardware Emergency Stop (E-Stop)
+
+**Enforced by:** The `EStop` class reads a dedicated GPIO input (active LOW) from a mushroom DPST button. The `ControlThread` checks `e_stop.is_pressed()` every cycle before any arm/fire logic. If pressed, it calls `FiringController::emergency_stop()` to force the laser off and transitions the state machine to `SAFE_HALT`, then breaks the control loop. The E-stop is independent of the arm switch and the watchdog, and it bypasses all state transitions via the `ANY → SAFE_HALT` path.
+
 ---
 
 ## 5. C++23 Mandatory Features
@@ -151,7 +185,8 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 | `IGpio` | `MockGpio` | Laser pin enforced LOW on init/shutdown/error; pulse duration tracking |
 | `ISpi` | `MockSpi` | DAC values validated in 0–4095 range; SPI errors → SAFE_HALT |
 | `ICamera` | `MockCamera` | Frame timestamps; queue behavior under backpressure |
-| `IDac` | `MockDac` | Motion blanking ordering — DAC write before laser fire |
+| `IDac` | `MockDac` | DAC values validated in 0–4095 range; SPI errors → SAFE_HALT |
+| `IGalvoDriver` | `MockGalvoDriver` | Motion blanking ordering — DAC write before laser fire |
 | `ILaser` | `MockLaser` | Cooldown enforcement; max pulse duration; emergency shutdown |
 
 ---
@@ -164,6 +199,8 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 |-----------|----------|
 | `LaserSafetyTest` | Pin LOW on init, pulse ≤100ms, cooldown enforced, emergency shutdown |
 | `WatchdogTest` | Heartbeat timeout detection, SAFE_HALT transition, tolerance for 3 missed cycles |
+| `ArmSwitchTest` | Debounce HIGH→armed, LOW→disarmed, glitch rejection, init failure |
+| `EStopTest` | Active-low debounce, press/release detection, init failure |
 | `CoordinateMapperTest` | Bounds validation, bounding box rejection, DAC range clamping |
 | `FiringControllerTest` | Motion blanking ordering, cooldown gating, state transitions |
 | `SystemStateMachineTest` | All valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
@@ -212,7 +249,9 @@ mosquito-laser-killer/
 │   ├── safety/
 │   │   ├── system_state.h       # SystemState enum + SystemStateMachine
 │   │   ├── watchdog.h           # Heartbeat watchdog
-│   │   └── bounding_box.h       # 3D geometric safety zone
+│   │   ├── bounding_box.h       # 3D geometric safety zone
+│   │   ├── arm_switch.h/.cpp    # Arm switch input with debounce
+│   │   └── e_stop.h/.cpp        # Mushroom E-stop input with debounce
 │   ├── vision/
 │   │   ├── detector.h/.cpp      # Mosquito detection (thresholding, morphology)
 │   │   ├── stereo_matcher.h/.cpp # Block-matching stereo disparity
@@ -227,10 +266,13 @@ mosquito-laser-killer/
 │   │   ├── mock_spi.h
 │   │   ├── mock_camera.h
 │   │   ├── mock_dac.h
+│   │   ├── mock_galvo_driver.h
 │   │   └── mock_laser.h
 │   └── unit/
 │       ├── test_safety_guards.cpp
 │       ├── test_watchdog.cpp
+│       ├── test_arm_switch.cpp
+│       ├── test_e_stop.cpp
 │       ├── test_coordinate_mapper.cpp
 │       ├── test_firing_controller.cpp
 │       ├── test_system_state.cpp
@@ -265,15 +307,18 @@ mosquito-laser-killer/
 6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
 8. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
+9. **Default camera mode 640×400@120fps** — the OV9281 hardware supports 1280×720; the default 640×400 mode is a validated OV9281 binned mode (640×480 is not supported). The `StereoFrame` buffers are dynamically sized (`std::vector`) so any supported mode works without code changes. Higher rates (up to 210 FPS at 640×400) are configurable via `target_fps`.
 
 ---
 
 ## 11. Communication Protocols
 
-- **SPI:** Mode 0, 20 MHz (MCP4922 max), CS0 on Bus 0
-- **TTL Laser:** GPIO 18 via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3V logic → 5V level shifter → laser driver
-- **Cameras:** USB 3.0 UVC, YUYV→grayscale conversion, 640×480@120fps
-- **Config:** YAML file loaded at startup; bounding box, settle delays, PID gains
+- **SPI:** Mode 0, 20 MHz (MCP4922 max), CS0 on Bus 0 for X-axis DAC, CS1 for Y-axis DAC
+- **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), 3.3V logic → 5V level shifter → laser driver
+- **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH
+- **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW mushroom DPST
+- **Cameras:** USB 3.0 UVC, grayscale capture, 640×400@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`; OV9281 supports up to 210 FPS at 640×400)
+- **Config:** YAML file loaded at startup; bounding box, settle delays, pulse/cooldown limits, GPIO pins, camera device paths
 
 ---
 

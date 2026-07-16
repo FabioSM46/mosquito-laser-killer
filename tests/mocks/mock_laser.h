@@ -8,4 +8,5 @@ public:
     MOCK_METHOD((std::expected<void, HardwareError>), fire, (bool enable), (override));
     MOCK_METHOD((std::expected<void, HardwareError>), emergency_shutdown, (), (override));
     MOCK_METHOD(bool, is_firing, (), (const, override));
+    MOCK_METHOD(bool, is_initialized, (), (const, override));
 };

@@ -6,6 +6,45 @@ A C++23 real-time embedded system for Raspberry Pi 5 that detects, tracks, and n
 
 **WARNING: This system controls a 2.5W Class 4 laser capable of causing instant, irreversible blindness and fire. Read `AGENTS.md` before modifying any code. All safety guards are structurally enforced in the source code.**
 
+## Hardware Bill of Materials
+
+| Component | Specification | Purpose |
+|-----------|-------------|---------|
+| Host | Raspberry Pi 5 | Real-time control and stereo vision processing |
+| Cameras | 2× OV9281 global-shutter monochrome 720P USB3 UVC (120 FPS) | Stereoscopic target detection |
+| Laser | 2.5W focusable TTL/PWM 450 nm blue Class 4 | Target neutralization |
+| Laser power supply | Mean Well LRS-50-12 12 VDC / 4.2 A / 50 W | Laser driver power |
+| Galvo scanner | 20 kpps 400–700 nm, powered by 15 V | Laser beam steering |
+| X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
+| Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
+| Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | TTL level translation for laser driver |
+| Arm switch | Lever SPST | System arm input (active HIGH) |
+| E-stop | Mushroom DPST push-button | Emergency stop (active LOW) |
+| Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
+| Resistor | 1/2 W 3.3 kΩ | E-stop pull-up/pull-down |
+| Resistors | 2× 1/2 W 10 kΩ | E-stop series/input protection |
+| Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
+
+### Wiring Notes
+
+- **RPi 5 GPIO 18** → level shifter → laser TTL input (3.3 V logic shifted to 5 V). Configurable via `laser_pin`.
+- **RPi 5 GPIO 24** → lever SPST arm switch (active HIGH when armed). Configurable via `arm_switch_pin`.
+- **RPi 5 GPIO 25** → mushroom DPST E-stop (active LOW when pressed; both poles wired in series for redundancy). Configurable via `e_stop_pin`.
+- **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC).
+- **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC).
+- **RPi 5 SPI0 MOSI** (pin 19) and **SCLK** (pin 23) → both MCP4922 SDI and SCK.
+- Both MCP4922 Vref pins tied to **5 V** → output swing 0–5 V per channel, producing ±5 V differential per axis.
+- Galvo scanner powered by **15 V**; driver accepts the ±5 V differential signal from the DAC pair.
+- Laser driver powered by **12 V** from the Mean Well supply.
+
+### Recommended E-Stop Input Circuit
+
+The mushroom DPST button is normally-closed (NC). Each pole is wired in series with a 10 kΩ resistor to a GPIO input. A 3.3 kΩ pull-up holds the GPIO HIGH when the button is released; pressing the button opens the contacts and pulls the GPIO LOW. A 100 nF capacitor to ground provides debounce, and the BZX55C3V3 zener clamps transients to 3.3 V. Both poles must agree before the system considers the E-stop released.
+
+### Camera Resolution Note
+
+The OV9281 modules are capable of 1280×720. The default configuration runs them at **640×480 @ 120 FPS** for real-time dual-camera processing on the Raspberry Pi 5. Adjust `frame_width`, `frame_height`, and `target_fps` in `config/system_config.yaml` if your UVC firmware supports a different mode, but do not exceed the real-time processing budget.
+
 ## Quick Start
 
 ```bash
@@ -56,6 +95,15 @@ All runtime parameters are in `config/system_config.yaml`:
 | `max_pulse_duration_ms` | 100.0 | Hard limit on laser emission duration |
 | `cooldown_seconds` | 10.0 | Mandatory cooldown after each pulse |
 | `watchdog_missed_threshold` | 3 | Missed heartbeats before SAFE_HALT |
+| `laser_pin` | 18 | GPIO pin for laser TTL output (3.3 V, level-shifted to 5 V) |
+| `arm_switch_pin` | 24 | GPIO pin for arm switch (reads HIGH when armed) |
+| `e_stop_pin` | 25 | GPIO pin for mushroom E-stop (active LOW when pressed) |
+| `frame_width` | 640 | Capture frame width (OV9281 default mode) |
+| `frame_height` | 480 | Capture frame height |
+| `target_fps` | 120 | Camera frame rate |
+| `spi_device_x` | `/dev/spidev0.0` | X-axis DAC SPI device |
+| `spi_device_y` | `/dev/spidev0.1` | Y-axis DAC SPI device |
+| `spi_speed_hz` | 20'000'000 | SPI clock (20 MHz, MCP4922 max) |
 | `bounding_box` | -1..1m xyz | 3D safe firing zone |
 | `galvo_limits` | ±20° | Galvanometer mechanical limits |
 | `stereo` | baseline, focal, principal point | Stereo camera calibration |
@@ -111,6 +159,8 @@ ctest --output-on-failure
 # Run specific test suite
 ./tests/test_safety_guards
 ./tests/test_watchdog
+./tests/test_arm_switch
+./tests/test_e_stop
 ./tests/test_coordinate_mapper
 ./tests/test_firing_controller
 ./tests/test_system_state
@@ -132,7 +182,7 @@ ctest --output-on-failure
 │   ├── main.cpp                 # Entry point, thread orchestration
 │   ├── core/                    # Types, errors, thread-safe queue
 │   ├── hal/                     # Hardware abstraction layer
-│   ├── safety/                  # State machine, watchdog, bounding box
+│   ├── safety/                  # State machine, watchdog, bounding box, arm switch, E-stop
 │   ├── vision/                  # Detection, stereo matching, tracking
 │   └── control/                 # Coordinate mapping, firing controller
 └── tests/

@@ -8,40 +8,102 @@ settle_delay_ms: 3.0          # Galvo mechanical settling time before laser fire
 max_pulse_duration_ms: 100.0  # Hard limit on consecutive laser emission
 cooldown_seconds: 10.0        # Mandatory cooldown period after each pulse
 watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
+laser_pin: 18                 # GPIO pin for laser TTL output (3.3V, level-shifted to 5V)
+arm_switch_pin: 24            # GPIO pin for arming key switch (reads HIGH when armed)
+e_stop_pin: 25                # GPIO pin for mushroom E-stop (active LOW, pulled HIGH when released)
 
 # --- Camera Parameters ---
+# OV9281 global-shutter monochrome cameras, USB3 UVC, 1MP (1280x800 native).
+# Supported high-rate modes: 640x400@210fps, 640x360@210fps, 1280x720@120fps.
+# Default 640x400@120fps is a safe, validated OV9281 mode. To try higher rates,
+# set target_fps to 210 (the OV9281 max at this resolution) or 120 to be more conservative.
 frame_width: 640
-frame_height: 480
-target_fps: 120
+frame_height: 400
+target_fps: 210
 # Use /dev/v4l/by-path/ symlinks for stable, USB-port-based camera identification.
 # These survive reboots and re-enumeration — critical for correct left/right assignment.
 # Run: ls -l /dev/v4l/by-path/  to discover the links for your cameras.
-# Example for Raspberry Pi 5 with two OV9281 cameras:
-#   ls -l /dev/v4l/by-path/
-#   left_camera_device: /dev/v4l/by-path/platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.1:1.0-video-index0
-#   right_camera_device: /dev/v4l/by-path/platform-1f00100000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0-video-index0
 left_camera_device: ""
 right_camera_device: ""
 
+# --- SPI / DAC / Galvanometer Parameters ---
+# Two MCP4922 12-bit dual-channel DACs on SPI0, one per axis, for differential
+# ±5V galvo drive (Option A: dual-DAC):
+#
+#   DAC0 (X-axis, CS0): ChA = X+, ChB = X- (inverted)
+#   DAC1 (Y-axis, CS1): ChA = Y+, ChB = Y- (inverted)
+#
+# Each axis channel pair produces complementary outputs:
+#   DAC=2048 → ChA=2.5V, ChB=2.5V → 0V differential (center)
+#   DAC=4095 → ChA=5.0V, ChB=0.0V → +5V differential (full positive)
+#   DAC=0    → ChA=0.0V, ChB=5.0V → -5V differential (full negative)
+#
+# Wiring (RPi 5 GPIO header):
+#   SPI0 MOSI (pin 19) → both MCP4922 SDI
+#   SPI0 SCLK (pin 23) → both MCP4922 SCK
+#   SPI0 CE0  (pin 24) → MCP4922#1 /CS (X-axis)
+#   SPI0 CE1  (pin 26) → MCP4922#2 /CS (Y-axis)
+spi_device_x: /dev/spidev0.0     # X-axis DAC (CS0)
+spi_device_y: /dev/spidev0.1     # Y-axis DAC (CS1)
+spi_speed_hz: 20000000           # SPI clock (20 MHz, MCP4922 max)
+dac_reference_voltage: 5.0       # MCP4922 Vref voltage (default 5.0V)
+
 # --- Safe Firing Zone (meters, camera-centric coordinate system) ---
+# The volume must lie ENTIRELY within the galvo half-cone AND be detectable by
+# the stereo cameras. With galvo_limits of +/-15 deg (the angle commandable by
+# the +/-5V DAC @ 0.33V/deg), a corner at (x,y,z) requires
+# atan2(sqrt(x^2+y^2), z) <= 15 deg. At z_min=0.5m the corner-reachable lateral
+# half-width is 0.5*tan(15deg)/sqrt(2) ~= 0.09m, hence x/y in [-0.09, 0.09].
+# Mosquito detection (~5mm target) is reliable to ~1.0m with the 3mm lens.
+# Widen lateral only if you also raise z_min; the startup validator will warn.
 bounding_box:
-  x_min: -1.0    # Left boundary
-  x_max: 1.0     # Right boundary
-  y_min: -1.0    # Bottom boundary
-  y_max: 1.0     # Top boundary
-  z_min: 0.5     # Minimum distance (too close = hazard)
-  z_max: 5.0     # Maximum distance (too far = ineffective)
+  x_min: -0.09   # Left boundary (m)
+  x_max: 0.09    # Right boundary (m)
+  y_min: -0.09   # Bottom boundary (m)
+  y_max: 0.09    # Top boundary (m)
+  z_min: 0.5     # Minimum engagement distance (m)
+  z_max: 1.0     # Maximum engagement distance (m)
 
 # --- Galvanometer Mechanical Limits ---
+# ±15 deg optical = the full +/-5V DAC range at 0.33V/deg driver input scale.
+# Max galvo head capability is ±30 deg optical but that needs ±10V (unreachable
+# from the ±5V differential DAC), so the usable half-cone is ±15 deg.
 galvo_limits:
-  angle_x_min_deg: -20.0
-  angle_x_max_deg: 20.0
-  angle_y_min_deg: -20.0
-  angle_y_max_deg: 20.0
+  angle_x_min_deg: -15.0
+  angle_x_max_deg: 15.0
+  angle_y_min_deg: -15.0
+  angle_y_max_deg: 15.0
+
+# --- Galvo Driver Electrical Parameters (validated against galvo_limits) ---
+galvo_driver:
+  input_scale_v_per_deg: 0.33   # Driver input coefficient (V per optical degree)
+  dac_max_diff_voltage: 5.0     # Max MCP4922 differential output (V)
+  driver_input_voltage: 15.0    # Driver supply (±VDC)
+
+# --- Camera Optics (OV9281, 1/4" sensor) ---
+# 3mm distortion-free lens: H-FOV ~65 deg, comfortably covers the ±15 deg cone.
+# FOV is derived as 2*atan(sensor_w/(2*f_mm)) and used by the startup validator.
+camera_optics:
+  lens_focal_length_mm: 3.0
+  image_sensor_width_mm: 3.84    # 1280 px * 3 um
+  image_sensor_height_mm: 2.4    # 800 px * 3 um
+
+# --- Camera V4L2 Image Controls ---
+# Dark-field defaults: locked/low exposure so background stays dark and the
+# bright mosquito target pops against it. Tune per illumination.
+camera_controls:
+  exposure_auto: 1              # 1 = V4L2_EXPOSURE_MANUAL, 3 = AUTO
+  exposure_absolute_us: 156     # Manual exposure in microseconds
+  brightness: 0
+  gamma: 100
+  sharpness: 0
+  gain: 0
 
 # --- Stereo Calibration ---
+# IMPORTANT: Calibrate your specific rig. Update after running a chessboard
+# calibration (OpenCV calibrate.py or MATLAB Stereo Camera Calibrator).
 stereo:
   baseline_m: 0.12       # Distance between camera optical centers
-  focal_length_px: 800.0 # Calibrated focal length in pixels
-  cx: 320.0              # Principal point x
-  cy: 240.0              # Principal point y
+  focal_length_px: 500.0 # Calibrated focal length in pixels (3mm lens @ 640-wide full sensor ~= 500; override with chessboard calibration)
+  cx: 320.0              # Principal point x (= frame_width / 2)
+  cy: 200.0              # Principal point y (= frame_height / 2)

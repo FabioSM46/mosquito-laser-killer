@@ -6,6 +6,7 @@ set(SAFETY_SOURCES
     ${CMAKE_SOURCE_DIR}/src/safety/system_state.cpp
     ${CMAKE_SOURCE_DIR}/src/safety/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/safety/bounding_box.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/e_stop.cpp
 )
 
 set(CONTROL_SOURCES
@@ -47,6 +48,40 @@ target_link_libraries(test_watchdog PRIVATE
     pthread
 )
 gtest_discover_tests(test_watchdog)
+
+add_executable(test_arm_switch
+    unit/test_arm_switch.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/arm_switch.cpp
+)
+target_include_directories(test_arm_switch PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_arm_switch PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_arm_switch)
+
+add_executable(test_e_stop
+    unit/test_e_stop.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/e_stop.cpp
+)
+target_include_directories(test_e_stop PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_e_stop PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_e_stop)
 
 add_executable(test_coordinate_mapper
     unit/test_coordinate_mapper.cpp
@@ -144,6 +179,87 @@ target_link_libraries(test_kalman_tracker PRIVATE
     pthread
 )
 gtest_discover_tests(test_kalman_tracker)
+
+add_executable(test_differential_galvo_driver
+    unit/test_differential_galvo_driver.cpp
+)
+target_include_directories(test_differential_galvo_driver PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_differential_galvo_driver PRIVATE
+    mosquito_hal
+    Eigen3::Eigen
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_differential_galvo_driver)
+
+add_executable(test_mcp4922
+    unit/test_mcp4922.cpp
+)
+target_include_directories(test_mcp4922 PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_mcp4922 PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_mcp4922)
+
+add_executable(test_detector
+    unit/test_detector.cpp
+)
+target_include_directories(test_detector PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_detector PRIVATE
+    mosquito_vision
+    GTest::gtest
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_detector)
+
+add_executable(test_signal_handling
+    unit/test_signal_handling.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/signal_handler.cpp
+)
+target_include_directories(test_signal_handling PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_signal_handling PRIVATE
+    mosquito_hal
+    GTest::gtest
+    GTest::gmock
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_signal_handling)
+
+add_executable(test_config_validator
+    unit/test_config_validator.cpp
+    ${CMAKE_SOURCE_DIR}/src/safety/config_validator.cpp
+)
+target_include_directories(test_config_validator PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_config_validator PRIVATE
+    Eigen3::Eigen
+    GTest::gtest
+    GTest::gtest_main
+    pthread
+)
+gtest_discover_tests(test_config_validator)
 
 #
 # Stress Tests

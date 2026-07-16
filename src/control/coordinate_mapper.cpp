@@ -3,18 +3,24 @@
 #include "core/print.h"
 
 CoordinateMapper::CoordinateMapper(const BoundingBox3D& bounding_box,
-                                   const SystemConfig::GalvoLimits& galvo_limits)
+                                   const SystemConfig::GalvoLimits& galvo_limits,
+                                   double dac_ref_voltage)
     : bounding_box_(bounding_box)
     , angle_x_min_(galvo_limits.angle_x_min_deg)
     , angle_x_max_(galvo_limits.angle_x_max_deg)
     , angle_y_min_(galvo_limits.angle_y_min_deg)
-    , angle_y_max_(galvo_limits.angle_y_max_deg) {
+    , angle_y_max_(galvo_limits.angle_y_max_deg)
+    , dac_ref_voltage_(dac_ref_voltage) {
     println("[MAPPER] Initialized, bounding box: x=[{:.2f},{:.2f}] y=[{:.2f},{:.2f}] "
                  "z=[{:.2f},{:.2f}]", bounding_box_.x_min(), bounding_box_.x_max(),
                  bounding_box_.y_min(), bounding_box_.y_max(),
                  bounding_box_.z_min(), bounding_box_.z_max());
     println("[MAPPER] Galvo limits: x=[{:.1f},{:.1f}]deg y=[{:.1f},{:.1f}]deg",
                  angle_x_min_, angle_x_max_, angle_y_min_, angle_y_max_);
+    println("[MAPPER] DAC ref voltage: {:.1f}V (midpoint={:.1f}V, "
+                 "galvo input range: 0-{:.1f}V unipolar -> {:.1f}-{:.1f} deg)",
+                 dac_ref_voltage_, dac_ref_voltage_ / 2.0,
+                 dac_ref_voltage_, angle_x_min_, angle_x_max_);
 }
 
 auto CoordinateMapper::map_to_dac(const Point3D& target)
@@ -44,11 +50,6 @@ auto CoordinateMapper::map_to_dac(const Point3D& target)
 
 auto CoordinateMapper::point_to_angles(const Point3D& p)
     -> std::expected<std::pair<double, double>, MappingError> {
-    if (p.z <= 0.0) {
-        println(stderr, "[MAPPER] Target behind baseline: z={:.3f}", p.z);
-        return std::unexpected(MappingError::TargetBehindBaseline);
-    }
-
     double angle_x = std::atan2(p.x, p.z) * (180.0 / M_PI);
     double angle_y = std::atan2(p.y, p.z) * (180.0 / M_PI);
 
@@ -68,10 +69,6 @@ auto CoordinateMapper::angles_to_dac(double angle_x, double angle_y)
 
     dac_x = std::clamp(dac_x, 0, 4095);
     dac_y = std::clamp(dac_y, 0, 4095);
-
-    if (dac_x > 4095 || dac_y > 4095) {
-        return std::unexpected(MappingError::DacRangeInvalid);
-    }
 
     return DacValues{
         static_cast<uint16_t>(dac_x),

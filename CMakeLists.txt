@@ -39,6 +39,7 @@ set(HAL_SOURCES
     src/hal/spi_impl.cpp
     src/hal/camera_impl.cpp
     src/hal/mcp4922.cpp
+    src/hal/differential_galvo_driver.cpp
     src/hal/laser.cpp
 )
 
@@ -90,6 +91,10 @@ add_executable(mosquito_laser_killer src/main.cpp
     src/safety/system_state.cpp
     src/safety/watchdog.cpp
     src/safety/bounding_box.cpp
+    src/safety/arm_switch.cpp
+    src/safety/e_stop.cpp
+    src/safety/signal_handler.cpp
+    src/safety/config_validator.cpp
 )
 target_link_libraries(mosquito_laser_killer PRIVATE
     mosquito_hal

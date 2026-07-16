@@ -6,15 +6,21 @@
 #include "hal/ispi.h"
 #include "hal/idac.h"
 #include "hal/ilaser.h"
+#include "hal/igalvo_driver.h"
 #include "hal/gpio_impl.h"
 #include "hal/spi_impl.h"
 #include "hal/camera_impl.h"
 #include "hal/mcp4922.h"
+#include "hal/differential_galvo_driver.h"
 #include "hal/laser.h"
 
+#include "safety/e_stop.h"
 #include "safety/system_state.h"
 #include "safety/watchdog.h"
 #include "safety/bounding_box.h"
+#include "safety/arm_switch.h"
+#include "safety/signal_handler.h"
+#include "safety/config_validator.h"
 
 #include "vision/detector.h"
 #include "vision/stereo_matcher.h"
@@ -34,23 +40,6 @@
 namespace {
 
 std::atomic<bool> g_shutdown_requested{false};
-
-void signal_handler(int signal) {
-    println(stderr, "\n[SIGNAL] Received signal {} ({})", signal, strsignal(signal));
-    g_shutdown_requested.store(true, std::memory_order_release);
-}
-
-auto setup_signal_handlers() -> void {
-    struct sigaction sa{};
-    sa.sa_handler = signal_handler;
-    sa.sa_flags = SA_RESTART;
-    sigemptyset(&sa.sa_mask);
-
-    sigaction(SIGINT, &sa, nullptr);
-    sigaction(SIGTERM, &sa, nullptr);
-
-    signal(SIGPIPE, SIG_IGN);
-}
 
 auto load_config() -> SystemConfig {
     SystemConfig config{};
@@ -79,6 +68,27 @@ auto load_config() -> SystemConfig {
         if (yaml["target_fps"]) {
             config.target_fps = yaml["target_fps"].as<int>();
         }
+        if (yaml["spi_device_x"]) {
+            config.spi_device_x = yaml["spi_device_x"].as<std::string>();
+        }
+        if (yaml["spi_device_y"]) {
+            config.spi_device_y = yaml["spi_device_y"].as<std::string>();
+        }
+        if (yaml["spi_speed_hz"]) {
+            config.spi_speed_hz = yaml["spi_speed_hz"].as<int>();
+        }
+        if (yaml["dac_reference_voltage"]) {
+            config.dac_ref_voltage = yaml["dac_reference_voltage"].as<double>();
+        }
+        if (yaml["laser_pin"]) {
+            config.laser_pin = yaml["laser_pin"].as<unsigned int>();
+        }
+        if (yaml["arm_switch_pin"]) {
+            config.arm_switch_pin = yaml["arm_switch_pin"].as<unsigned int>();
+        }
+        if (yaml["e_stop_pin"]) {
+            config.e_stop_pin = yaml["e_stop_pin"].as<unsigned int>();
+        }
         if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
             config.left_camera_device = yaml["left_camera_device"].as<std::string>();
         }
@@ -99,13 +109,49 @@ auto load_config() -> SystemConfig {
         if (yaml["galvo_limits"]) {
             auto gl = yaml["galvo_limits"];
             config.galvo_limits.angle_x_min_deg = gl["angle_x_min_deg"]
-                ? gl["angle_x_min_deg"].as<double>() : -20.0;
+                ? gl["angle_x_min_deg"].as<double>() : -15.0;
             config.galvo_limits.angle_x_max_deg = gl["angle_x_max_deg"]
-                ? gl["angle_x_max_deg"].as<double>() : 20.0;
+                ? gl["angle_x_max_deg"].as<double>() : 15.0;
             config.galvo_limits.angle_y_min_deg = gl["angle_y_min_deg"]
-                ? gl["angle_y_min_deg"].as<double>() : -20.0;
+                ? gl["angle_y_min_deg"].as<double>() : -15.0;
             config.galvo_limits.angle_y_max_deg = gl["angle_y_max_deg"]
-                ? gl["angle_y_max_deg"].as<double>() : 20.0;
+                ? gl["angle_y_max_deg"].as<double>() : 15.0;
+        }
+
+        if (yaml["galvo_driver"]) {
+            auto gd = yaml["galvo_driver"];
+            config.galvo_driver.input_scale_v_per_deg = gd["input_scale_v_per_deg"]
+                ? gd["input_scale_v_per_deg"].as<double>() : 0.33;
+            config.galvo_driver.dac_max_diff_voltage = gd["dac_max_diff_voltage"]
+                ? gd["dac_max_diff_voltage"].as<double>() : 5.0;
+            config.galvo_driver.driver_input_voltage = gd["driver_input_voltage"]
+                ? gd["driver_input_voltage"].as<double>() : 15.0;
+        }
+
+        if (yaml["camera_optics"]) {
+            auto co = yaml["camera_optics"];
+            config.camera_optics.lens_focal_length_mm = co["lens_focal_length_mm"]
+                ? co["lens_focal_length_mm"].as<double>() : 3.0;
+            config.camera_optics.image_sensor_width_mm = co["image_sensor_width_mm"]
+                ? co["image_sensor_width_mm"].as<double>() : 3.84;
+            config.camera_optics.image_sensor_height_mm = co["image_sensor_height_mm"]
+                ? co["image_sensor_height_mm"].as<double>() : 2.4;
+        }
+
+        if (yaml["camera_controls"]) {
+            auto cc = yaml["camera_controls"];
+            config.camera_controls.exposure_auto = cc["exposure_auto"]
+                ? cc["exposure_auto"].as<int>() : 1;
+            config.camera_controls.exposure_absolute_us = cc["exposure_absolute_us"]
+                ? cc["exposure_absolute_us"].as<int>() : 156;
+            config.camera_controls.brightness = cc["brightness"]
+                ? cc["brightness"].as<int>() : 0;
+            config.camera_controls.gamma = cc["gamma"]
+                ? cc["gamma"].as<int>() : 100;
+            config.camera_controls.sharpness = cc["sharpness"]
+                ? cc["sharpness"].as<int>() : 0;
+            config.camera_controls.gain = cc["gain"]
+                ? cc["gain"].as<int>() : 0;
         }
 
         if (yaml["stereo"]) {
@@ -119,6 +165,11 @@ auto load_config() -> SystemConfig {
         }
 
         println("[CONFIG] Loaded config/system_config.yaml");
+
+        auto validation_warnings = validate_engagement_volume(config);
+        for (const auto& w : validation_warnings) {
+            println(stderr, "[CONFIG] WARNING [{}]: {}", w.category, w.message);
+        }
     } catch (const YAML::Exception& e) {
         println(stderr, "[CONFIG] Failed to load config: {}. Using defaults.", e.what());
     }
@@ -126,7 +177,7 @@ auto load_config() -> SystemConfig {
     return config;
 }
 
-} 
+}
 
 auto main(int argc, char* argv[]) -> int {
     (void)argc;
@@ -135,30 +186,79 @@ auto main(int argc, char* argv[]) -> int {
     println("===========================================");
     println("  Mosquito Laser Killer v1.0.0");
     println("  Stereoscopic Laser Targeting System");
+    println("  Differential Galvo Driver (Dual-DAC)");
     println("===========================================");
 
-    setup_signal_handlers();
+    SignalHandler signal_handler;
+    signal_handler.set_shutdown_callback([&] {
+        println(stderr, "\n[SIGNAL] Shutdown requested");
+        g_shutdown_requested.store(true, std::memory_order_release);
+    });
+    signal_handler.install();
 
     auto config = load_config();
 
     SystemStateMachine state_machine;
 
-    auto gpio_laser = std::make_unique<GpioImpl>(18);
-    auto spi_device = std::make_unique<SpiImpl>("/dev/spidev0.0", 20'000'000);
-    auto dac = std::make_unique<MCP4922>(std::move(spi_device));
-    auto laser = std::make_unique<Laser>(std::move(gpio_laser), 18);
+    auto gpio_laser = std::make_unique<GpioImpl>(config.laser_pin);
+    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin);
+
+    auto spi_x = std::make_unique<SpiImpl>(config.spi_device_x, config.spi_speed_hz);
+    auto spi_y = std::make_unique<SpiImpl>(config.spi_device_y, config.spi_speed_hz);
+    auto dac_x = std::make_unique<MCP4922>(std::move(spi_x));
+    auto dac_y = std::make_unique<MCP4922>(std::move(spi_y));
+    auto galvo = std::make_unique<DifferentialGalvoDriver>(std::move(dac_x), std::move(dac_y));
+
+    println("[MAIN] Laser TTL on GPIO {}", config.laser_pin);
+    println("[MAIN] SPI X-axis DAC: {} (CS0)", config.spi_device_x);
+    println("[MAIN] SPI Y-axis DAC: {} (CS1)", config.spi_device_y);
+    println("[MAIN] SPI speed: {} Hz", config.spi_speed_hz);
+
+    auto gpio_arm = std::make_unique<GpioImpl>(config.arm_switch_pin);
+    ArmSwitch arm_switch(std::move(gpio_arm));
+    auto arm_init = arm_switch.initialize();
+    if (!arm_init.has_value()) {
+        println(stderr, "[MAIN] Arm switch init failed: {}",
+                     to_string(arm_init.error()));
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
+    println("[MAIN] Arm switch on GPIO {}", config.arm_switch_pin);
+
+    auto gpio_estop = std::make_unique<GpioImpl>(config.e_stop_pin);
+    EStop e_stop(std::move(gpio_estop));
+    auto estop_init = e_stop.initialize();
+    if (!estop_init.has_value()) {
+        println(stderr, "[MAIN] E-stop init failed: {}",
+                     to_string(estop_init.error()));
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
+    println("[MAIN] E-stop on GPIO {}", config.e_stop_pin);
+
+    if (!laser->is_initialized()) {
+        println(stderr, "[MAIN] Laser hardware initialization failed");
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
+
+    if (!galvo->is_initialized()) {
+        println(stderr, "[MAIN] Galvo driver initialization failed");
+        (void)state_machine.transition(SystemState::SAFE_HALT);
+        return 1;
+    }
 
     BoundingBox3D bounding_box(config.bounding_box);
-    CoordinateMapper mapper(bounding_box, config.galvo_limits);
-    FiringController firing_controller(*laser, *dac, mapper,
+    CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage);
+    FiringController firing_controller(*laser, *galvo, mapper,
         config.max_pulse_duration_ms,
         config.cooldown_seconds,
         config.settle_delay_ms);
-    Watchdog watchdog(state_machine, *laser, *dac,
-        config.watchdog_missed_threshold);
+    Watchdog watchdog(state_machine, *laser, *galvo,
+        config.watchdog_missed_threshold, config.target_fps);
 
-    Detector detector_left;
-    Detector detector_right;
+    Detector detector_left(config.frame_width, config.frame_height);
+    Detector detector_right(config.frame_width, config.frame_height);
     StereoMatcher stereo_matcher(config.stereo);
     KalmanTracker tracker;
 
@@ -167,7 +267,11 @@ auto main(int argc, char* argv[]) -> int {
     std::atomic<std::chrono::steady_clock::time_point> heartbeat{
         std::chrono::steady_clock::now()};
 
-    (void)state_machine.transition(SystemState::IDLE);
+    auto init_ok = state_machine.transition(SystemState::IDLE);
+    if (!init_ok) {
+        println(stderr, "[MAIN] Failed to enter IDLE state");
+        return 1;
+    }
     println("[MAIN] System ready in IDLE state");
 
     println("[MAIN] Starting capture thread...");
@@ -183,8 +287,12 @@ auto main(int argc, char* argv[]) -> int {
         println("[CAPTURE] Left camera: {}", left_dev);
         println("[CAPTURE] Right camera: {}", right_dev);
 
-        auto left_cam_ptr = std::make_unique<CameraImpl>(left_dev);
-        auto right_cam_ptr = std::make_unique<CameraImpl>(right_dev);
+        auto left_cam_ptr = std::make_unique<CameraImpl>(
+            left_dev, config.frame_width, config.frame_height, config.target_fps,
+            config.camera_controls);
+        auto right_cam_ptr = std::make_unique<CameraImpl>(
+            right_dev, config.frame_width, config.frame_height, config.target_fps,
+            config.camera_controls);
         auto& left_cam = *left_cam_ptr;
         auto& right_cam = *right_cam_ptr;
 
@@ -201,7 +309,7 @@ auto main(int argc, char* argv[]) -> int {
             return;
         }
 
-        auto cycle_period = std::chrono::microseconds(8333);
+        auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire)) {
@@ -210,6 +318,8 @@ auto main(int argc, char* argv[]) -> int {
             StereoFrame frame;
             frame.frame_id = frame_id++;
             frame.timestamp = cycle_start;
+            frame.left_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
+            frame.right_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
 
             auto left_result = left_cam.capture(frame.left_frame.data(),
                                                  frame.left_frame.size());
@@ -267,10 +377,12 @@ auto main(int argc, char* argv[]) -> int {
             }
 
             auto& frame = latest_frame.value();
-            heartbeat.store(frame.timestamp, std::memory_order_release);
+            heartbeat.store(std::chrono::steady_clock::now(), std::memory_order_release);
 
-            auto left_detection = detector_left.detect(frame.left_frame);
-            auto right_detection = detector_right.detect(frame.right_frame);
+            auto left_detection = detector_left.detect(frame.left_frame.data(),
+                                                          frame.left_frame.size());
+            auto right_detection = detector_right.detect(frame.right_frame.data(),
+                                                           frame.right_frame.size());
 
             TargetCommand cmd;
             cmd.frame_id = frame.frame_id;
@@ -310,7 +422,7 @@ auto main(int argc, char* argv[]) -> int {
     std::jthread control_thread([&](std::stop_token stoken) {
         println("[CONTROL] Thread started");
         auto max_wait = std::chrono::milliseconds(16);
-        auto cycle_period = std::chrono::microseconds(8333);
+        auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire)) {
@@ -322,10 +434,40 @@ auto main(int argc, char* argv[]) -> int {
                 break;
             }
 
+            e_stop.update();
+            if (e_stop.is_pressed()) {
+                println(stderr, "[CONTROL] E-STOP PRESSED, halting");
+                firing_controller.emergency_stop();
+                (void)state_machine.transition(SystemState::SAFE_HALT);
+                break;
+            }
+
+            arm_switch.update();
+            bool is_armed = arm_switch.is_armed();
+            auto cs = state_machine.current();
+
+            if (!is_armed && cs != SystemState::IDLE &&
+                cs != SystemState::SAFE_HALT) {
+                println("[CONTROL] Arm switch OFF, disarming");
+                firing_controller.disarm();
+                if (cs == SystemState::FIRING) {
+                    (void)state_machine.transition(SystemState::COOLDOWN);
+                } else {
+                    (void)state_machine.transition(SystemState::IDLE);
+                }
+            }
+
+            if (is_armed && cs == SystemState::IDLE) {
+                println("[CONTROL] Arm switch ON, arming");
+                (void)state_machine.transition(SystemState::ARMED);
+            }
+
             auto cmd_opt = target_queue.pop(max_wait);
+
+            watchdog.feed(heartbeat.load(std::memory_order_acquire));
+
             if (cmd_opt.has_value()) {
                 auto& cmd = cmd_opt.value();
-                watchdog.feed(cmd.timestamp);
 
                 if (cmd.target_valid && cmd.target_position.has_value()) {
                     auto current_state = state_machine.current();
@@ -338,16 +480,24 @@ auto main(int argc, char* argv[]) -> int {
                         firing_controller.set_target(cmd.target_position.value());
                     }
                 } else {
-                    if (state_machine.current() == SystemState::TRACKING) {
+                    auto current_state = state_machine.current();
+                    if (current_state == SystemState::TRACKING) {
                         (void)state_machine.transition(SystemState::ARMED);
+                    } else if (current_state == SystemState::FIRING) {
+                        (void)state_machine.transition(SystemState::COOLDOWN);
                     }
                     firing_controller.clear_target();
                 }
             }
 
-            bool pulse_ended = firing_controller.execute_cycle(now);
-            if (pulse_ended) {
+            bool pulse_was_active = firing_controller.is_firing();
+            const auto exec_now = std::chrono::steady_clock::now();
+            bool pulse_ended = firing_controller.execute_cycle(exec_now);
+            if (pulse_ended && state_machine.current() == SystemState::FIRING) {
                 (void)state_machine.transition(SystemState::COOLDOWN);
+            } else if (!pulse_was_active && firing_controller.is_firing() &&
+                       state_machine.current() == SystemState::TRACKING) {
+                (void)state_machine.transition(SystemState::FIRING);
             }
 
             if (state_machine.current() == SystemState::COOLDOWN &&
@@ -372,10 +522,10 @@ auto main(int argc, char* argv[]) -> int {
             println(stderr, "[CONTROL] Final emergency shutdown failed: {}",
                          to_string(halt_result.error()));
         }
-        auto dac_result = dac->zero();
-        if (!dac_result.has_value()) {
-            println(stderr, "[CONTROL] Final DAC zero failed: {}",
-                         to_string(dac_result.error()));
+        auto galvo_result = galvo->zero();
+        if (!galvo_result.has_value()) {
+            println(stderr, "[CONTROL] Final galvo zero failed: {}",
+                         to_string(galvo_result.error()));
         }
 
         println("[CONTROL] Thread exiting");
@@ -386,7 +536,7 @@ auto main(int argc, char* argv[]) -> int {
     control_thread.join();
 
     println("[MAIN] All threads joined. System shutdown complete.");
-    println("[MAIN] Laser GPIO LOW, DAC at (0,0)");
+    println("[MAIN] Laser GPIO LOW, galvos at center (0V differential)");
 
     return 0;
 }

@@ -2,7 +2,7 @@
 
 #include "core/types.h"
 #include "hal/ilaser.h"
-#include "hal/idac.h"
+#include "hal/igalvo_driver.h"
 #include "control/coordinate_mapper.h"
 #include <chrono>
 #include <atomic>
@@ -11,7 +11,7 @@
 class FiringController {
 public:
     FiringController(ILaser& laser,
-                     IDac& dac,
+                     IGalvoDriver& galvo,
                      CoordinateMapper& mapper,
                      double max_pulse_ms = 100.0,
                      double cooldown_s = 10.0,
@@ -22,9 +22,11 @@ public:
     auto operator=(const FiringController&) -> FiringController& = delete;
 
     [[nodiscard]] auto may_fire() const -> bool;
+    [[nodiscard]] auto is_firing() const -> bool;
 
     auto set_target(const Point3D& position) -> void;
     auto clear_target() -> void;
+    auto disarm() -> void;
 
     [[nodiscard]] auto execute_cycle(std::chrono::steady_clock::time_point now)
         -> bool;
@@ -33,7 +35,7 @@ public:
 
 private:
     ILaser& laser_;
-    IDac& dac_;
+    IGalvoDriver& galvo_;
     CoordinateMapper& mapper_;
 
     double max_pulse_ms_;
@@ -54,4 +56,6 @@ private:
 
     [[nodiscard]] auto enforce_timing_limits(std::chrono::steady_clock::time_point now)
         -> bool;
+
+    auto abort_active_pulse(const char* reason) -> void;
 };

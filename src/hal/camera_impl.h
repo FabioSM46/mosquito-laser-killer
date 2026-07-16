@@ -5,7 +5,9 @@
 
 class CameraImpl final : public ICamera {
 public:
-    explicit CameraImpl(const std::string& device);
+    CameraImpl(const std::string& device, int width, int height, int fps,
+               const SystemConfig::CameraControls& controls = {});
+
     ~CameraImpl() override;
 
     CameraImpl(const CameraImpl&) = delete;
@@ -21,5 +23,11 @@ public:
 
 private:
     std::string device_;
+    int width_;
+    int height_;
+    int fps_;
+    SystemConfig::CameraControls controls_{};
     int fd_{-1};
+
+    auto apply_controls() -> void;
 };

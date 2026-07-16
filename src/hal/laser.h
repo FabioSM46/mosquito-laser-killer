@@ -19,6 +19,7 @@ public:
     [[nodiscard]] auto fire(bool enable) -> std::expected<void, HardwareError> override;
     [[nodiscard]] auto emergency_shutdown() -> std::expected<void, HardwareError> override;
     [[nodiscard]] auto is_firing() const -> bool override;
+    [[nodiscard]] auto is_initialized() const -> bool override;
 
 private:
     std::unique_ptr<IGpio> gpio_;

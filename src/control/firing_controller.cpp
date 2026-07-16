@@ -3,13 +3,13 @@
 #include <thread>
 
 FiringController::FiringController(ILaser& laser,
-                                   IDac& dac,
+                                   IGalvoDriver& galvo,
                                    CoordinateMapper& mapper,
                                    double max_pulse_ms,
                                    double cooldown_s,
                                    double settle_ms)
     : laser_(laser)
-    , dac_(dac)
+    , galvo_(galvo)
     , mapper_(mapper)
     , max_pulse_ms_(max_pulse_ms)
     , cooldown_s_(cooldown_s)
@@ -33,10 +33,18 @@ auto FiringController::may_fire() const -> bool {
     return true;
 }
 
+auto FiringController::is_firing() const -> bool {
+    return pulse_active_;
+}
+
 auto FiringController::set_target(const Point3D& position) -> void {
     if (emergency_stop_) {
         println(stderr, "[FIRING] Target rejected: emergency stop active");
         return;
+    }
+
+    if (pulse_active_) {
+        abort_active_pulse("Target changed while pulse active, aborting pulse");
     }
 
     current_target_ = position;
@@ -46,9 +54,43 @@ auto FiringController::set_target(const Point3D& position) -> void {
 }
 
 auto FiringController::clear_target() -> void {
+    abort_active_pulse("Target lost while pulse active, aborting pulse");
+
     current_target_.reset();
     target_valid_ = false;
     galvo_settled_ = false;
+}
+
+auto FiringController::disarm() -> void {
+    println("[FIRING] Disarming (immediate laser OFF)");
+
+    abort_active_pulse("Disarming while pulse active");
+
+    current_target_.reset();
+    target_valid_ = false;
+    galvo_settled_ = false;
+
+    println("[FIRING] Disarmed, ready for re-arm");
+}
+
+auto FiringController::abort_active_pulse(const char* reason) -> void {
+    if (!pulse_active_) {
+        return;
+    }
+
+    println("[FIRING] {}", reason);
+
+    auto result = laser_.fire(false);
+    if (!result.has_value()) {
+        println(stderr, "[FIRING] Pulse abort laser off failed: {}",
+                     to_string(result.error()));
+    }
+    pulse_active_ = false;
+
+    auto now = std::chrono::steady_clock::now();
+    cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(cooldown_s_));
+    println("[FIRING] Cooldown started after pulse abort ({}s)", cooldown_s_);
 }
 
 auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) -> bool {
@@ -70,9 +112,9 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
         if (dac_result.has_value()) {
             auto values = dac_result.value();
-            auto write_result = dac_.write(values);
+            auto write_result = galvo_.set_position(values.channel_a, values.channel_b);
             if (!write_result.has_value()) {
-                println(stderr, "[FIRING] DAC write failed: {}",
+                println(stderr, "[FIRING] Galvo set_position failed: {}",
                              to_string(write_result.error()));
                 emergency_stop_ = true;
                 laser_.emergency_shutdown();
@@ -98,12 +140,13 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
         }
     }
 
-    if (target_valid_ && galvo_settled_ && may_fire()) {
+    if (target_valid_ && galvo_settled_ && may_fire() && !pulse_active_) {
         auto fire_result = laser_.fire(true);
         if (!fire_result.has_value()) {
             println(stderr, "[FIRING] Laser fire failed: {}",
                          to_string(fire_result.error()));
             emergency_stop_ = true;
+            laser_.emergency_shutdown();
             return false;
         }
 
@@ -123,14 +166,14 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
             if (!off_result.has_value()) {
                 println(stderr, "[FIRING] Laser off failed: {}",
                              to_string(off_result.error()));
+                emergency_stop_ = true;
+                return false;
             }
 
             pulse_active_ = false;
             cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(cooldown_s_));
-            println("[FIRING] Cooldown active until {}",
-                         std::chrono::duration_cast<std::chrono::seconds>(
-                             cooldown_until_.time_since_epoch()).count());
+            println("[FIRING] Cooldown active for {}s", cooldown_s_);
             galvo_settled_ = false;
             target_valid_ = false;
             current_target_.reset();
@@ -144,22 +187,6 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
 auto FiringController::enforce_timing_limits(std::chrono::steady_clock::time_point now)
     -> bool {
-    if (pulse_active_) {
-        auto pulse_duration = std::chrono::duration<double, std::milli>(now - pulse_start_);
-        if (pulse_duration.count() >= max_pulse_ms_) {
-            println(stderr, "[FIRING] HARD LIMIT: pulse exceeded {:.0f}ms, "
-                         "forcing laser OFF", max_pulse_ms_);
-            auto result = laser_.fire(false);
-            if (!result.has_value()) {
-                println(stderr, "[FIRING] Hard limit laser off failed: {}",
-                             to_string(result.error()));
-            }
-            pulse_active_ = false;
-            emergency_stop_ = true;
-            return false;
-        }
-    }
-
     if (now < cooldown_until_) {
         auto result = laser_.fire(false);
         if (!result.has_value()) {
@@ -180,9 +207,9 @@ auto FiringController::emergency_stop() -> void {
     pulse_active_ = false;
     current_target_.reset();
 
-    auto result = laser_.fire(false);
+    auto result = laser_.emergency_shutdown();
     if (!result.has_value()) {
-        println(stderr, "[FIRING] Emergency stop: laser off failed: {}",
+        println(stderr, "[FIRING] Emergency stop: laser shutdown failed: {}",
                      to_string(result.error()));
     }
 

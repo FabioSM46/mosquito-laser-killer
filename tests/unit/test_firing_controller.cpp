@@ -7,6 +7,7 @@
 #include "mocks/mock_gpio.h"
 #include "mocks/mock_spi.h"
 #include "mocks/mock_dac.h"
+#include "mocks/mock_galvo_driver.h"
 #include "mocks/mock_laser.h"
 #include "core/types.h"
 #include "core/error.h"
@@ -21,7 +22,7 @@ class FiringControllerTest : public Test {
 protected:
     void SetUp() override {
         mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
-        mock_dac_ = std::make_unique<NiceMock<MockDac>>();
+        mock_galvo_ = std::make_unique<NiceMock<MockGalvoDriver>>();
 
         SystemConfig::BoundingBox bb;
         bb.x_min = -2.0;
@@ -40,12 +41,12 @@ protected:
         bbox_ = std::make_unique<BoundingBox3D>(bb);
         mapper_ = std::make_unique<CoordinateMapper>(*bbox_, gl);
         controller_ = std::make_unique<FiringController>(
-            *mock_laser_, *mock_dac_, *mapper_,
+            *mock_laser_, *mock_galvo_, *mapper_,
             100.0, 10.0, 3.0);
     }
 
     std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockDac> mock_dac_;
+    std::unique_ptr<MockGalvoDriver> mock_galvo_;
     std::unique_ptr<BoundingBox3D> bbox_;
     std::unique_ptr<CoordinateMapper> mapper_;
     std::unique_ptr<FiringController> controller_;
@@ -61,7 +62,7 @@ TEST_F(FiringControllerTest, MayFireAfterStartupCooldown) {
 }
 
 TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     controller_->set_target({0.0, 0.0, 1.0});
@@ -71,17 +72,16 @@ TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
 }
 
 TEST_F(FiringControllerTest, DacWriteBeforeFire) {
-    EXPECT_CALL(*mock_dac_, write(_))
-        .Times(AtLeast(1))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
     controller_->set_target({0.0, 0.0, 1.0});
 
     std::this_thread::sleep_for(1100ms);
+
+    InSequence seq;
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
 
     auto now = std::chrono::steady_clock::now();
     (void)controller_->execute_cycle(now);
@@ -105,7 +105,7 @@ TEST_F(FiringControllerTest, EmergencyStopForcesLaserOff) {
 }
 
 TEST_F(FiringControllerTest, ClearTargetPreventsFiring) {
-    EXPECT_CALL(*mock_dac_, write(_))
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
         .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
 
     controller_->set_target({0.0, 0.0, 1.0});
@@ -122,4 +122,116 @@ TEST_F(FiringControllerTest, LaserForceDisabledWhenNotMayFire) {
 
     auto now = std::chrono::steady_clock::now();
     controller_->execute_cycle(now);
+}
+
+TEST_F(FiringControllerTest, PulseEndsAfterMaxDuration) {
+    FiringController fc(*mock_laser_, *mock_galvo_, *mapper_, 20.0, 100.0, 3.0);
+
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(_))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    fc.set_target({0.0, 0.0, 1.0});
+
+    (void)fc.execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)fc.execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    auto result = fc.execute_cycle(t0 + std::chrono::milliseconds(30));
+    EXPECT_TRUE(result);
+    EXPECT_FALSE(fc.may_fire());
+}
+
+TEST_F(FiringControllerTest, CooldownPreventsReFireAfterPulse) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(_))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    controller_->set_target({0.0, 0.0, 1.0});
+
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    auto pulse_end = controller_->execute_cycle(t0 + std::chrono::milliseconds(110));
+    EXPECT_TRUE(pulse_end);
+
+    EXPECT_FALSE(controller_->may_fire());
+
+    controller_->set_target({0.5, 0.0, 1.0});
+    auto fire_result = controller_->execute_cycle(t0 + std::chrono::milliseconds(115));
+    EXPECT_FALSE(fire_result);
+}
+
+TEST_F(FiringControllerTest, DisarmTurnsOffLaserImmediately) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(true))
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(false))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    controller_->set_target({0.0, 0.0, 1.0});
+
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    controller_->disarm();
+
+    auto result = controller_->execute_cycle(t0 + std::chrono::milliseconds(12));
+    EXPECT_FALSE(result);
+}
+
+TEST_F(FiringControllerTest, ClearTargetAbortsPulseAndCooldown) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(_))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    controller_->set_target({0.0, 0.0, 1.0});
+
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    controller_->clear_target();
+
+    EXPECT_FALSE(controller_->may_fire());
+}
+
+TEST_F(FiringControllerTest, SetTargetDuringPulseAbortsPulseAndCooldown) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+    EXPECT_CALL(*mock_laser_, fire(_))
+        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+
+    std::this_thread::sleep_for(1100ms);
+
+    auto t0 = std::chrono::steady_clock::now();
+    controller_->set_target({0.0, 0.0, 1.0});
+
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(4));
+    (void)controller_->execute_cycle(t0 + std::chrono::milliseconds(8));
+
+    EXPECT_TRUE(controller_->is_firing());
+
+    controller_->set_target({0.5, 0.0, 1.0});
+
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->may_fire());
+}
+
+TEST_F(FiringControllerTest, IsFiringFalseInitially) {
+    EXPECT_FALSE(controller_->is_firing());
 }
