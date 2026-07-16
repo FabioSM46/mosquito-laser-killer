@@ -133,3 +133,26 @@ TEST_F(ArmSwitchTest, UpdateWithoutInitDoesNotCrash) {
     arm_switch.update();
     EXPECT_FALSE(arm_switch.is_armed());
 }
+
+TEST_F(ArmSwitchTest, GpioReadFailureForcesDisarmed) {
+    EXPECT_CALL(*mock_gpio_, set_direction_input())
+        .WillOnce(Return(std::expected<void, HardwareError>{}));
+
+    MockGpio* raw_ptr = mock_gpio_.get();
+    ArmSwitch arm_switch(std::move(mock_gpio_), 3);
+    arm_switch.initialize();
+
+    EXPECT_CALL(*raw_ptr, read())
+        .Times(3)
+        .WillRepeatedly(Return(true));
+    arm_switch.update();
+    arm_switch.update();
+    arm_switch.update();
+    ASSERT_TRUE(arm_switch.is_armed());
+
+    EXPECT_CALL(*raw_ptr, read())
+        .WillOnce(Return(std::unexpected(HardwareError::GpioReadFailed)));
+
+    arm_switch.update();
+    EXPECT_FALSE(arm_switch.is_armed());
+}

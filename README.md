@@ -17,33 +17,33 @@ A C++23 real-time embedded system for Raspberry Pi 5 that detects, tracks, and n
 | Galvo scanner | 20 kpps 400–700 nm, powered by 15 V | Laser beam steering |
 | X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
 | Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
-| Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | TTL level translation for laser driver |
+| Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | 3.3 V → 5 V level translation for SPI and laser TTL |
 | Arm switch | Lever SPST | System arm input (active HIGH) |
 | E-stop | Mushroom DPST push-button | Emergency stop (active LOW) |
-| Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
-| Resistor | 1/2 W 3.3 kΩ | E-stop pull-up/pull-down |
-| Resistors | 2× 1/2 W 10 kΩ | E-stop series/input protection |
-| Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
+| Zener diode | BZX55C3V3 1/2 W | E-stop and arm-switch input overvoltage protection |
+| Resistor | 1/2 W 3.3 kΩ | E-stop and arm-switch pull-down / pull-up |
+| Resistors | 3× 1/2 W 10 kΩ | E-stop series (×2) and arm-switch series (×1) input protection |
+| Capacitor | 100 nF ceramic | E-stop and arm-switch debounce / input filtering |
 
 ### Wiring Notes
 
+A complete wiring guide is in [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md). Key points:
+
 - **RPi 5 GPIO 18** → level shifter → laser TTL input (3.3 V logic shifted to 5 V). Configurable via `laser_pin`.
-- **RPi 5 GPIO 24** → lever SPST arm switch (active HIGH when armed). Configurable via `arm_switch_pin`.
-- **RPi 5 GPIO 25** → mushroom DPST E-stop (active LOW when pressed; both poles wired in series for redundancy). Configurable via `e_stop_pin`.
+- **RPi 5 GPIO 24** → lever SPST arm switch sense circuit (active HIGH when armed). The same arm switch also switches 12 V power to the laser driver. Configurable via `arm_switch_pin`.
+- **RPi 5 GPIO 25** → mushroom DPST E-stop sense (active LOW when pressed). One E-stop pole breaks mains Live; the second pole drives the GPIO sense circuit. Configurable via `e_stop_pin`.
 - **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC).
 - **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC).
-- **RPi 5 SPI0 MOSI** (pin 19) and **SCLK** (pin 23) → both MCP4922 SDI and SCK.
-- Both MCP4922 Vref pins tied to **5 V** → output swing 0–5 V per channel, producing ±5 V differential per axis.
-- Galvo scanner powered by **15 V**; driver accepts the ±5 V differential signal from the DAC pair.
-- Laser driver powered by **12 V** from the Mean Well supply.
+- **RPi 5 SPI0 MOSI** (pin 19) and **SCLK** (pin 23) → level shifter → both MCP4922 SDI and SCK.
+- Both MCP4922 Vref pins tied to **5 V** → 0–5 V per channel, combined as **±5 V differential** per axis. See the guide for the channel mapping and differential-drive explanation.
+- Galvo scanner powered by **±15 V**; driver accepts the ±5 V differential signal from the DAC pair.
+- Laser driver powered by **12 V** from the Mean Well supply through the arm switch.
 
-### Recommended E-Stop Input Circuit
-
-The mushroom DPST button is normally-closed (NC). Each pole is wired in series with a 10 kΩ resistor to a GPIO input. A 3.3 kΩ pull-up holds the GPIO HIGH when the button is released; pressing the button opens the contacts and pulls the GPIO LOW. A 100 nF capacitor to ground provides debounce, and the BZX55C3V3 zener clamps transients to 3.3 V. Both poles must agree before the system considers the E-stop released.
+For the complete E-Stop, arm switch, GPIO input, and SPI wiring details, see [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md).
 
 ### Camera Resolution Note
 
-The OV9281 modules are capable of 1280×720. The default configuration runs them at **640×480 @ 120 FPS** for real-time dual-camera processing on the Raspberry Pi 5. Adjust `frame_width`, `frame_height`, and `target_fps` in `config/system_config.yaml` if your UVC firmware supports a different mode, but do not exceed the real-time processing budget.
+The OV9281 modules are capable of 1280×720. The default configuration runs them at **640×400 @ 120 FPS** for real-time dual-camera processing on the Raspberry Pi 5. (640×480 is not a supported OV9281 mode.) Adjust `frame_width`, `frame_height`, and `target_fps` in `config/system_config.yaml` if your UVC firmware supports a different mode, but do not exceed the real-time processing budget.
 
 ## Quick Start
 
@@ -134,17 +134,18 @@ If `left_camera_device` or `right_camera_device` is left empty, the system falls
 
 ## Safety Architecture
 
-The system implements seven structurally-enforced safety guards:
+The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration ≤ 100ms** — enforced by timer check in the same function that writes the pin
+1. **Laser pulse duration ≤ 100ms** — control-loop + HAL max-pulse enforcement
 2. **10-second firing cooldown** — `may_fire()` gate with no bypass path
-3. **Motion blanking** — laser TTL LOW during galvo slewing, fires only after settling
-4. **Software watchdog** — 3 missed heartbeats (~25ms) triggers SAFE_HALT
-5. **Coordinate bounds checking** — `std::expected` chain validates 3D point → bounding box → galvo limits → DAC range (0-4095)
-6. **RAII deterministic shutdown** — destructor order guarantees laser LOW, DAC zeroed, SPI closed
-7. **Hardware error propagation** — all HAL operations return `std::expected<T, HardwareError>`
-
-See `AGENTS.md` for the full safety enforcement strategy.
+3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
+4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
+5. **Software watchdog** — 3 missed heartbeats (~25ms) triggers SAFE_HALT
+6. **Coordinate bounds** — box + galvo cone + voltage-scale DAC (**reject**, no clamp)
+7. **E-stop** — active-low mushroom → SAFE_HALT; GPIO fault → pressed
+8. **Config validation** — critical engagement mismatches abort startup
+9. **RAII shutdown** — destructor order guarantees laser LOW, galvos centered
+10. **Signal shutdown** — SIGINT/SIGTERM polled by all worker threads
 
 ## Building and Running Tests
 
@@ -163,6 +164,7 @@ ctest --output-on-failure
 ./tests/test_e_stop
 ./tests/test_coordinate_mapper
 ./tests/test_firing_controller
+./tests/test_control_arm_gating
 ./tests/test_system_state
 ./tests/test_thread_safe_queue
 ./tests/test_stereo_matcher

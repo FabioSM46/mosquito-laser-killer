@@ -6,7 +6,40 @@
 #include <cstring>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 #include <linux/videodev2.h>
+
+namespace {
+
+constexpr auto k_capture_timeout_ms = 1000;
+
+auto wait_for_frame(int fd, int timeout_ms) -> std::expected<void, HardwareError> {
+    if (fd < 0) {
+        return std::unexpected(HardwareError::CameraCaptureFailed);
+    }
+
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+
+    timeval tv{};
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    auto ret = select(fd + 1, &fds, nullptr, nullptr, &tv);
+    if (ret < 0) {
+        println(stderr, "[Camera] select() failed: {}", strerror(errno));
+        return std::unexpected(HardwareError::CameraCaptureFailed);
+    }
+    if (ret == 0) {
+        println(stderr, "[Camera] Capture timeout ({} ms)", timeout_ms);
+        return std::unexpected(HardwareError::Timeout);
+    }
+
+    return {};
+}
+
+}
 
 CameraImpl::CameraImpl(const std::string& device, int width, int height, int fps,
                        const SystemConfig::CameraControls& controls)
@@ -83,13 +116,21 @@ auto CameraImpl::open(int /*device_index*/) -> std::expected<void, HardwareError
         return std::unexpected(HardwareError::CameraOpenFailed);
     }
 
+    apply_controls();
+
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(fd_, VIDIOC_STREAMON, &type) < 0) {
+        println(stderr, "[Camera] VIDIOC_STREAMON failed on {}: {}", device_, strerror(errno));
+        close();
+        return std::unexpected(HardwareError::CameraOpenFailed);
+    }
+
     println("[Camera] Opened {} at {}x{}@{} (actual {}x{}@{}/{})",
             device_, width_, height_, fps_,
             fmt.fmt.pix.width, fmt.fmt.pix.height,
             parm.parm.capture.timeperframe.denominator,
             parm.parm.capture.timeperframe.numerator);
 
-    apply_controls();
     return {};
 }
 
@@ -116,6 +157,11 @@ auto CameraImpl::capture(uint8_t* buffer, size_t size) -> std::expected<void, Ha
         return std::unexpected(HardwareError::CameraCaptureFailed);
     }
 
+    auto ready = wait_for_frame(fd_, k_capture_timeout_ms);
+    if (!ready.has_value()) {
+        return std::unexpected(ready.error());
+    }
+
     auto bytes_read = ::read(fd_, buffer, size);
     if (bytes_read < 0) {
         println(stderr, "[Camera] Capture read failed: {}", strerror(errno));
@@ -136,6 +182,8 @@ auto CameraImpl::is_open() const -> bool {
 
 void CameraImpl::close() {
     if (fd_ >= 0) {
+        int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        (void)ioctl(fd_, VIDIOC_STREAMOFF, &type);
         ::close(fd_);
         fd_ = -1;
         println("[Camera] Closed {}", device_);

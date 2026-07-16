@@ -32,8 +32,11 @@ auto EStop::update() -> void {
 
     auto read_result = gpio_->read();
     if (!read_result.has_value()) {
-        println(stderr, "[ESTOP] GPIO read failed: {}",
+        // Fail-safe: treat GPIO faults as E-stop pressed.
+        println(stderr, "[ESTOP] GPIO read failed: {} — forcing PRESSED",
                      to_string(read_result.error()));
+        pressed_ = true;
+        pressed_counter_ = debounce_cycles_;
         return;
     }
 
@@ -64,7 +67,7 @@ auto EStop::update() -> void {
 }
 
 auto EStop::is_pressed() const -> bool {
-    return initialized_ && pressed_;
+    return pressed_ || !initialized_;
 }
 
 auto EStop::is_initialized() const -> bool {

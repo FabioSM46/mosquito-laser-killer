@@ -98,12 +98,12 @@ auto load_config() -> SystemConfig {
 
         if (yaml["bounding_box"]) {
             auto bb = yaml["bounding_box"];
-            config.bounding_box.x_min = bb["x_min"] ? bb["x_min"].as<double>() : -1.0;
-            config.bounding_box.x_max = bb["x_max"] ? bb["x_max"].as<double>() : 1.0;
-            config.bounding_box.y_min = bb["y_min"] ? bb["y_min"].as<double>() : -1.0;
-            config.bounding_box.y_max = bb["y_max"] ? bb["y_max"].as<double>() : 1.0;
+            config.bounding_box.x_min = bb["x_min"] ? bb["x_min"].as<double>() : -0.09;
+            config.bounding_box.x_max = bb["x_max"] ? bb["x_max"].as<double>() : 0.09;
+            config.bounding_box.y_min = bb["y_min"] ? bb["y_min"].as<double>() : -0.09;
+            config.bounding_box.y_max = bb["y_max"] ? bb["y_max"].as<double>() : 0.09;
             config.bounding_box.z_min = bb["z_min"] ? bb["z_min"].as<double>() : 0.5;
-            config.bounding_box.z_max = bb["z_max"] ? bb["z_max"].as<double>() : 5.0;
+            config.bounding_box.z_max = bb["z_max"] ? bb["z_max"].as<double>() : 1.0;
         }
 
         if (yaml["galvo_limits"]) {
@@ -159,17 +159,13 @@ auto load_config() -> SystemConfig {
             config.stereo.baseline_m = st["baseline_m"]
                 ? st["baseline_m"].as<double>() : 0.12;
             config.stereo.focal_length_px = st["focal_length_px"]
-                ? st["focal_length_px"].as<double>() : 800.0;
+                ? st["focal_length_px"].as<double>() : 500.0;
             config.stereo.cx = st["cx"] ? st["cx"].as<double>() : 320.0;
             config.stereo.cy = st["cy"] ? st["cy"].as<double>() : 240.0;
         }
 
         println("[CONFIG] Loaded config/system_config.yaml");
 
-        auto validation_warnings = validate_engagement_volume(config);
-        for (const auto& w : validation_warnings) {
-            println(stderr, "[CONFIG] WARNING [{}]: {}", w.category, w.message);
-        }
     } catch (const YAML::Exception& e) {
         println(stderr, "[CONFIG] Failed to load config: {}. Using defaults.", e.what());
     }
@@ -190,18 +186,30 @@ auto main(int argc, char* argv[]) -> int {
     println("===========================================");
 
     SignalHandler signal_handler;
-    signal_handler.set_shutdown_callback([&] {
-        println(stderr, "\n[SIGNAL] Shutdown requested");
-        g_shutdown_requested.store(true, std::memory_order_release);
-    });
     signal_handler.install();
 
     auto config = load_config();
 
+    {
+        auto validation_warnings = validate_engagement_volume(config);
+        for (const auto& w : validation_warnings) {
+            if (w.critical) {
+                println(stderr, "[CONFIG] ERROR [{}]: {}", w.category, w.message);
+            } else {
+                println(stderr, "[CONFIG] WARNING [{}]: {}", w.category, w.message);
+            }
+        }
+        if (has_critical_validation_errors(validation_warnings)) {
+            println(stderr, "[CONFIG] Aborting: critical engagement-volume validation failed");
+            return 1;
+        }
+    }
+
     SystemStateMachine state_machine;
 
     auto gpio_laser = std::make_unique<GpioImpl>(config.laser_pin);
-    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin);
+    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin,
+                                         config.max_pulse_duration_ms);
 
     auto spi_x = std::make_unique<SpiImpl>(config.spi_device_x, config.spi_speed_hz);
     auto spi_y = std::make_unique<SpiImpl>(config.spi_device_y, config.spi_speed_hz);
@@ -249,7 +257,8 @@ auto main(int argc, char* argv[]) -> int {
     }
 
     BoundingBox3D bounding_box(config.bounding_box);
-    CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage);
+    CoordinateMapper mapper(bounding_box, config.galvo_limits, config.dac_ref_voltage,
+                            config.galvo_driver);
     FiringController firing_controller(*laser, *galvo, mapper,
         config.max_pulse_duration_ms,
         config.cooldown_seconds,
@@ -274,15 +283,26 @@ auto main(int argc, char* argv[]) -> int {
     }
     println("[MAIN] System ready in IDLE state");
 
+    // Capture thread may only set the atomic; control thread owns laser/state cleanup.
+    auto request_system_halt = [&](const char* reason) {
+        println(stderr, "[MAIN] System halt requested: {}", reason);
+        g_shutdown_requested.store(true, std::memory_order_release);
+    };
+
     println("[MAIN] Starting capture thread...");
     std::jthread capture_thread([&](std::stop_token stoken) {
         println("[CAPTURE] Thread started");
         uint64_t frame_id = 0;
 
-        std::string left_dev = config.left_camera_device.empty()
-            ? "/dev/video0" : config.left_camera_device;
-        std::string right_dev = config.right_camera_device.empty()
-            ? "/dev/video2" : config.right_camera_device;
+        std::string left_dev = config.left_camera_device;
+        std::string right_dev = config.right_camera_device;
+
+        if (left_dev.empty() || right_dev.empty()) {
+            println(stderr, "[CAPTURE] Camera device paths are not configured. "
+                            "Use stable /dev/v4l/by-path/ symlinks in config/system_config.yaml");
+            request_system_halt("camera device paths not configured");
+            return;
+        }
 
         println("[CAPTURE] Left camera: {}", left_dev);
         println("[CAPTURE] Right camera: {}", right_dev);
@@ -300,19 +320,22 @@ auto main(int argc, char* argv[]) -> int {
         if (!open_left.has_value()) {
             println(stderr, "[CAPTURE] Failed to open left camera: {}",
                          to_string(open_left.error()));
+            request_system_halt("left camera open failed");
             return;
         }
         auto open_right = right_cam.open(1);
         if (!open_right.has_value()) {
             println(stderr, "[CAPTURE] Failed to open right camera: {}",
                          to_string(open_right.error()));
+            request_system_halt("right camera open failed");
             return;
         }
 
         auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
-               !g_shutdown_requested.load(std::memory_order_acquire)) {
+               !g_shutdown_requested.load(std::memory_order_acquire) &&
+               !signal_handler.is_shutdown_requested()) {
             auto cycle_start = std::chrono::steady_clock::now();
 
             StereoFrame frame;
@@ -326,6 +349,7 @@ auto main(int argc, char* argv[]) -> int {
             if (!left_result.has_value()) {
                 println(stderr, "[CAPTURE] Left camera capture failed: {}",
                              to_string(left_result.error()));
+                request_system_halt("left camera capture failed");
                 break;
             }
 
@@ -334,6 +358,7 @@ auto main(int argc, char* argv[]) -> int {
             if (!right_result.has_value()) {
                 println(stderr, "[CAPTURE] Right camera capture failed: {}",
                              to_string(right_result.error()));
+                request_system_halt("right camera capture failed");
                 break;
             }
 
@@ -355,7 +380,8 @@ auto main(int argc, char* argv[]) -> int {
         auto max_wait = std::chrono::milliseconds(16);
 
         while (!stoken.stop_requested() &&
-               !g_shutdown_requested.load(std::memory_order_acquire)) {
+               !g_shutdown_requested.load(std::memory_order_acquire) &&
+               !signal_handler.is_shutdown_requested()) {
             auto frames = frame_queue.drain_all();
 
             std::optional<StereoFrame> latest_frame;
@@ -425,18 +451,24 @@ auto main(int argc, char* argv[]) -> int {
         auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
 
         while (!stoken.stop_requested() &&
-               !g_shutdown_requested.load(std::memory_order_acquire)) {
+               !g_shutdown_requested.load(std::memory_order_acquire) &&
+               !signal_handler.is_shutdown_requested()) {
             auto cycle_start = std::chrono::steady_clock::now();
 
             auto now = std::chrono::steady_clock::now();
+            laser->enforce_max_pulse(now);
             if (!watchdog.check(now)) {
                 println(stderr, "[CONTROL] Watchdog triggered, halting");
+                g_shutdown_requested.store(true, std::memory_order_release);
+                firing_controller.emergency_stop();
+                (void)state_machine.transition(SystemState::SAFE_HALT);
                 break;
             }
 
             e_stop.update();
             if (e_stop.is_pressed()) {
                 println(stderr, "[CONTROL] E-STOP PRESSED, halting");
+                g_shutdown_requested.store(true, std::memory_order_release);
                 firing_controller.emergency_stop();
                 (void)state_machine.transition(SystemState::SAFE_HALT);
                 break;
@@ -446,10 +478,12 @@ auto main(int argc, char* argv[]) -> int {
             bool is_armed = arm_switch.is_armed();
             auto cs = state_machine.current();
 
+            // Structural arm gate: controller refuses targets/fire when disarmed.
+            firing_controller.set_armed(is_armed);
+
             if (!is_armed && cs != SystemState::IDLE &&
-                cs != SystemState::SAFE_HALT) {
+                cs != SystemState::SAFE_HALT && cs != SystemState::COOLDOWN) {
                 println("[CONTROL] Arm switch OFF, disarming");
-                firing_controller.disarm();
                 if (cs == SystemState::FIRING) {
                     (void)state_machine.transition(SystemState::COOLDOWN);
                 } else {
@@ -468,23 +502,26 @@ auto main(int argc, char* argv[]) -> int {
 
             if (cmd_opt.has_value()) {
                 auto& cmd = cmd_opt.value();
+                auto current_state = state_machine.current();
 
-                if (cmd.target_valid && cmd.target_position.has_value()) {
-                    auto current_state = state_machine.current();
-
-                    if (current_state == SystemState::ARMED ||
-                        current_state == SystemState::TRACKING) {
-                        if (current_state == SystemState::ARMED) {
-                            (void)state_machine.transition(SystemState::TRACKING);
-                        }
-                        firing_controller.set_target(cmd.target_position.value());
+                if (!is_armed) {
+                    firing_controller.clear_target();
+                } else if (current_state == SystemState::FIRING) {
+                    // Hold aim while firing (motion blanking). Abort only on loss.
+                    if (!cmd.target_valid || !cmd.target_position.has_value()) {
+                        (void)state_machine.transition(SystemState::COOLDOWN);
+                        firing_controller.clear_target();
                     }
+                } else if (cmd.target_valid && cmd.target_position.has_value() &&
+                           (current_state == SystemState::ARMED ||
+                            current_state == SystemState::TRACKING)) {
+                    if (current_state == SystemState::ARMED) {
+                        (void)state_machine.transition(SystemState::TRACKING);
+                    }
+                    firing_controller.set_target(cmd.target_position.value());
                 } else {
-                    auto current_state = state_machine.current();
                     if (current_state == SystemState::TRACKING) {
                         (void)state_machine.transition(SystemState::ARMED);
-                    } else if (current_state == SystemState::FIRING) {
-                        (void)state_machine.transition(SystemState::COOLDOWN);
                     }
                     firing_controller.clear_target();
                 }
@@ -501,8 +538,12 @@ auto main(int argc, char* argv[]) -> int {
             }
 
             if (state_machine.current() == SystemState::COOLDOWN &&
+                !firing_controller.is_firing() &&
                 firing_controller.may_fire()) {
                 (void)state_machine.transition(SystemState::IDLE);
+                if (is_armed) {
+                    (void)state_machine.transition(SystemState::ARMED);
+                }
             }
 
             if (state_machine.current() == SystemState::SAFE_HALT) {

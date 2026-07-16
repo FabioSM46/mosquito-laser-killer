@@ -10,7 +10,7 @@ MCP4922::MCP4922(std::unique_ptr<ISpi> spi) : spi_(std::move(spi)) {
             println(stderr, "[MCP4922] Failed to zero DAC on init: {}",
                          to_string(result.error()));
         } else {
-            println("[MCP4922] Initialized, both channels at (0,0)");
+            println("[MCP4922] Initialized, both channels at mid-scale (2048)");
         }
     }
 }
@@ -46,7 +46,9 @@ auto MCP4922::write(DacValues values) -> std::expected<void, HardwareError> {
 }
 
 auto MCP4922::zero() -> std::expected<void, HardwareError> {
-    return write({0, 0});
+    // Mid-scale on both channels → 0 V differential at mid common-mode (safe center).
+    constexpr uint16_t kCenter = 2048;
+    return write({kCenter, kCenter});
 }
 
 auto MCP4922::is_initialized() const -> bool {

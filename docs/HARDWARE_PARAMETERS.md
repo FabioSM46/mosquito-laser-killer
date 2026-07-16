@@ -2,11 +2,13 @@
 
 This document records the measured/quoted parameters of the galvanometer, the
 cameras, and the laser, and derives the **engagement envelope** that the software
-enforces. The runtime configuration lives in `config/system_config.yaml`; a
-startup validator (`src/safety/config_validator.cpp`, see
-`validate_engagement_volume`) checks that the configured safe firing volume,
-galvo limits, and camera field of view are mutually consistent and prints
-warnings on mismatch.
+enforces. For physical wiring and assembly instructions, see
+[`docs/HARDWARE_WIRING.md`](HARDWARE_WIRING.md). The runtime configuration lives
+in `config/system_config.yaml`; a startup validator
+(`src/safety/config_validator.cpp`, see `validate_engagement_volume`) checks that
+the configured safe firing volume, galvo limits, and camera field of view are
+mutually consistent and prints warnings on mismatch. **Critical** mismatches abort
+startup.
 
 ---
 
@@ -54,6 +56,28 @@ MCP4922 (12-bit, 0–5 V unipolar per channel)
         └── Driver input (±5 V, 0.33 V/°)  →  ±15° optical (default)
              └── Galvo mirror  →  beam steered ±15° optical
 ```
+
+The MCP4922 is a **dual-channel** DAC. Each axis consumes one entire DAC: channel A
+carries the positive half of the differential signal and channel B carries the inverted
+(negative) half. This is how the system generates a true ±5 V differential signal
+although the Raspberry Pi itself can only output positive logic levels. See
+[`docs/HARDWARE_WIRING.md`](HARDWARE_WIRING.md) for the physical wiring and the
+[`CoordinateMapper`](../src/control/coordinate_mapper.cpp) source for the math.
+
+**Channel mapping:**
+
+| DAC | SPI chip select | Channel A | Channel B | Signal |
+|-----|-----------------|-----------|-----------|--------|
+| X-axis | GPIO 8 / CE0 | X+ | X- (inverted) | Horizontal mirror |
+| Y-axis | GPIO 7 / CE1 | Y+ | Y- (inverted) | Vertical mirror |
+
+**Signal map for one axis:**
+
+| DAC code | ChA (V+) | ChB (V−) | V_diff = V+ − V− | Optical angle |
+|----------|----------|-----------|------------------|---------------|
+| 0 | 0.0 V | 5.0 V | −5.0 V | −15.15° |
+| 2048 | 2.5 V | 2.5 V | 0.0 V | 0° |
+| 4095 | 5.0 V | 0.0 V | +5.0 V | +15.15° |
 
 **Key consequence:** the ±5 V differential DAC range, combined with the
 **0.33 V/°** driver input scale, commands at most **±5 / 0.33 ≈ ±15.15°** optical.
@@ -155,12 +179,14 @@ tunable in `camera_controls`.
 
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
-| Max pulse ≤ 100 ms | per-cycle duration check forces `laser.fire(false)` | `FiringController::execute_cycle` |
+| Max pulse ≤ 100 ms | per-cycle duration check + `Laser::enforce_max_pulse` | `FiringController`, `Laser` |
 | Cooldown ≥ 10 s | `cooldown_until_` gates `may_fire()` | `FiringController` |
-| Motion blanking | galvo must be `settled` before fire; fire path is dead code otherwise | `FiringController` |
+| Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
+| Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
 | Watchdog | 3 missed heartbeats → `emergency_shutdown()` + `SAFE_HALT` | `Watchdog` |
-| Coordinate bounds | all 3D targets validated against the safe box and galvo cone | `CoordinateMapper`, `BoundingBox3D` |
-| E-stop | hardware mushroom button (active-low GPIO) bypasses all states → `SAFE_HALT` | `EStop` |
+| Coordinate bounds | safe box + galvo cone + voltage-scale DAC (reject, no clamp) | `CoordinateMapper`, `BoundingBox3D` |
+| E-stop | active-low mushroom → `SAFE_HALT`; GPIO fault → pressed | `EStop` |
+| Config validation | critical engagement mismatches abort startup | `validate_engagement_volume` |
 | RAII shutdown | laser GPIO forced LOW on init, on error, and on destruction | `Laser`, `~GpioImpl` |
 
 ---

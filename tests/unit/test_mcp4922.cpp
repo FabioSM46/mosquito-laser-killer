@@ -35,13 +35,14 @@ protected:
     MockSpi* raw_spi_{nullptr};
 };
 
-TEST_F(MCP4922Test, ConstructorZerosBothChannels) {
+TEST_F(MCP4922Test, ConstructorCentersBothChannels) {
     std::vector<uint16_t> calls;
     EXPECT_CALL(*raw_spi_, write16(_)).WillRepeatedly(Invoke(make_recorder(calls)));
 
     MCP4922 dac(std::move(mock_spi_));
 
-    EXPECT_THAT(calls, ElementsAre(DAC_A_CMD, DAC_B_CMD));
+    constexpr uint16_t kCenter = 2048;
+    EXPECT_THAT(calls, ElementsAre(DAC_A_CMD | kCenter, DAC_B_CMD | kCenter));
     EXPECT_TRUE(dac.is_initialized());
 }
 
@@ -102,7 +103,7 @@ TEST_F(MCP4922Test, SpiFailurePropagates) {
     EXPECT_EQ(result.error(), HardwareError::SpiTransferFailed);
 }
 
-TEST_F(MCP4922Test, ZeroWritesBothChannelsToZero) {
+TEST_F(MCP4922Test, ZeroWritesBothChannelsToMidScale) {
     std::vector<uint16_t> calls;
     EXPECT_CALL(*raw_spi_, write16(_)).WillRepeatedly(Invoke(make_recorder(calls)));
 
@@ -111,7 +112,8 @@ TEST_F(MCP4922Test, ZeroWritesBothChannelsToZero) {
 
     auto result = dac.zero();
     ASSERT_TRUE(result.has_value());
-    EXPECT_THAT(calls, ElementsAre(DAC_A_CMD, DAC_B_CMD));
+    constexpr uint16_t kCenter = 2048;
+    EXPECT_THAT(calls, ElementsAre(DAC_A_CMD | kCenter, DAC_B_CMD | kCenter));
 }
 
 TEST_F(MCP4922Test, NullSpiLeavesUninitialized) {
