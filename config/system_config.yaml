@@ -134,3 +134,24 @@ detection:
   max_blobs: 8              # Busier frames cannot be matched unambiguously -> no target.
   epipolar_tolerance_px: 2.0  # Max |v_left - v_right| for a rectified pair.
   target_size_m: 0.005      # Nominal mosquito body length, used for the area sanity check.
+  # Motion gate: a running background model; a blob must differ from it by
+  # motion_threshold to be reported at all. Static glints, fixtures and lens
+  # dust merge into the model and vanish. The trade: a target that stops
+  # moving fades too — this system engages flying targets only.
+  # 0 disables the gate (legacy bright-blob behaviour). Must be in [0, 0.5].
+  background_learning_rate: 0.05
+  motion_threshold: 25        # 8-bit absdiff gate vs background. Must be in [1, 254].
+  # Depth-consistent size check: at a triangulated z, a target_size_m object
+  # projects to a known pixel area; blobs outside [expected/k, expected*k]
+  # are glints, fixtures, or different animals. Must be in [1, 100].
+  size_tolerance_factor: 3.0
+
+# --- Multi-Target Tracking ---
+# Multiple tracks are held at once, but only confirmed, plausibly-flying ones
+# are engageable, and the selector engages ONE sticky target at a time.
+tracking:
+  confirm_hits: 3           # Consecutive matched frames before a track is engageable.
+  association_gate_m: 0.15  # Max distance between a track prediction and a measurement.
+  min_speed_mps: 0.05       # ~0 m/s is a glint or fixture, not a flying insect.
+  max_speed_mps: 3.0        # Beyond this is a correspondence artefact, not flight.
+  max_tracks: 16            # Refuse new tracks beyond this (fail closed).

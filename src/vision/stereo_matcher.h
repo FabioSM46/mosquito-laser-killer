@@ -18,10 +18,19 @@ public:
                   const SystemConfig::BoundingBox& bounds);
     ~StereoMatcher() = default;
 
-    // Returns a point only when exactly one plausible correspondence exists.
-    // Zero candidates and multiple candidates both yield nullopt: an ambiguous
-    // pairing is a guess, and a wrong guess aims a Class 4 beam at a point that
-    // was never verified to hold the target.
+    // Returns every correspondence that survives all gates, with per-cluster
+    // exclusivity: any blob participating in more than one candidate pair is
+    // ambiguous, so every pair involving it is dropped. An ambiguous cluster
+    // therefore produces nothing while a clean pair elsewhere in the same
+    // frame still yields its target. A wrong pairing aims a Class 4 beam at a
+    // point never verified to hold a target, so ambiguity is always resolved
+    // toward silence, never toward a guess.
+    [[nodiscard]] auto match_all(const std::vector<Blob>& left,
+                                 const std::vector<Blob>& right) const
+        -> std::vector<Point3D>;
+
+    // Single-target view of match_all: a point only when exactly one
+    // correspondence survives. Zero and multiple survivors both yield nullopt.
     [[nodiscard]] auto match(const std::vector<Blob>& left,
                              const std::vector<Blob>& right) const
         -> std::optional<Point3D>;
@@ -39,6 +48,12 @@ private:
     [[nodiscard]] auto blobs_are_plausible_pair(const Blob& left, const Blob& right) const
         -> bool;
 
+    // At a measured z, a target_size_m object projects to a known area in
+    // pixels. A blob far outside that band is a glint, a fixture, or a
+    // different animal — not the target, whatever its centroid says.
+    [[nodiscard]] auto size_consistent_with_target(const Blob& left_blob,
+                                                   double z) const -> bool;
+
     double baseline_m_;
     double focal_length_px_;
     double cx_;
@@ -46,4 +61,6 @@ private:
     double epipolar_tolerance_px_;
     double min_disparity_px_{0.0};
     double max_disparity_px_{0.0};
+    double target_size_m_{0.0};
+    double size_tolerance_factor_{1.0};
 };

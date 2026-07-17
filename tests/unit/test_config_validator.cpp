@@ -405,3 +405,99 @@ TEST_F(ConfigValidatorTest, PulseDurationBoundary) {
     config.max_pulse_duration_ms = 100.0;
     EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
 }
+
+TEST_F(ConfigValidatorTest, BackgroundLearningRateBoundary) {
+    // 0 disables the motion gate by design; above 0.5 the model chases the
+    // current frame so fast a slow target erases itself — silent blindness.
+    for (const double v : {-0.1, 0.51, std::nan("")}) {
+        auto config = config_;
+        config.detection.background_learning_rate = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "background_learning_rate=" << v << " passed validation";
+    }
+    for (const double v : {0.0, 0.05, 0.5}) {
+        auto config = config_;
+        config.detection.background_learning_rate = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "background_learning_rate=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, MotionThresholdBoundary) {
+    for (const int v : {0, 255, -1}) {
+        auto config = config_;
+        config.detection.motion_threshold = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "motion_threshold=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, SizeToleranceFactorBoundary) {
+    // Below 1.0 the accept band inverts and rejects every real target.
+    for (const double v : {0.5, 0.0, -2.0, 100.1, std::nan("")}) {
+        auto config = config_;
+        config.detection.size_tolerance_factor = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "size_tolerance_factor=" << v << " passed validation";
+    }
+    auto config = config_;
+    config.detection.size_tolerance_factor = 1.0;
+    EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
+}
+
+TEST_F(ConfigValidatorTest, TrackingConfirmHitsBoundary) {
+    for (const int v : {0, -1, 61}) {
+        auto config = config_;
+        config.tracking.confirm_hits = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "confirm_hits=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, TrackingAssociationGateBoundary) {
+    // A NaN gate makes every distance comparison false -> nothing associates
+    // (fail closed), but the system is then silently blind; reject at startup.
+    for (const double v : {0.0, -0.1, 1.01, std::nan("")}) {
+        auto config = config_;
+        config.tracking.association_gate_m = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "association_gate_m=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, TrackingSpeedWindowBoundary) {
+    {
+        auto config = config_;
+        config.tracking.min_speed_mps = -0.5;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "negative min_speed_mps passed validation";
+    }
+    {
+        auto config = config_;
+        config.tracking.min_speed_mps = 3.0;
+        config.tracking.max_speed_mps = 3.0;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "empty speed window passed validation";
+    }
+    {
+        auto config = config_;
+        config.tracking.max_speed_mps = std::nan("");
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "NaN max_speed_mps passed validation";
+    }
+    {
+        auto config = config_;
+        config.tracking.max_speed_mps = 25.0;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "absurd max_speed_mps passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, TrackingMaxTracksBoundary) {
+    for (const int v : {0, -4, 257}) {
+        auto config = config_;
+        config.tracking.max_tracks = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "max_tracks=" << v << " passed validation";
+    }
+}

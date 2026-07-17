@@ -210,8 +210,10 @@ TEST_F(StereoMatcherTest, NonFinitePixelIsRejected) {
 }
 
 TEST_F(StereoMatcherTest, MatchSinglePlausiblePairTriangulates) {
-    const std::vector<Blob> left{make_blob(300.0, 200.0, 100)};
-    const std::vector<Blob> right{make_blob(220.0, 200.0, 100)};
+    // Area 9 px: a 5 mm target at z = 0.75 m projects to ~8.7 px, so this is
+    // what a real mosquito-sized pair looks like to the size gate.
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 9)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 9)};
 
     const auto point = matcher_->match(left, right);
 
@@ -245,12 +247,13 @@ TEST_F(StereoMatcherTest, MatchWithNoBlobsOnEitherSideReturnsNullopt) {
 TEST_F(StereoMatcherTest, MatchAmbiguousSceneFailsClosed) {
     // Two blobs per camera, arranged so that L1-R1 (d = 80) and L2-R2 (d = 80)
     // are both perfectly plausible: same rows, same areas, both disparities
-    // inside the window. The two survivors triangulate to genuinely different
-    // places, and nothing in the frame says which one is real.
-    const std::vector<Blob> left{make_blob(300.0, 200.0, 100),
-                                 make_blob(400.0, 200.0, 100)};
-    const std::vector<Blob> right{make_blob(220.0, 200.0, 100),
-                                  make_blob(320.0, 200.0, 100)};
+    // inside the window. match_all now resolves both as separate targets — but
+    // the single-target match() contract stays fail closed: anything other
+    // than exactly one survivor is no target at all.
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 9),
+                                 make_blob(400.0, 200.0, 9)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 9),
+                                  make_blob(320.0, 200.0, 9)};
 
     EXPECT_FALSE(matcher_->match(left, right).has_value());
 
@@ -263,22 +266,120 @@ TEST_F(StereoMatcherTest, MatchAmbiguousSceneFailsClosed) {
 TEST_F(StereoMatcherTest, MatchRejectsPairWithMismatchedAreas) {
     // Same row, disparity 80 px, dead centre of the window: epipolar and
     // disparity both say yes. The areas say no. The same object at one distance
-    // projects to roughly the same area in both cameras, so a 30:1 area ratio
+    // projects to roughly the same area in both cameras, so a ~9:1 area ratio
     // means these are two different objects that happen to line up — a mosquito
     // in one frame and something much larger behind it in the other.
-    EXPECT_FALSE(matcher_->match({make_blob(300.0, 200.0, 10)},
-                                 {make_blob(220.0, 200.0, 300)})
+    //
+    // Areas 3 and 26 both sit INSIDE the depth-size band ([2.9, 26.2] px for a
+    // 5 mm target at z = 0.75 m), so only the area-ratio gate can be rejecting
+    // these pairs: if that gate were deleted, this test would fail.
+    EXPECT_FALSE(matcher_->match({make_blob(300.0, 200.0, 3)},
+                                 {make_blob(220.0, 200.0, 26)})
                      .has_value());
 
     // Rejected in both directions: the ratio bound is two-sided.
-    EXPECT_FALSE(matcher_->match({make_blob(300.0, 200.0, 300)},
-                                 {make_blob(220.0, 200.0, 10)})
+    EXPECT_FALSE(matcher_->match({make_blob(300.0, 200.0, 26)},
+                                 {make_blob(220.0, 200.0, 3)})
                      .has_value());
 
     // Areas that differ by a plausible amount still pair, so the gate is
     // discriminating rather than simply refusing everything.
-    EXPECT_TRUE(matcher_->match({make_blob(300.0, 200.0, 100)},
-                                {make_blob(220.0, 200.0, 120)})
+    EXPECT_TRUE(matcher_->match({make_blob(300.0, 200.0, 9)},
+                                {make_blob(220.0, 200.0, 11)})
+                    .has_value());
+}
+
+// The depth-consistent size gate: at a triangulated z, a target_size_m object
+// projects to a known pixel area. Blobs far outside that band are glints,
+// fixtures, or different animals — not the target.
+TEST_F(StereoMatcherTest, SizeGateRejectsOversizedPair) {
+    // d = 80 -> z = 0.75 m -> a 5 mm target is ~8.7 px. 100 px at that depth is
+    // a ~19 mm object: a fixture or a glint, not a mosquito. Both sides are
+    // 100 px, so the area-ratio gate passes and only the size gate can reject.
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 100)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 100)};
+
+    EXPECT_THAT(matcher_->match_all(left, right), IsEmpty());
+    EXPECT_FALSE(matcher_->match(left, right).has_value());
+}
+
+TEST_F(StereoMatcherTest, SizeGateRejectsUndersizedPair) {
+    // 1 px at z = 0.75 m is a sub-mm speck: sensor noise, not a target.
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 1)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 1)};
+
+    EXPECT_THAT(matcher_->match_all(left, right), IsEmpty());
+}
+
+TEST_F(StereoMatcherTest, SizeGateDisabledWhenNoTargetSizeConfigured) {
+    auto config = config_;
+    config.detection.target_size_m = 0.0;
+    StereoMatcher matcher(config.stereo, config.detection, config.bounding_box);
+
+    // With no expectation to check against, the gate must not invent one: the
+    // same oversized pair that the default config rejects now matches.
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 100)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 100)};
+    EXPECT_EQ(matcher.match_all(left, right).size(), 1u);
+}
+
+TEST_F(StereoMatcherTest, NanSizeToleranceFailsClosed) {
+    auto config = config_;
+    config.detection.size_tolerance_factor = std::numeric_limits<double>::quiet_NaN();
+    StereoMatcher matcher(config.stereo, config.detection, config.bounding_box);
+
+    // Sanitized to the strictest band (x1.0, exact-size-only): at 8.7 px
+    // expected, even an honest 9 px mosquito-sized blob cannot land inside.
+    EXPECT_THAT(matcher.match_all({make_blob(300.0, 200.0, 9)},
+                                  {make_blob(220.0, 200.0, 9)}),
+                IsEmpty());
+}
+
+// match_all: two clean, mutually exclusive correspondences in one frame are two
+// targets — the multi-target case the old match() collapsed to nullopt.
+TEST_F(StereoMatcherTest, MatchAllReturnsBothCleanPairs) {
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 9),
+                                 make_blob(400.0, 200.0, 9)};
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 9),
+                                  make_blob(320.0, 200.0, 9)};
+
+    auto points = matcher_->match_all(left, right);
+
+    ASSERT_EQ(points.size(), 2u);
+    // d = 80 -> z = 0.75 for both; x comes from the left pixel.
+    EXPECT_NEAR(points[0].z, 0.75, 1e-9);
+    EXPECT_NEAR(points[0].x, -0.03, 1e-9);   // (300 - 320) * 0.75 / 500
+    EXPECT_NEAR(points[1].z, 0.75, 1e-9);
+    EXPECT_NEAR(points[1].x, 0.12, 1e-9);    // (400 - 320) * 0.75 / 500
+}
+
+// Per-cluster exclusivity: L1-R1 and L2-R1 both pass every gate but share R1,
+// so the whole ambiguous cluster is void — while a clean pair elsewhere in the
+// same frame still produces its target. The old all-or-nothing rule would have
+// sunk the clean pair too.
+TEST_F(StereoMatcherTest, MatchAllAmbiguousClusterFailsClosedButCleanPairSurvives) {
+    const std::vector<Blob> left{make_blob(300.0, 200.0, 9),    // L1
+                                 make_blob(320.0, 200.0, 9),    // L2
+                                 make_blob(500.0, 300.0, 9)};   // L3
+    const std::vector<Blob> right{make_blob(220.0, 200.0, 9),   // R1
+                                  make_blob(420.0, 300.0, 9)};  // R3
+
+    // L1-R1: d = 80, valid. L2-R1: d = 100, valid. Both claim R1 -> cluster void.
+    // L3-R3: d = 80, exclusive -> survives.
+    auto points = matcher_->match_all(left, right);
+
+    ASSERT_EQ(points.size(), 1u);
+    EXPECT_NEAR(points[0].z, 0.75, 1e-9);
+    EXPECT_NEAR(points[0].x, 0.27, 1e-9);    // (500 - 320) * 0.75 / 500
+    EXPECT_NEAR(points[0].y, 0.15, 1e-9);    // (300 - 200) * 0.75 / 500
+
+    // The cluster members genuinely would match in isolation — the void is
+    // about the shared blob, not the gates.
+    EXPECT_TRUE(matcher_->match({make_blob(300.0, 200.0, 9)},
+                                {make_blob(220.0, 200.0, 9)})
+                    .has_value());
+    EXPECT_TRUE(matcher_->match({make_blob(320.0, 200.0, 9)},
+                                {make_blob(220.0, 200.0, 9)})
                     .has_value());
 }
 

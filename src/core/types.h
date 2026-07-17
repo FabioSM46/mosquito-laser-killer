@@ -127,9 +127,43 @@ struct SystemConfig {
         // two blobs are not the same object.
         double epipolar_tolerance_px{2.0};
         // Nominal target size, used to sanity-check min_blob_area_px against the
-        // configured z range at startup.
+        // configured z range at startup, and by the matcher's depth-consistent
+        // size gate: at a triangulated z, a blob whose area is implausible for a
+        // target_size_m object at that depth is not the target.
         double target_size_m{0.005};
+        // Per-frame weight of the newest frame in the running background model.
+        // 0 disables the motion gate (legacy bright-blob behaviour); above 0 a
+        // blob must also differ from the background to be reported, so static
+        // glints and fixtures merge into the model and vanish. Flying targets
+        // only: a target that stops moving fades from the motion mask.
+        double background_learning_rate{0.0};
+        // Absdiff gate against the background model, 8-bit intensity units.
+        int motion_threshold{25};
+        // Accept band for the depth-consistent size check: blob area must lie
+        // within [expected/k, expected*k] of a target_size_m object at the
+        // measured z. 1.0 admits only the exact expected area.
+        double size_tolerance_factor{3.0};
     } detection;
+
+    struct Tracking {
+        // Consecutive matched frames before a track may be engaged. A one-frame
+        // detection is a phantom candidate, not a target.
+        int confirm_hits{3};
+        // Max 3D distance between a track's prediction and a measurement for
+        // association. A mosquito at 1 m/s moves ~8 mm/frame at 120 fps; the
+        // gate is deliberately generous so a fast manoeuvre does not drop the
+        // track.
+        double association_gate_m{0.15};
+        // Speed window an engageable track must stay inside. ~0 m/s is a glint
+        // or a fixture, not a flying insect; beyond max is a correspondence
+        // artefact, not flight.
+        double min_speed_mps{0.05};
+        double max_speed_mps{3.0};
+        // Refuse new tracks beyond this many live ones (fail closed). Noise
+        // tracks die on their own within one predict horizon, so this only
+        // binds in a pathological scene.
+        int max_tracks{16};
+    } tracking;
 };
 
 // A connected bright region in one camera's frame.

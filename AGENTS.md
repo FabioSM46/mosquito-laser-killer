@@ -201,7 +201,7 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 
 **Enforced by:** `validate_engagement_volume()` at startup. Critical findings **abort** process start; non-critical findings log warnings only.
 
-**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances.
+**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances; `background_learning_rate` outside [0, 0.5]; `motion_threshold` outside [1, 254]; `size_tolerance_factor` outside [1, 100]; invalid `tracking.*` bounds (`confirm_hits` ∉ [1, 60], `association_gate_m` ∉ (0, 1], empty/negative speed window, `max_tracks` ∉ [1, 256]).
 
 Every bound above exists because the parameter can disable a guard from YAML alone:
 - `cooldown_seconds: 0` → `end_pulse` sets `cooldown_until_ = now` → re-fire within ~15ms → ~87% duty cycle, effectively CW 2.5W.
@@ -230,11 +230,19 @@ The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**
 
 **Per-blob segmentation (`Detector::detect_blobs`).** Each frame is segmented into connected components; every blob keeps its own centroid. A frame-wide centroid averages unrelated objects into a point where nothing physically exists, and that phantom passes every downstream gate: it has a clean centroid, triangulates to a real depth, and sits inside the bounding box. Worse, it sits *between* the real targets — two mosquitoes at u=200 and u=440 collapsed to a single "detection" at u=320, which at cx=320 is dead on the optical axis. Blobs outside `[min_blob_area_px, max_blob_area_px]` are dropped; a short frame or a scene with more than `max_blobs` candidates yields **nothing** (fail closed).
 
-**Validated correspondence (`StereoMatcher::match`).** A blob pair is a candidate only if it satisfies the epipolar constraint (`|v_left − v_right| <= epipolar_tolerance_px` — for a rectified pair the same object lands on the same row, so a vertical offset *proves* they are different objects), falls inside the disparity window implied by the bounding-box z range (`d = f·b/z`), and has a plausible area ratio. **If more than one candidate survives, the result is nullopt** — an ambiguous scene is a guess, and a wrong guess aims a Class 4 beam at a point never verified to hold a target.
+**Motion gate (background model).** When `background_learning_rate > 0`, each `Detector` keeps a running background model (`cv::accumulateWeighted`, diff computed *before* the model absorbs the current frame), and a blob must also differ from it by `motion_threshold`. Static glints, fixtures, and lens dust merge into the model and stop being reported — the single biggest discriminator between a mosquito and a bright speck. The deliberate trade: **the system engages flying targets only** — a target that lands fades from the motion mask. `background_learning_rate: 0` disables the gate (legacy bright-blob behaviour); an out-of-range rate sanitizes to disabled.
+
+**Depth-consistent size gate.** After triangulation the matcher knows z, so a `target_size_m` object projects to a known pixel area. A blob whose area falls outside `[expected/k, expected*k]` (`size_tolerance_factor`) is a glint, a fixture, or a different animal — rejected even when epipolar, disparity, and area-ratio gates all pass. `target_size_m: 0` disables the check; a NaN or sub-1.0 tolerance sanitizes to the strictest band.
+
+**Validated multi-target correspondence (`StereoMatcher::match_all`).** A blob pair is a candidate only if it satisfies the epipolar constraint (`|v_left − v_right| <= epipolar_tolerance_px` — for a rectified pair the same object lands on the same row, so a vertical offset *proves* they are different objects), falls inside the disparity window implied by the bounding-box z range (`d = f·b/z`), has a plausible area ratio, and passes the size gate. Exclusivity is enforced **per cluster**: any blob participating in more than one candidate pair is ambiguous, and every pair it touches is void — while a clean pair elsewhere in the same frame still yields its target. A wrong guess aims a Class 4 beam at a point never verified to hold a target, so ambiguity is always resolved toward silence. `match()` retains the single-target contract (exactly one survivor or nullopt).
 
 **Fail-closed at the boundary.** `triangulate` rejects non-finite pixels itself rather than delegating validity to a distant consumer.
 
-**Coasting through brief detection gaps.** A single frame without a match does not drop the track: the processing thread coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction; it can only fire at a point the track extrapolates to from a target that was verified inside the box ≤100 ms earlier. Past the horizon `predict()` returns nullopt, the track is reset, and the command goes out invalid — fail closed. Resetting on every lost frame instead would discard the velocity estimate and force re-acquisition from zero on every transient occlusion.
+**Multi-track confirmation (`MultiTracker`).** Measurements are associated to tracks by mutual nearest neighbour within `association_gate_m`; a measurement that sits between two tracks binds only to its genuine nearest, and the other coasts. A track becomes *confirmed* only after `confirm_hits` consecutive matched frames — a one-frame detection is a phantom candidate and never reaches the control thread — and *engageable* only while its estimated speed stays inside `[min_speed_mps, max_speed_mps]` (~0 m/s is a glint or fixture; beyond max is a correspondence artefact). Tracks are capped at `max_tracks`: beyond it, new tracks are refused and live ones are never evicted (fail closed).
+
+**Coasting through brief detection gaps.** A frame without a match does not drop a track: it coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction. Past the horizon the track is deleted — fail closed.
+
+**Sticky engagement (`TargetSelector`).** One laser, one galvo, one mandatory cooldown: engagement is sequential no matter how many tracks exist. The selector holds the engaged target while it stays engageable and falls back to the nearest (smallest z) only when it is lost — re-picking every frame would ping-pong the galvo across the swarm and never settle long enough to fire. The control thread still receives exactly one `TargetCommand` per frame; the firing path is untouched by the multi-target machinery.
 
 ---
 
@@ -299,7 +307,11 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `SystemStateMachineTest` | Valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
 | `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness |
 | `DetectorTest` | **Per-blob centroids (no frame-wide phantom)**, area gates, short frame and >max_blobs → fail closed, threshold boundary |
+| `MotionDetectorTest` | **Motion gate**: first frame seeds (perched target invisible), static blob fades into background, moving blob detected indefinitely, invalid rate → gate disabled |
 | `StereoMatcherTest` | Triangulation, **epipolar rejection**, disparity window, **ambiguous scene → fail closed**, non-finite rejection |
+| `StereoMatcherTest (match_all)` | **Two clean pairs → two targets**, ambiguous cluster void while clean pair survives, **depth-size gate** rejects over/undersized, NaN tolerance → strictest band |
+| `MultiTrackerTest` | Confirmation gating (3 hits), **static point confirmed but never engageable**, ID stability, coasting through gaps, horizon death, mutual-NN association, max_tracks cap, non-finite rejection |
+| `TargetSelectorTest` | Sticky engagement vs nearer challengers, nearest-first fallback, release on non-engageable, reset |
 | `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
 | `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
@@ -355,9 +367,11 @@ mosquito-laser-killer/
 │   │   ├── arm_switch.h/.cpp    # Arm switch input with debounce
 │   │   └── e_stop.h/.cpp        # Mushroom E-stop input with debounce
 │   ├── vision/
-│   │   ├── detector.h/.cpp      # Per-blob connected-component detection
-│   │   ├── stereo_matcher.h/.cpp # Epipolar-gated correspondence + triangulation
-│   │   └── tracker.h/.cpp       # Kalman filter tracker
+│   │   ├── detector.h/.cpp      # Per-blob connected-component detection with motion gate
+│   │   ├── stereo_matcher.h/.cpp # Epipolar-gated multi-target correspondence + triangulation
+│   │   ├── tracker.h/.cpp       # Kalman filter tracker
+│   │   ├── multi_tracker.h/.cpp # Multi-track association, confirmation, coasting
+│   │   └── target_selector.h/.cpp # Sticky single-target engagement policy
 │   └── control/
 │       ├── coordinate_mapper.h/.cpp  # 3D→DAC conversion with bounds checking
 │       ├── firing_controller.h/.cpp  # Laser fire sequencing with all safety gates
@@ -383,6 +397,8 @@ mosquito-laser-killer/
 │   │   ├── test_thread_safe_queue.cpp
 │   │   ├── test_detector.cpp
 │   │   ├── test_stereo_matcher.cpp
+│   │   ├── test_multi_tracker.cpp
+│   │   ├── test_target_selector.cpp
 │   │   ├── test_kalman_tracker.cpp
 │   │   ├── test_differential_galvo_driver.cpp
 │   │   ├── test_mcp4922.cpp
@@ -417,7 +433,7 @@ mosquito-laser-killer/
 1. **Raspberry Pi OS (64-bit, arm64) on Raspberry Pi 5** — all paths, bus topology, and hardware assumptions target this platform
 2. **Linux only** — uses `/dev/spidev*`, `/dev/gpiochip*`, `/dev/video*`
 3. **Non-RTOS** — worst-case scheduling latency ~10ms; watchdog tolerance accounts for this
-4. **Single target** — the system tracks one mosquito at a time; multi-target is future scope
+4. **Multi-target tracking, sequential engagement** — the pipeline holds many tracks at once, but one laser and one galvo mean engagement is one target at a time, chosen by the sticky `TargetSelector` (§4.12)
 5. **Indoor/controlled lighting** — detection assumes controlled background; outdoor use requires retuning
 6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload

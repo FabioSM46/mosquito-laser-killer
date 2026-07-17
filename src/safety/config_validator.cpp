@@ -279,6 +279,63 @@ auto validate_engagement_volume(const SystemConfig& config)
             "detection", "detection.epipolar_tolerance_px must be positive.", true});
     }
 
+    // 0 disables the motion gate deliberately; above 0.5 the model chases the
+    // current frame so fast that a slow target erases itself from the mask,
+    // and the system goes blind without ever logging why.
+    if (!(config.detection.background_learning_rate >= 0.0 &&
+          config.detection.background_learning_rate <= 0.5)) {
+        warnings.push_back({
+            "detection",
+            "detection.background_learning_rate must be in [0, 0.5] (0 disables "
+            "the motion gate).",
+            true
+        });
+    }
+
+    // Only meaningful when the gate is live, but validated unconditionally: a
+    // garbage value here must not sit dormant in the YAML waiting for the gate
+    // to be switched on.
+    if (!(config.detection.motion_threshold >= 1 &&
+          config.detection.motion_threshold <= 254)) {
+        warnings.push_back({
+            "detection", "detection.motion_threshold must be in [1, 254].", true});
+    }
+
+    // Below 1.0 the size accept band inverts and rejects every real target.
+    if (!(config.detection.size_tolerance_factor >= 1.0 &&
+          config.detection.size_tolerance_factor <= 100.0)) {
+        warnings.push_back({
+            "detection", "detection.size_tolerance_factor must be in [1, 100].", true});
+    }
+
+    if (config.tracking.confirm_hits < 1 || config.tracking.confirm_hits > 60) {
+        warnings.push_back({
+            "tracking", "tracking.confirm_hits must be in [1, 60].", true});
+    }
+
+    // A gate larger than the engagement volume associates any measurement with
+    // any track; the bounding box diagonal here is well under 1 m.
+    if (!(config.tracking.association_gate_m > 0.0 &&
+          config.tracking.association_gate_m <= 1.0)) {
+        warnings.push_back({
+            "tracking", "tracking.association_gate_m must be in (0, 1.0].", true});
+    }
+
+    if (!(config.tracking.min_speed_mps >= 0.0) ||
+        !(config.tracking.max_speed_mps > config.tracking.min_speed_mps) ||
+        !(config.tracking.max_speed_mps <= 20.0)) {
+        warnings.push_back({
+            "tracking",
+            "tracking speeds must satisfy 0 <= min_speed_mps < max_speed_mps <= 20.",
+            true
+        });
+    }
+
+    if (config.tracking.max_tracks < 1 || config.tracking.max_tracks > 256) {
+        warnings.push_back({
+            "tracking", "tracking.max_tracks must be in [1, 256].", true});
+    }
+
     // Cross-check the blob-area floor against the geometry: a target of
     // target_size_m at the far plane projects to roughly
     // (pi/4) * (size * f / z_max)^2 pixels. A floor above that silently filters

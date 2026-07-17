@@ -28,6 +28,11 @@ The following software and hardware-abstraction components are present and pass 
 | Differential galvo drive | Implemented | One MCP4922 per axis; ChA positive, ChB inverted, producing true ±5 V differential. |
 | Coordinate mapping | Implemented | `CoordinateMapper` converts 3D target → angles → DAC code. |
 | Stereo triangulation | Implemented | `StereoMatcher` computes 3D position from left/right pixel disparity. |
+| Multi-target correspondence | Implemented | `match_all()` validates every epipolar/disparity/area/size-consistent pair; ambiguous clusters fail closed while clean pairs survive. |
+| Motion gate | Implemented | Per-camera background model; only moving blobs are reported (flying targets only). |
+| Depth-consistent size gate | Implemented | Blobs whose area is implausible for a `target_size_m` object at the measured z are rejected. |
+| Multi-track tracking | Implemented | `MultiTracker` holds many tracks with IDs, confirmation (3 consecutive hits), speed plausibility window, and 100 ms bounded coasting. |
+| Sticky target selection | Implemented | `TargetSelector` engages one target until lost, then falls back to nearest. |
 | Kalman tracker | Implemented | `KalmanTracker` smooths trajectories and provides predicted target position. |
 | Configuration validation | Implemented | `validate_engagement_volume()` aborts startup on critical mismatches. |
 
@@ -79,13 +84,14 @@ Before firing anything, confirm the vision pipeline can detect and track a movin
 
 - [ ] System is powered; arm switch is OFF; E-Stop is released.
 - [ ] Application starts and both cameras open successfully.
-- [ ] Enclosure is dark; a bright test target (e.g., small LED on a thin wire) is placed inside the bounding box.
-- [ ] The detector finds the target in both left and right frames.
-- [ ] `threshold_` and `min_contour_area_` in `vision/detector.h` are tuned so that:
-  - The target is detected reliably.
-  - Background noise and reflections are ignored.
+- [ ] Enclosure is dark; a bright test target (e.g., small LED on a thin wire) is moved through the bounding box (with the motion gate on, a stationary target is deliberately invisible).
+- [ ] The detector finds the target in both left and right frames while it moves.
+- [ ] `detection.threshold`, `min_blob_area_px`, `motion_threshold` and `background_learning_rate` in `config/system_config.yaml` are tuned so that:
+  - The target is detected reliably while moving.
+  - Background noise and reflections are ignored (and fade into the background model when static).
+- [ ] Detection is verified with the motion gate ENABLED (`background_learning_rate > 0`): a static bright target must NOT be detected; the same target moved through the volume MUST be.
 - [ ] The tracker follows the target smoothly without losing lock when the target moves.
-- [ ] The processing thread reports no dropped frames when the target is stationary.
+- [ ] The processing thread reports no dropped frames when the target moves slowly.
 - [ ] Dropped frames under fast target motion are reasonable (<50% at `target_fps`).
 - [ ] The projected target position in the camera coordinate frame looks correct when the target is at known distances (e.g., 0.5 m, 0.75 m, 1.0 m).
 
@@ -98,7 +104,7 @@ Only proceed after Section 4 is fully validated. Replace the Class 4 laser with 
 - [ ] Class 4 laser is disconnected; low-power laser is installed with the same mounting and alignment as the eventual Class 4 laser.
 - [ ] Low-power laser still requires the arm switch ON **and** GPIO 18 HIGH to emit.
 - [ ] With arm switch OFF, confirm no beam is emitted.
-- [ ] Place the test target in the center of the bounding box and arm the system.
+- [ ] Swing the test target slowly through the center of the bounding box and arm the system (a confirmed track needs ~3 consecutive frames of motion).
 - [ ] Verify the galvo points at the target and the low-power laser beam lands on the target.
 - [ ] Move the target slowly and verify the beam follows it.
 - [ ] Move the target to the edges of the bounding box (within ±15° cone) and verify the beam still tracks.
@@ -118,8 +124,9 @@ These are current limitations in the code that will affect real-world mosquito t
 
 | Limitation | Impact | Mitigation |
 |------------|--------|------------|
-| **Simple threshold detector** | `Detector` counts pixels above a threshold and returns their centroid. It does not perform contour analysis, background subtraction, or object classification. | Use a dark background, bright backlight, and tune `threshold_` and `min_contour_area_`. If this fails, the detector will need a more sophisticated algorithm. |
-| **No stereo correspondence matching** | `StereoMatcher` assumes the bright centroid in the left image corresponds to the bright centroid in the right image. Multiple bright spots, reflections, or noise can cause false matches. | Ensure only one bright target is in view during early tests. If multiple bright spots are present, add a correspondence matcher (e.g., epipolar-constrained template matching). |
+| **Flying targets only** | The motion gate (`background_learning_rate > 0`) merges anything stationary into the background model: a perched mosquito is invisible. This is deliberate — a static glint and a perched insect are indistinguishable at this resolution. | Accept the trade, or set `background_learning_rate: 0` to disable the gate (legacy bright-blob behaviour, far more false positives). |
+| **Lighting flicker pollutes the motion mask** | 100/120 Hz mains lighting beats against the frame rate and appears as whole-frame motion. | Use a DC-driven LED backlight inside the enclosure and locked exposure (`exposure_auto: 1`, as shipped). |
+| **Engagement is sequential** | One laser, one galvo, one 10 s cooldown: at most 6 shots/min regardless of how many targets are tracked. The tracker holds the swarm; the selector picks them off nearest-first. | None in software — this is hardware physics. |
 | **Small target size** | A mosquito at 1 m is approximately 3–5 pixels in a 640×400 image. Detection at that scale is sensitive to noise and motion blur. | Use a longer focal length or higher resolution (1280×720@120) if the target is too small; lower the detection distance to 0.5–0.7 m. |
 | **No camera/galvo extrinsic calibration** | The code assumes the camera coordinate frame and the galvo coordinate frame are aligned. In reality, there is a rotation/translation offset between them. | The low-power laser test in Section 5 is the practical calibration step. If the beam misses consistently, this offset must be measured or corrected. |
 | **No real-time galvo latency compensation** | The target is tracked on the freshest frame, but the galvo has a finite mechanical response time (`settle_delay_ms`). A very fast target may move during the settle period. | Keep `target_fps` high (210 FPS) and targets within the near half of the bounding box. |
