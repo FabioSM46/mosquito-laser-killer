@@ -20,6 +20,10 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
 | Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
 | Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | TTL level translation for laser driver |
+| Monostable | SN74HC123N (DIP-16) dual retriggerable one-shot | Hardware pulse-duration backstop on laser TTL (§4.1) |
+| Monostable timing R | 220 kΩ (1Rext/Cext → +5 V) | Sets one-shot period with C_ext |
+| Monostable timing C | 1 µF (across 1Cext ↔ 1Rext/Cext) | Sets one-shot period ≈ 0.45·R·C ≈ 99 ms |
+| AND gate | SN74HC08N (DIP-14) quad 2-input AND | Gates laser TTL = GPIO18 ∧ one-shot-Q (§4.1) |
 | Arm switch | Lever SPST | System arm input (active HIGH on GPIO 24) |
 | E-stop | Mushroom DPST push-button | Emergency stop (active LOW on GPIO 25) |
 | Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
@@ -28,7 +32,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
 
 **Power and signal wiring:**
-- RPi 5 GPIO 18 → level shifter → laser TTL input (configurable via `laser_pin`).
+- RPi 5 GPIO 18 → level shifter → **74HC123 monostable + AND gate** → laser TTL input (configurable via `laser_pin`). The monostable is the independent hardware pulse-duration backstop; see §4.1.
 - RPi 5 GPIO 24 → lever SPST arm switch (configurable via `arm_switch_pin`).
 - RPi 5 GPIO 25 → mushroom DPST E-stop (configurable via `e_stop_pin`).
 - RPi 5 SPI0 CE0 (pin 24) → MCP4922 #1 `/CS` (X-axis); SPI0 CE1 (pin 26) → MCP4922 #2 `/CS` (Y-axis).
@@ -110,9 +114,16 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 **The real bound is ~105ms, not 100ms.** The check only runs when the control thread runs, so the true limit is `max_pulse_duration_ms` plus one control cycle (~4.8ms at 210fps) plus scheduling jitter. Quoting a flat 100ms would be a claim the software cannot make.
 
-**Residual risk — no hardware backstop.** Every mechanism that can end a pulse (`enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, the E-stop) runs on the *control thread itself*. There is no `/dev/watchdog`, monostable, or independent timer behind the GPIO. If that thread stalls with the pin HIGH, no software path turns the laser off; recovery is the operator opening the arm switch, which is a true hardware interlock (it cuts 12V to the driver — see `docs/HARDWARE_WIRING.md`). The E-stop is *not* a substitute here: its GPIO is polled by the very thread that would be hung.
+**Every *software* mechanism that can end a pulse runs on the control thread itself.** `enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, and the E-stop poll are all on the *control thread*. If that thread stalls with the pin HIGH, none of them fires. This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall — and it is why the pulse bound needs an enforcer that is *not* on that thread.
 
-This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall. **A retriggerable monostable on the laser TTL line remains the recommended hardware mitigation**; it is the only thing that would make a flat pulse-duration guarantee true.
+**Hardware backstop — 74HC123 retriggerable monostable on the TTL line.** A one-shot sits between the level shifter and the laser driver TTL, wired so the laser TTL is `GPIO18 (level-shifted) ∧ one-shot-Q`, with the one-shot triggered by GPIO 18's rising edge (and `1CLR` tied to the fire line so it re-arms between shots). Effect: a normal short pulse passes through unchanged (the AND gate follows GPIO 18), but a control thread that hangs with GPIO 18 stuck HIGH is force-cut when Q times out — **with no software path and no operator action.** This is the enforcer the software cannot be: it is the only thing that makes the pulse-duration bound independent of the control thread. Period ≈ `0.45 · R_ext · C_ext` = `0.45 · 220 kΩ · 1 µF` ≈ **99 ms** (see `docs/HARDWARE_WIRING.md` §11a).
+
+The guarantee is real **only if three conditions hold, and each must be scope-verified — an unverified backstop is a comment (§4, §7):**
+1. **The AND gating is present.** If Q drives the laser TTL *alone* (no AND with GPIO 18), every fire pulse is stretched to the full ~99 ms one-shot width — a hazard, not a guard. Verify: a short GPIO 18 pulse must produce an equally short laser pulse; a *stuck-HIGH* GPIO 18 must produce a single ~99 ms pulse and then stay dark.
+2. **Firing is a single sustained level, never a PWM burst.** "Retriggerable" means edges *restart* the timer; repeated edges within the window would hold Q HIGH indefinitely and defeat the cap. Current firing (`fire(true)`/`fire(false)`) satisfies this — it is now a constraint the firing path must never violate.
+3. **The measured period is what you intend.** At ~99 ms the one-shot sits *below* the ~105 ms real software bound, so hardware becomes the binding limit and will also clip legitimate max-length pulses (safe, and arguably desirable). If the backstop should only trip on a *failure*, raise it above the software bound (e.g. C_ext = 1.5 µF → ~130–150 ms). R/C tolerance alone can swing the period ±20%.
+
+**Remaining residual risk.** The '123 is itself a single component; a failure of the one-shot or a broken AND gate must be considered in the FMEA. The operator interlocks remain the outer layers and are *not* on the control thread: the **arm switch** cuts 12 V to the driver (a true hardware interlock), and the **E-stop** cuts mains — but both require a human hand and neither is autonomous. The monostable is the only autonomous enforcer of the *duration* bound.
 
 ### 4.2 Firing Cooldown (10 seconds)
 
@@ -190,7 +201,7 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 
 **Enforced by:** `validate_engagement_volume()` at startup. Critical findings **abort** process start; non-critical findings log warnings only.
 
-**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances.
+**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances; `background_learning_rate` outside [0, 0.5]; `motion_threshold` outside [1, 254]; `size_tolerance_factor` outside [1, 100]; invalid `tracking.*` bounds (`confirm_hits` ∉ [1, 60], `association_gate_m` ∉ (0, 1], empty/negative speed window, `max_tracks` ∉ [1, 256]).
 
 Every bound above exists because the parameter can disable a guard from YAML alone:
 - `cooldown_seconds: 0` → `end_pulse` sets `cooldown_until_ = now` → re-fire within ~15ms → ~87% duty cycle, effectively CW 2.5W.
@@ -219,11 +230,19 @@ The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**
 
 **Per-blob segmentation (`Detector::detect_blobs`).** Each frame is segmented into connected components; every blob keeps its own centroid. A frame-wide centroid averages unrelated objects into a point where nothing physically exists, and that phantom passes every downstream gate: it has a clean centroid, triangulates to a real depth, and sits inside the bounding box. Worse, it sits *between* the real targets — two mosquitoes at u=200 and u=440 collapsed to a single "detection" at u=320, which at cx=320 is dead on the optical axis. Blobs outside `[min_blob_area_px, max_blob_area_px]` are dropped; a short frame or a scene with more than `max_blobs` candidates yields **nothing** (fail closed).
 
-**Validated correspondence (`StereoMatcher::match`).** A blob pair is a candidate only if it satisfies the epipolar constraint (`|v_left − v_right| <= epipolar_tolerance_px` — for a rectified pair the same object lands on the same row, so a vertical offset *proves* they are different objects), falls inside the disparity window implied by the bounding-box z range (`d = f·b/z`), and has a plausible area ratio. **If more than one candidate survives, the result is nullopt** — an ambiguous scene is a guess, and a wrong guess aims a Class 4 beam at a point never verified to hold a target.
+**Motion gate (background model).** When `background_learning_rate > 0`, each `Detector` keeps a running background model (`cv::accumulateWeighted`, diff computed *before* the model absorbs the current frame), and a blob must also differ from it by `motion_threshold`. Static glints, fixtures, and lens dust merge into the model and stop being reported — the single biggest discriminator between a mosquito and a bright speck. The deliberate trade: **the system engages flying targets only** — a target that lands fades from the motion mask. `background_learning_rate: 0` disables the gate (legacy bright-blob behaviour); an out-of-range rate sanitizes to disabled.
+
+**Depth-consistent size gate.** After triangulation the matcher knows z, so a `target_size_m` object projects to a known pixel area. A blob whose area falls outside `[expected/k, expected*k]` (`size_tolerance_factor`) is a glint, a fixture, or a different animal — rejected even when epipolar, disparity, and area-ratio gates all pass. `target_size_m: 0` disables the check; a NaN or sub-1.0 tolerance sanitizes to the strictest band.
+
+**Validated multi-target correspondence (`StereoMatcher::match_all`).** A blob pair is a candidate only if it satisfies the epipolar constraint (`|v_left − v_right| <= epipolar_tolerance_px` — for a rectified pair the same object lands on the same row, so a vertical offset *proves* they are different objects), falls inside the disparity window implied by the bounding-box z range (`d = f·b/z`), has a plausible area ratio, and passes the size gate. Exclusivity is enforced **per cluster**: any blob participating in more than one candidate pair is ambiguous, and every pair it touches is void — while a clean pair elsewhere in the same frame still yields its target. A wrong guess aims a Class 4 beam at a point never verified to hold a target, so ambiguity is always resolved toward silence. `match()` retains the single-target contract (exactly one survivor or nullopt).
 
 **Fail-closed at the boundary.** `triangulate` rejects non-finite pixels itself rather than delegating validity to a distant consumer.
 
-**Coasting through brief detection gaps.** A single frame without a match does not drop the track: the processing thread coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction; it can only fire at a point the track extrapolates to from a target that was verified inside the box ≤100 ms earlier. Past the horizon `predict()` returns nullopt, the track is reset, and the command goes out invalid — fail closed. Resetting on every lost frame instead would discard the velocity estimate and force re-acquisition from zero on every transient occlusion.
+**Multi-track confirmation (`MultiTracker`).** Measurements are associated to tracks by mutual nearest neighbour within `association_gate_m`; a measurement that sits between two tracks binds only to its genuine nearest, and the other coasts. A track becomes *confirmed* only after `confirm_hits` consecutive matched frames — a one-frame detection is a phantom candidate and never reaches the control thread — and *engageable* only while its estimated speed stays inside `[min_speed_mps, max_speed_mps]` (~0 m/s is a glint or fixture; beyond max is a correspondence artefact). Tracks are capped at `max_tracks`: beyond it, new tracks are refused and live ones are never evicted (fail closed).
+
+**Coasting through brief detection gaps.** A frame without a match does not drop a track: it coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction. Past the horizon the track is deleted — fail closed.
+
+**Sticky engagement (`TargetSelector`).** One laser, one galvo, one mandatory cooldown: engagement is sequential no matter how many tracks exist. The selector holds the engaged target while it stays engageable and falls back to the nearest (smallest z) only when it is lost — re-picking every frame would ping-pong the galvo across the swarm and never settle long enough to fire. The control thread still receives exactly one `TargetCommand` per frame; the firing path is untouched by the multi-target machinery.
 
 ---
 
@@ -288,11 +307,16 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `SystemStateMachineTest` | Valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
 | `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness |
 | `DetectorTest` | **Per-blob centroids (no frame-wide phantom)**, area gates, short frame and >max_blobs → fail closed, threshold boundary |
+| `MotionDetectorTest` | **Motion gate**: first frame seeds (perched target invisible), static blob fades into background, moving blob detected indefinitely, invalid rate → gate disabled |
 | `StereoMatcherTest` | Triangulation, **epipolar rejection**, disparity window, **ambiguous scene → fail closed**, non-finite rejection |
+| `StereoMatcherTest (match_all)` | **Two clean pairs → two targets**, ambiguous cluster void while clean pair survives, **depth-size gate** rejects over/undersized, NaN tolerance → strictest band |
+| `MultiTrackerTest` | Confirmation gating (3 hits), **static point confirmed but never engageable**, ID stability, coasting through gaps, horizon death, mutual-NN association, max_tracks cap, non-finite rejection |
+| `TargetSelectorTest` | Sticky engagement vs nearer challengers, nearest-first fallback, release on non-engageable, reset |
 | `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
 | `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
 | `MCP4922Test` | Command-bit format, range rejection, **destructor re-centres both channels** (§4.6 RAII shutdown) |
+| `DifferentialGalvoDriverTest` | Complementary A/B channel writes for the differential pair, init centres both axes (and fails closed on a null/uninitialised/failing DAC), out-of-range rejection, DAC-failure propagation, `zero()` centres at midpoint |
 
 ### 7.2 Stress Tests
 
@@ -329,10 +353,12 @@ mosquito-laser-killer/
 │   │   ├── icamera.h            # Camera interface (pure virtual)
 │   │   ├── idac.h               # DAC interface (pure virtual)
 │   │   ├── ilaser.h             # Laser interface (pure virtual)
+│   │   ├── igalvo_driver.h      # Galvo driver interface (pure virtual)
 │   │   ├── gpio_impl.h/.cpp     # Raspberry Pi GPIO via sysfs/libgpiod
 │   │   ├── spi_impl.h/.cpp      # Linux SPI via spidev
 │   │   ├── camera_impl.h/.cpp   # OV9281 via V4L2
 │   │   ├── mcp4922.h/.cpp       # MCP4922 DAC via SPI
+│   │   ├── differential_galvo_driver.h/.cpp  # ±5V differential galvo drive over the DAC pair
 │   │   └── laser.h/.cpp         # Laser TTL control with safety timers
 │   ├── safety/
 │   │   ├── system_state.h       # SystemState enum + SystemStateMachine
@@ -341,9 +367,11 @@ mosquito-laser-killer/
 │   │   ├── arm_switch.h/.cpp    # Arm switch input with debounce
 │   │   └── e_stop.h/.cpp        # Mushroom E-stop input with debounce
 │   ├── vision/
-│   │   ├── detector.h/.cpp      # Per-blob connected-component detection
-│   │   ├── stereo_matcher.h/.cpp # Epipolar-gated correspondence + triangulation
-│   │   └── tracker.h/.cpp       # Kalman filter tracker
+│   │   ├── detector.h/.cpp      # Per-blob connected-component detection with motion gate
+│   │   ├── stereo_matcher.h/.cpp # Epipolar-gated multi-target correspondence + triangulation
+│   │   ├── tracker.h/.cpp       # Kalman filter tracker
+│   │   ├── multi_tracker.h/.cpp # Multi-track association, confirmation, coasting
+│   │   └── target_selector.h/.cpp # Sticky single-target engagement policy
 │   └── control/
 │       ├── coordinate_mapper.h/.cpp  # 3D→DAC conversion with bounds checking
 │       ├── firing_controller.h/.cpp  # Laser fire sequencing with all safety gates
@@ -369,7 +397,11 @@ mosquito-laser-killer/
 │   │   ├── test_thread_safe_queue.cpp
 │   │   ├── test_detector.cpp
 │   │   ├── test_stereo_matcher.cpp
+│   │   ├── test_multi_tracker.cpp
+│   │   ├── test_target_selector.cpp
 │   │   ├── test_kalman_tracker.cpp
+│   │   ├── test_differential_galvo_driver.cpp
+│   │   ├── test_mcp4922.cpp
 │   │   ├── test_config_validator.cpp
 │   │   ├── test_print.cpp             # non-blocking logger (§4.11)
 │   │   └── test_signal_handling.cpp
@@ -401,7 +433,7 @@ mosquito-laser-killer/
 1. **Raspberry Pi OS (64-bit, arm64) on Raspberry Pi 5** — all paths, bus topology, and hardware assumptions target this platform
 2. **Linux only** — uses `/dev/spidev*`, `/dev/gpiochip*`, `/dev/video*`
 3. **Non-RTOS** — worst-case scheduling latency ~10ms; watchdog tolerance accounts for this
-4. **Single target** — the system tracks one mosquito at a time; multi-target is future scope
+4. **Multi-target tracking, sequential engagement** — the pipeline holds many tracks at once, but one laser and one galvo mean engagement is one target at a time, chosen by the sticky `TargetSelector` (§4.12)
 5. **Indoor/controlled lighting** — detection assumes controlled background; outdoor use requires retuning
 6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload

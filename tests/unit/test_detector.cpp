@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -261,6 +262,130 @@ TEST_F(DetectorTest, CustomResolutionIsHonoured) {
     ASSERT_EQ(blobs.size(), 1u);
     EXPECT_NEAR(blobs[0].centroid.u, 154.5, 0.5);
     EXPECT_NEAR(blobs[0].centroid.v, 104.5, 0.5);
+}
+
+// --- Motion gate (background model) ---
+//
+// The fixture above runs with background_learning_rate = 0 (gate disabled),
+// which is why its first-frame detections work. These tests enable the model.
+// The property under test: the gate is what separates a MOVING target from a
+// static glint — the single biggest discriminator this pipeline has, and the
+// reason the system engages flying targets only.
+
+class MotionDetectorTest : public Test {
+protected:
+    MotionDetectorTest() {
+        config_.detection.background_learning_rate = 0.05;
+        config_.detection.motion_threshold = 25;
+        detector_ = std::make_unique<Detector>(k_width, k_height, config_.detection);
+    }
+
+    auto detect(std::vector<uint8_t>& frame) -> std::vector<Blob> {
+        return detector_->detect_blobs(frame.data(), frame.size());
+    }
+
+    SystemConfig config_{};
+    std::unique_ptr<Detector> detector_;
+};
+
+TEST_F(MotionDetectorTest, FirstFrameSeedsTheModelAndReportsNothing) {
+    auto frame = make_dark_frame();
+    paint_rect(frame, 300, 180, 10, 10);
+
+    // Even with a detectable blob present there is nothing to diff against yet;
+    // the frame becomes the reference instead.
+    EXPECT_THAT(detect(frame), IsEmpty());
+}
+
+TEST_F(MotionDetectorTest, PerchedTargetIsInvisible) {
+    // The flying-targets-only contract, stated directly: a target already in
+    // the scene when the model seeds is part of the background, and it stays
+    // invisible until it MOVES.
+    auto frame = make_dark_frame();
+    paint_rect(frame, 300, 180, 10, 10);
+    ASSERT_THAT(detect(frame), IsEmpty());   // seeds the model, blob included
+    EXPECT_THAT(detect(frame), IsEmpty());   // identical frame: no motion
+
+    // The moment it moves, it exists.
+    auto moved = make_dark_frame();
+    paint_rect(moved, 340, 180, 10, 10);
+    EXPECT_EQ(detect(moved).size(), 1u);
+}
+
+TEST_F(MotionDetectorTest, BlobAppearingAfterSeedingIsDetected) {
+    auto dark = make_dark_frame();
+    ASSERT_THAT(detect(dark), IsEmpty());   // seed: dark scene
+
+    auto with_blob = make_dark_frame();
+    paint_rect(with_blob, 300, 180, 10, 10);
+    const auto blobs = detect(with_blob);
+    ASSERT_EQ(blobs.size(), 1u);
+    EXPECT_NEAR(blobs[0].centroid.u, 304.5, 0.5);
+}
+
+TEST_F(MotionDetectorTest, StaticBlobFadesIntoTheBackground) {
+    auto dark = make_dark_frame();
+    ASSERT_THAT(detect(dark), IsEmpty());   // seed
+
+    auto with_blob = make_dark_frame();
+    paint_rect(with_blob, 300, 180, 10, 10);
+
+    // While the model is still dark the blob is motion, and it is reported.
+    ASSERT_EQ(detect(with_blob).size(), 1u);
+
+    // Feeding the identical frame converges the model onto it (0.95^n decay);
+    // once the diff drops under the motion threshold the blob is background.
+    // If the background update were deleted, the blob would be reported forever
+    // and the final assertion would fail.
+    bool faded = false;
+    for (int i = 0; i < 200; ++i) {
+        if (detect(with_blob).empty()) {
+            faded = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(faded) << "a motionless blob must merge into the background model";
+}
+
+TEST_F(MotionDetectorTest, MovingBlobStaysDetectedIndefinitely) {
+    auto dark = make_dark_frame();
+    ASSERT_THAT(detect(dark), IsEmpty());   // seed
+
+    // 30 frames of straight-line flight, never revisiting a pixel: the model
+    // at each new position is still dark, so the diff stays large.
+    int detections = 0;
+    for (int i = 0; i < 30; ++i) {
+        auto frame = make_dark_frame();
+        paint_rect(frame, 40 + i * 10, 180, 6, 6);
+        if (!detect(frame).empty()) {
+            ++detections;
+        }
+    }
+    EXPECT_EQ(detections, 30);
+}
+
+TEST_F(MotionDetectorTest, ShortFrameStillFailsClosed) {
+    auto frame = make_dark_frame();
+    paint_rect(frame, 300, 180, 10, 10);
+    EXPECT_THAT(detector_->detect_blobs(frame.data(), frame.size() - 1), IsEmpty());
+}
+
+TEST_F(MotionDetectorTest, OutOfRangeLearningRateDisablesTheGate) {
+    // A NaN rate would poison accumulateWeighted forever; negative or >1 is a
+    // config error. Both sanitize to gate-disabled, the legacy behaviour the
+    // DetectorTest fixture above exercises on every call.
+    for (const double bad : {std::numeric_limits<double>::quiet_NaN(), -0.1, 1.5}) {
+        SystemConfig bad_config;
+        bad_config.detection.background_learning_rate = bad;
+        Detector detector(k_width, k_height, bad_config.detection);
+        EXPECT_FALSE(detector.background_model_active());
+
+        auto frame = make_dark_frame();
+        paint_rect(frame, 300, 180, 10, 10);
+        // Gate disabled: the first frame already detects.
+        EXPECT_EQ(detector.detect_blobs(frame.data(), frame.size()).size(), 1u)
+            << "learning_rate=" << bad;
+    }
 }
 
 }   // namespace

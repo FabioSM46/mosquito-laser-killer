@@ -24,7 +24,8 @@
 
 #include "vision/detector.h"
 #include "vision/stereo_matcher.h"
-#include "vision/tracker.h"
+#include "vision/multi_tracker.h"
+#include "vision/target_selector.h"
 
 #include "control/coordinate_mapper.h"
 #include "control/firing_controller.h"
@@ -145,6 +146,16 @@ auto load_config() -> SystemConfig {
         load_field(det, "max_blobs", config.detection.max_blobs);
         load_field(det, "epipolar_tolerance_px", config.detection.epipolar_tolerance_px);
         load_field(det, "target_size_m", config.detection.target_size_m);
+        load_field(det, "background_learning_rate", config.detection.background_learning_rate);
+        load_field(det, "motion_threshold", config.detection.motion_threshold);
+        load_field(det, "size_tolerance_factor", config.detection.size_tolerance_factor);
+
+        auto tr = yaml["tracking"];
+        load_field(tr, "confirm_hits", config.tracking.confirm_hits);
+        load_field(tr, "association_gate_m", config.tracking.association_gate_m);
+        load_field(tr, "min_speed_mps", config.tracking.min_speed_mps);
+        load_field(tr, "max_speed_mps", config.tracking.max_speed_mps);
+        load_field(tr, "max_tracks", config.tracking.max_tracks);
 
         println("[CONFIG] Loaded config/system_config.yaml");
 
@@ -261,7 +272,8 @@ auto main(int argc, char* argv[]) -> int {
     Detector detector_left(config.frame_width, config.frame_height, config.detection);
     Detector detector_right(config.frame_width, config.frame_height, config.detection);
     StereoMatcher stereo_matcher(config.stereo, config.detection, config.bounding_box);
-    KalmanTracker tracker;
+    MultiTracker multi_tracker(config.tracking);
+    TargetSelector target_selector;
 
     ThreadSafeQueue<StereoFrame> frame_queue;
     ThreadSafeQueue<TargetCommand> target_queue;
@@ -414,31 +426,25 @@ auto main(int argc, char* argv[]) -> int {
             cmd.timestamp = frame.timestamp;
 
             // Correspondence is established per blob and validated against the
-            // epipolar constraint; an ambiguous scene yields no target.
-            auto target_3d = stereo_matcher.match(left_blobs, right_blobs);
+            // epipolar constraint; an ambiguous cluster yields no target from
+            // that cluster, while clean pairs elsewhere in the frame survive.
+            auto targets_3d = stereo_matcher.match_all(left_blobs, right_blobs);
 
-            // Brief detection gap: coast the track on the Kalman prediction
-            // instead of throwing the velocity estimate away and re-acquiring
-            // from zero. predict() is pure and bounded by
-            // k_max_predict_horizon_s, and the coasted point still passes
-            // through every downstream gate (bounding box, galvo cone, DAC
-            // range). Past the horizon predict yields nullopt and the track is
-            // dropped — fail closed.
-            auto filtered = target_3d
-                .and_then([&](const Point3D& pt) -> std::optional<Point3D> {
-                    return tracker.update(pt, frame.timestamp);
-                })
-                .or_else([&]() -> std::optional<Point3D> {
-                    return tracker.predict(frame.timestamp);
-                });
+            // Tracks coast through brief detection gaps on their Kalman
+            // predictions (bounded by k_max_predict_horizon_s) instead of
+            // throwing the velocity estimates away; a track past the horizon
+            // is deleted — fail closed. Only confirmed, plausibly-flying
+            // tracks are engageable.
+            auto tracks = multi_tracker.update(targets_3d, frame.timestamp);
 
-            if (!filtered.has_value()) {
-                tracker.reset();
-            }
+            // One laser, one galvo: pick the sticky/nearest engageable target.
+            // The control thread and firing path below are unchanged — they
+            // still see exactly one TargetCommand per frame.
+            auto chosen = target_selector.select(tracks);
 
-            cmd.target_valid = filtered.has_value();
-            if (filtered.has_value()) {
-                cmd.target_position = filtered.value();
+            cmd.target_valid = chosen.has_value();
+            if (chosen.has_value()) {
+                cmd.target_position = chosen->position;
             }
 
             target_queue.push(std::move(cmd));

@@ -57,6 +57,8 @@ set(VISION_SOURCES
     src/vision/detector.cpp
     src/vision/stereo_matcher.cpp
     src/vision/tracker.cpp
+    src/vision/multi_tracker.cpp
+    src/vision/target_selector.cpp
 )
 
 set(CONTROL_SOURCES

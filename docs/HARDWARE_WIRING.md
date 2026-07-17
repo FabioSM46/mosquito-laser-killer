@@ -61,6 +61,10 @@ This document is the single source of truth for wiring the stereoscopic laser-ta
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Differential X-axis drive |
 | Y-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Differential Y-axis drive |
 | Level shifter | 4-channel bidirectional 3.3 V ↔ 5 V | 1 | SPI and laser TTL level shifting |
+| Monostable | SN74HC123N, DIP-16 dual retriggerable one-shot | 1 | Laser TTL pulse-duration backstop (§11a) |
+| AND gate | SN74HC08N, DIP-14 quad 2-input AND | 1 | Gates laser TTL = GPIO18 ∧ one-shot-Q (§11a) |
+| Resistor | 220 kΩ, 1/4 W | 1 | 74HC123 timing (R_ext) |
+| Capacitor | 1 µF | 1 | 74HC123 timing (C_ext); 0.1 µF for VCC decoupling |
 | Arm switch | Lever SPST toggle, rated ≥3 A @ 12 VDC | 1 | Laser power + GPIO arm sense |
 | E-Stop | Mushroom DPST push-button, NC contacts | 1 | Physical power kill + GPIO sense |
 | Resistor | 10 kΩ, 1/2 W | 3 | Arm switch series, E-stop series (×2) |
@@ -266,16 +270,53 @@ The laser module has two electrical connections: a **12 V power input** and a **
 12 V supply + ──► [ARM SPST switch] ──► Laser driver +VIN
 12 V supply − ────────────────────────► Laser driver GND
 
-Level shifter B3 ────────────────────► Laser driver TTL
+Level shifter B3 ──► [74HC123 + AND gate backstop, §11a] ──► Laser driver TTL
 Laser driver GND ────────────────────► Common GND
 ```
 
 ### Safety notes
 
 - The laser driver receives **no power** until the arm switch is ON. This is the hardware interlock.
-- The TTL input is the **software trigger**. The laser fires only when GPIO 18 is HIGH, the arm switch is ON, the E-Stop is released, and all software safety gates are satisfied.
+- The TTL input is the **software trigger**, but it passes through the pulse-duration backstop of §11a — the laser fires only when GPIO 18 is HIGH, the arm switch is ON, the E-Stop is released, the one-shot has not timed out, and all software safety gates are satisfied.
 - Keep the TTL line short and away from the laser power cable to reduce noise.
 - The laser module chassis must be bonded to protective earth.
+
+---
+
+## 11a. Laser TTL Pulse-Duration Backstop (74HC123)
+
+Every *software* mechanism that ends a laser pulse (max-pulse enforcement, watchdog, E-stop poll) runs on the **control thread**. If that thread hangs with GPIO 18 stuck HIGH, no software turns the laser off. This one-shot is the **independent hardware enforcer** of the ≤100 ms pulse bound — it is not on the control thread and needs neither software nor an operator to act. See AGENTS.md §4.1.
+
+### Circuit
+
+The laser TTL is gated by `GPIO18 (5 V) AND one-shot-Q`. The one-shot is triggered by GPIO 18's rising edge; when it times out, the AND gate force-drives the laser TTL LOW even if GPIO 18 is still HIGH.
+
+```
+Level shifter B3 (GPIO18 @ 5 V) ─┬─────────────────────► 74HC08 AND  in A ─┐
+                                 │                                          ├─► Laser driver TTL
+                                 └─► 74HC123  1B (pin 2, +edge trigger)     │
+                                     74HC123  1Q (pin 13) ──────────────────┘ (AND in B)
+                                     74HC123  1CLR (pin 3) ◄── GPIO18 @ 5 V  (re-arm between shots)
+
+Timing network (channel 1):
+    74HC123  1Cext (pin 14) ──┬── 1 µF ──┬── 1Rext/Cext (pin 15)
+    74HC123  1Rext/Cext (pin 15) ── 220 kΩ ──► +5 V
+    74HC123  VCC (pin 16) ──► +5 V ;  GND (pin 8) ──► common GND ;  0.1 µF VCC↔GND decoupling
+    Unused channel 2 (pins 9,10,11): tie 2A/2B/2CLR to defined levels; leave 2Cext/2Rext open
+```
+
+### Timing
+
+`t_W ≈ 0.45 · R_ext · C_ext = 0.45 · 220 kΩ · 1 µF ≈ 99 ms`
+
+`K = 0.45` is nominal for the 74HC123 at V_CC = 5 V, C_ext > 1 nF; R and (electrolytic) C tolerance can move t_W ±20 %. **Measure it on a scope.** ~99 ms sits just below the ~105 ms real software bound, so the hardware becomes the binding limit and will also cap legitimate max-length pulses. To make the backstop trip only on a *failure* instead, raise the period above the software bound (e.g. C_ext = 1.5 µF → ~130–150 ms).
+
+### Verification (mandatory before connecting the Class 4 laser)
+
+- [ ] **Short pulse passes through:** drive GPIO 18 HIGH for ~10 ms; the laser TTL must be HIGH for ~10 ms (not stretched to ~99 ms). If it stretches, Q is driving the TTL *alone* — the AND gate is missing or miswired. Fix before proceeding.
+- [ ] **Stuck-HIGH is capped:** hold GPIO 18 HIGH indefinitely; the laser TTL must go LOW at the measured t_W and stay LOW.
+- [ ] **Period measured** on a scope and recorded; matches intent (§ Timing above).
+- [ ] **No PWM firing:** confirm the firing path drives a single sustained level per pulse — a retriggering burst within t_W would hold the output HIGH and defeat the cap.
 
 ---
 

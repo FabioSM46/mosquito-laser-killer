@@ -1,19 +1,30 @@
 #include "vision/detector.h"
 #include "core/print.h"
+#include <cmath>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
 Detector::Detector(int width, int height, const SystemConfig::Detection& config)
     : width_(width)
     , height_(height)
-    , config_(config) {
+    , config_(config)
+    // Sanitize at the boundary: accumulateWeighted(NaN) silently poisons the
+    // model forever, and a rate outside [0, 1] is a config error. 0 disables
+    // the motion gate outright (legacy bright-blob behaviour).
+    , learning_rate_(std::isfinite(config.background_learning_rate) &&
+                             config.background_learning_rate > 0.0 &&
+                             config.background_learning_rate <= 1.0
+                         ? config.background_learning_rate
+                         : 0.0) {
     println("[DETECTOR] Initialized {}x{}, threshold={}, blob area=[{}, {}] px, "
-            "max_blobs={}",
+            "max_blobs={}, motion gate={} (alpha={:.3f}, motion threshold={})",
             width_, height_, config_.threshold, config_.min_blob_area_px,
-            config_.max_blob_area_px, config_.max_blobs);
+            config_.max_blob_area_px, config_.max_blobs,
+            learning_rate_ > 0.0 ? "on" : "off",
+            learning_rate_, config_.motion_threshold);
 }
 
-auto Detector::detect_blobs(const uint8_t* data, size_t size) const
+auto Detector::detect_blobs(const uint8_t* data, size_t size)
     -> std::vector<Blob> {
     std::vector<Blob> blobs;
 
@@ -38,6 +49,31 @@ auto Detector::detect_blobs(const uint8_t* data, size_t size) const
         cv::Mat mask;
         cv::threshold(frame, mask, static_cast<double>(config_.threshold), 255.0,
                       cv::THRESH_BINARY);
+
+        if (learning_rate_ > 0.0) {
+            if (!background_seeded_) {
+                // There is nothing to diff against on the first frame; seed and
+                // report nothing rather than treat the whole scene as motion.
+                frame.convertTo(background_, CV_32F);
+                background_seeded_ = true;
+                println("[DETECTOR] Background model seeded, motion gate live");
+                return blobs;
+            }
+
+            cv::Mat background_u8;
+            background_.convertTo(background_u8, CV_8U);
+            cv::Mat diff;
+            cv::absdiff(frame, background_u8, diff);
+            cv::Mat motion_mask;
+            cv::threshold(diff, motion_mask,
+                          static_cast<double>(config_.motion_threshold), 255.0,
+                          cv::THRESH_BINARY);
+            cv::bitwise_and(mask, motion_mask, mask);
+
+            // Diff first, then fold the frame into the model: updating before
+            // the diff would let the current frame suppress itself.
+            cv::accumulateWeighted(frame, background_, learning_rate_);
+        }
 
         cv::Mat labels;
         cv::Mat stats;
