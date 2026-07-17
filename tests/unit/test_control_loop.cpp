@@ -277,13 +277,24 @@ TEST_F(ControlLoopTest, FiresOnlyAfterSettleAndStartupBlankingElapse) {
     set_arm_gpio(true);
     settle_inputs();
 
-    // Startup blanking is 1s; step past it.
-    now_ += FiringController::k_startup_blanking;
-
-    EXPECT_CALL(*laser_, fire(false)).Times(AnyNumber());
-    EXPECT_CALL(*laser_, fire(true)).Times(1);
-
+    // Phase 1: still inside the 1s startup blanking, galvo settled, target held.
+    // The laser must NOT fire no matter how clean the track is. The previous
+    // version installed the fire(true) expectation only after jumping past the
+    // blanking window, so a fire during blanking was invisible to it.
     auto cmd = make_target(kValidTarget);
+    {
+        EXPECT_CALL(*laser_, fire(false)).Times(AnyNumber());
+        EXPECT_CALL(*laser_, fire(true)).Times(0);
+        run_cycles(10, cmd);
+        EXPECT_FALSE(controller_->is_firing());
+        ASSERT_EQ(sm_.current(), SystemState::TRACKING);
+        ::testing::Mock::VerifyAndClearExpectations(laser_.get());
+    }
+
+    // Phase 2: blanking elapsed, target held continuously — the pulse starts.
+    now_ += FiringController::k_startup_blanking;
+    ON_CALL(*laser_, fire(_)).WillByDefault(Return(kOk));
+    EXPECT_CALL(*laser_, fire(true)).Times(1);
     run_cycles(3, cmd);
 
     EXPECT_TRUE(controller_->is_firing());
@@ -347,6 +358,100 @@ TEST_F(ControlLoopTest, CooldownBlocksRefireForTheConfiguredDuration) {
         (void)control_step(*deps_, cmd, now_, now_);
         ASSERT_FALSE(controller_->is_firing()) << "re-fired during cooldown";
     }
+}
+
+//
+// Target loss at the loop level. The abort itself is pinned at controller
+// level; these tests pin the loop glue: if the loss branch in control_step
+// were deleted, the controller would keep its (stale) target and keep firing
+// at a position the mosquito has already left.
+//
+
+TEST_F(ControlLoopTest, TrackingTargetLostReturnsToArmedAndClearsTheTarget) {
+    set_arm_gpio(true);
+    settle_inputs();
+    run_cycles(2, make_target(kValidTarget));
+    ASSERT_EQ(sm_.current(), SystemState::TRACKING);
+
+    // Target lost: no valid position in the freshest command.
+    TargetCommand lost;
+    now_ += kCyclePeriod;
+    (void)control_step(*deps_, lost, now_, now_);
+    EXPECT_EQ(sm_.current(), SystemState::ARMED);
+
+    // With the loss branch deleted the controller would still hold the stale
+    // target and would fire once the startup blanking elapsed.
+    EXPECT_CALL(*laser_, fire(false)).Times(AnyNumber());
+    EXPECT_CALL(*laser_, fire(true)).Times(0);
+    now_ += FiringController::k_startup_blanking + 100ms;
+    run_cycles(5, lost);
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_EQ(sm_.current(), SystemState::ARMED);
+}
+
+TEST_F(ControlLoopTest, FiringTargetLostAbortsThePulseAndEntersCooldown) {
+    set_arm_gpio(true);
+    settle_inputs();
+    now_ += FiringController::k_startup_blanking;
+
+    auto cmd = make_target(kValidTarget);
+    run_cycles(3, cmd);
+    ASSERT_EQ(sm_.current(), SystemState::FIRING);
+    ASSERT_TRUE(controller_->is_firing());
+
+    EXPECT_CALL(*laser_, fire(false)).Times(AtLeast(1));
+
+    TargetCommand lost;
+    now_ += kCyclePeriod;
+    (void)control_step(*deps_, lost, now_, now_);
+
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_EQ(sm_.current(), SystemState::COOLDOWN);
+    // The abort path must start the cooldown like every other pulse end.
+    EXPECT_FALSE(controller_->may_fire(now_));
+}
+
+TEST_F(ControlLoopTest, CooldownExpiryRearmsWhenTheSwitchIsStillOn) {
+    set_arm_gpio(true);
+    settle_inputs();
+    now_ += FiringController::k_startup_blanking;
+
+    auto cmd = make_target(kValidTarget);
+    run_cycles(3, cmd);
+    ASSERT_EQ(sm_.current(), SystemState::FIRING);
+
+    now_ += 110ms;
+    (void)control_step(*deps_, cmd, now_, now_);
+    ASSERT_EQ(sm_.current(), SystemState::COOLDOWN);
+
+    // Step past the full 10s cooldown with no target. If the cooldown-exit
+    // block were deleted the state would sit in COOLDOWN forever.
+    now_ += 11s;
+    run_cycles(2);
+
+    EXPECT_EQ(sm_.current(), SystemState::ARMED);
+    EXPECT_TRUE(controller_->is_armed());
+}
+
+TEST_F(ControlLoopTest, CooldownExpiryStaysIdleWhenTheSwitchIsOff) {
+    set_arm_gpio(true);
+    settle_inputs();
+    now_ += FiringController::k_startup_blanking;
+
+    auto cmd = make_target(kValidTarget);
+    run_cycles(3, cmd);
+    ASSERT_EQ(sm_.current(), SystemState::FIRING);
+
+    now_ += 110ms;
+    (void)control_step(*deps_, cmd, now_, now_);
+    ASSERT_EQ(sm_.current(), SystemState::COOLDOWN);
+
+    set_arm_gpio(false);
+    now_ += 11s;
+    run_cycles(8);
+
+    EXPECT_EQ(sm_.current(), SystemState::IDLE);
+    EXPECT_FALSE(controller_->is_armed());
 }
 
 //

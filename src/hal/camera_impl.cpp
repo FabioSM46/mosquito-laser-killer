@@ -1,6 +1,7 @@
 #include "hal/camera_impl.h"
 #include "core/error.h"
 #include "core/print.h"
+#include <chrono>
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
@@ -27,14 +28,28 @@ auto wait_for_frame(int fd, int timeout_ms) -> std::expected<void, HardwareError
         return std::unexpected(HardwareError::CameraCaptureFailed);
     }
 
+    // An absolute deadline, not a per-iteration timeout: re-arming the full
+    // timeout after every EINTR would let repeated signals extend the block
+    // arbitrarily far beyond the stated bound.
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(timeout_ms);
+
     for (;;) {
+        const auto remaining = deadline - std::chrono::steady_clock::now();
+        if (remaining <= std::chrono::steady_clock::duration::zero()) {
+            println(stderr, "[Camera] Capture timeout ({} ms)", timeout_ms);
+            return std::unexpected(HardwareError::Timeout);
+        }
+        const auto remaining_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(remaining);
+
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
 
         timeval tv{};
-        tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        tv.tv_sec = static_cast<time_t>(remaining_us.count() / 1'000'000);
+        tv.tv_usec = static_cast<suseconds_t>(remaining_us.count() % 1'000'000);
 
         auto ret = select(fd + 1, &fds, nullptr, nullptr, &tv);
         if (ret < 0) {

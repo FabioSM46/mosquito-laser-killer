@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/types.h"
-#include <optional>
 #include <vector>
 #include <cstdint>
 #include <cstddef>
@@ -23,10 +22,10 @@ public:
     [[nodiscard]] auto detect_blobs(const uint8_t* data, size_t size) const
         -> std::vector<Blob>;
 
-    void set_threshold(uint8_t threshold) { config_.threshold = threshold; }
-    [[nodiscard]] auto threshold() const -> uint8_t {
-        return static_cast<uint8_t>(config_.threshold);
-    }
+    // The config field is an int; narrowing through uint8_t here would wrap an
+    // out-of-range value silently at the call site.
+    void set_threshold(int threshold) { config_.threshold = threshold; }
+    [[nodiscard]] auto threshold() const -> int { return config_.threshold; }
     [[nodiscard]] auto width() const -> int { return width_; }
     [[nodiscard]] auto height() const -> int { return height_; }
 

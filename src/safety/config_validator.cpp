@@ -59,6 +59,29 @@ auto validate_engagement_volume(const SystemConfig& config)
         std::min({config.galvo_limits.angle_x_max_deg, config.galvo_limits.angle_y_max_deg,
                   -config.galvo_limits.angle_x_min_deg, -config.galvo_limits.angle_y_min_deg});
 
+    // A NaN or inverted galvo range disables the cone check in map_to_dac
+    // (`angle < min` / `angle > max` are both false for NaN bounds), so the
+    // limits themselves must be proven finite and ordered here.
+    const auto& gl = config.galvo_limits;
+    if (!std::isfinite(gl.angle_x_min_deg) || !std::isfinite(gl.angle_x_max_deg) ||
+        !std::isfinite(gl.angle_y_min_deg) || !std::isfinite(gl.angle_y_max_deg) ||
+        !(gl.angle_x_min_deg < gl.angle_x_max_deg) ||
+        !(gl.angle_y_min_deg < gl.angle_y_max_deg)) {
+        warnings.push_back({
+            "galvo-limits",
+            "Galvo angle limits must be finite with min < max on both axes.",
+            true
+        });
+    }
+
+    if (!std::isfinite(galvo_half_cone_deg) || galvo_half_cone_deg <= 0.0) {
+        warnings.push_back({
+            "galvo-limits",
+            "Galvo half-cone must be finite and positive.",
+            true
+        });
+    }
+
     const double max_commandable_deg =
         config.galvo_driver.dac_max_diff_voltage /
         std::max(config.galvo_driver.input_scale_v_per_deg, 1e-9);
@@ -90,6 +113,16 @@ auto validate_engagement_volume(const SystemConfig& config)
     }
 
     for (const auto& c : box_corners(config.bounding_box)) {
+        // isfinite first: `c.z <= 0.0` and `angle_deg > cone` are both false for
+        // NaN, so a NaN corner would otherwise sail through both checks.
+        if (!std::isfinite(c.x) || !std::isfinite(c.y) || !std::isfinite(c.z)) {
+            warnings.push_back({
+                "bounding-box",
+                "Bounding-box corner has a non-finite coordinate.",
+                true
+            });
+            continue;
+        }
         if (c.z <= 0.0) {
             warnings.push_back({
                 "bounding-box",
@@ -129,6 +162,12 @@ auto validate_engagement_volume(const SystemConfig& config)
     }
     if (!(config.galvo_driver.dac_max_diff_voltage > 0.0)) {
         warnings.push_back({"galvo-voltage", "dac_max_diff_voltage must be positive.", true});
+    }
+    // The mapper's own `dac_ref_voltage_ <= 0.0` guard fails open on NaN, and
+    // lround(NaN) then wraps to DAC code 0 — full deflection reported as
+    // success. This check is the only place that can still catch it.
+    if (!(config.dac_ref_voltage > 0.0)) {
+        warnings.push_back({"galvo-voltage", "dac_reference_voltage must be positive.", true});
     }
     // Phrased so a NaN from YAML falls into the reject branch rather than passing
     // every comparison.
@@ -187,9 +226,10 @@ auto validate_engagement_volume(const SystemConfig& config)
         warnings.push_back({"camera", "frame_width and frame_height must be positive.", true});
     } else {
         // A principal point outside the frame is a calibration error that biases
-        // every target's back-projected x/y. Negated so NaN rejects.
-        if (!(config.stereo.cx >= 0.0 && config.stereo.cx <= config.frame_width &&
-              config.stereo.cy >= 0.0 && config.stereo.cy <= config.frame_height)) {
+        // every target's back-projected x/y. Negated so NaN rejects. The last
+        // valid column/row is width-1/height-1, so the comparison is strict.
+        if (!(config.stereo.cx >= 0.0 && config.stereo.cx < config.frame_width &&
+              config.stereo.cy >= 0.0 && config.stereo.cy < config.frame_height)) {
             warnings.push_back({
                 "stereo",
                 "Principal point (" + std::to_string(config.stereo.cx) + ", " +

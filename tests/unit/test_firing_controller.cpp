@@ -136,6 +136,11 @@ TEST_F(FiringControllerTest, DisarmDuringPulseAbortsImmediately) {
 
     EXPECT_FALSE(controller_->is_firing());
     EXPECT_FALSE(controller_->is_armed());
+    // The disarm-abort is a pulse end like any other: the cooldown must be
+    // running, or a re-arm could re-fire immediately after a 100ms pulse.
+    EXPECT_FALSE(controller_->may_fire(fire_time + 10ms));
+    EXPECT_FALSE(controller_->may_fire(fire_time + 10ms + 9s));
+    EXPECT_TRUE(controller_->may_fire(fire_time + 10ms + 10s));
 }
 
 //
@@ -244,11 +249,8 @@ TEST_F(FiringControllerTest, DoesNotFireBeforeTheSettleDelayElapses) {
     controller_->set_target(kValidTarget, now);
 
     // fire(false) is routine; naming fire(true) at all makes non-matching calls
-
     // "unexpected" rather than "uninteresting", even under NiceMock.
-
     EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
-
     EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
 
     // settle_delay_ms = 3.0. The first cycle stamps galvo_command_time_ = now, so
@@ -389,11 +391,8 @@ TEST_F(FiringControllerTest, HaltedControllerCannotBeRearmedOrRetargeted) {
     ASSERT_TRUE(controller_->is_halted());
 
     // fire(false) is routine; naming fire(true) at all makes non-matching calls
-
     // "unexpected" rather than "uninteresting", even under NiceMock.
-
     EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
-
     EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
     EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
 

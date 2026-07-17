@@ -56,6 +56,15 @@ constexpr int hardware_init_failed = 2;
 constexpr int safe_halt = 3;
 }
 
+// Runs log_shutdown() on EVERY exit path from main, including the early
+// hardware/config failure returns: O_NONBLOCK is a property of the shared open
+// file description, so skipping the restore hands EAGAIN back to whatever owns
+// our stdout (an interactive shell, a supervisor). Declared right after
+// log_init() so it is destroyed last, after every logger has gone quiet.
+struct LogSessionGuard {
+    ~LogSessionGuard() { mlk_log::log_shutdown(); }
+};
+
 // Assigns only when the key is present, so types.h stays the single source of
 // truth for defaults. The previous `node[k] ? node[k].as<T>() : <literal>` style
 // duplicated every default at the call site, and one had already drifted (cy was
@@ -155,6 +164,7 @@ auto main(int argc, char* argv[]) -> int {
     // Before any thread starts: the control thread must never block on a log
     // write while it owns a live laser pulse.
     mlk_log::log_init();
+    LogSessionGuard log_guard;
 
     println("===========================================");
     println("  Mosquito Laser Killer v1.0.0");
@@ -407,22 +417,29 @@ auto main(int argc, char* argv[]) -> int {
             // epipolar constraint; an ambiguous scene yields no target.
             auto target_3d = stereo_matcher.match(left_blobs, right_blobs);
 
-            cmd.target_valid = target_3d.has_value();
-
-            target_3d
+            // Brief detection gap: coast the track on the Kalman prediction
+            // instead of throwing the velocity estimate away and re-acquiring
+            // from zero. predict() is pure and bounded by
+            // k_max_predict_horizon_s, and the coasted point still passes
+            // through every downstream gate (bounding box, galvo cone, DAC
+            // range). Past the horizon predict yields nullopt and the track is
+            // dropped — fail closed.
+            auto filtered = target_3d
                 .and_then([&](const Point3D& pt) -> std::optional<Point3D> {
                     return tracker.update(pt, frame.timestamp);
                 })
-                .transform([&](const Point3D& filtered) {
-                    cmd.target_position = filtered;
-                    return filtered;
-                })
                 .or_else([&]() -> std::optional<Point3D> {
-                    if (!cmd.target_valid) {
-                        tracker.reset();
-                    }
-                    return std::nullopt;
+                    return tracker.predict(frame.timestamp);
                 });
+
+            if (!filtered.has_value()) {
+                tracker.reset();
+            }
+
+            cmd.target_valid = filtered.has_value();
+            if (filtered.has_value()) {
+                cmd.target_position = filtered.value();
+            }
 
             target_queue.push(std::move(cmd));
         }
@@ -492,7 +509,6 @@ auto main(int argc, char* argv[]) -> int {
     if (final_state == SystemState::SAFE_HALT) {
         println(stderr, "[MAIN] Shutdown complete in SAFE_HALT — a safety interlock "
                 "fired. Review the log above before restarting.");
-        mlk_log::log_shutdown();
         return exit_code::safe_halt;
     }
 
@@ -502,11 +518,9 @@ auto main(int argc, char* argv[]) -> int {
     if (g_hardware_fault.load(std::memory_order_acquire)) {
         println(stderr, "[MAIN] Shutdown complete after a hardware fault. "
                 "Review the log above before restarting.");
-        mlk_log::log_shutdown();
         return exit_code::hardware_init_failed;
     }
 
     println("[MAIN] All threads joined. System shutdown complete.");
-    mlk_log::log_shutdown();
     return exit_code::ok;
 }

@@ -74,6 +74,15 @@ auto DifferentialGalvoDriver::set_position(uint16_t x, uint16_t y)
     if (!y_result.has_value()) {
         println(stderr, "[GALVO] Y-axis DAC write failed: {}",
                      to_string(y_result.error()));
+        // X already took its new value, leaving the galvo at a partial,
+        // never-commanded position. Best-effort re-center X before reporting
+        // the failure; if this too fails the higher layer halts anyway.
+        constexpr uint16_t k_center = 2048;
+        auto restore = dac_x_->write({k_center, k_center});
+        if (!restore.has_value()) {
+            println(stderr, "[GALVO] X-axis re-center also failed: {}",
+                         to_string(restore.error()));
+        }
         return std::unexpected(y_result.error());
     }
 

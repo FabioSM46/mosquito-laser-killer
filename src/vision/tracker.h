@@ -40,7 +40,6 @@ private:
               std::chrono::steady_clock::time_point timestamp) -> void;
 
     Eigen::Matrix<double, 6, 6> P_;
-    Eigen::Matrix<double, 6, 6> F_;
     Eigen::Matrix<double, 3, 6> H_;
     Eigen::Matrix<double, 6, 6> Q_;
     Eigen::Matrix<double, 3, 3> R_;

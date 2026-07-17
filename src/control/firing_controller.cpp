@@ -244,6 +244,12 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
         pulse_active_ = true;
         pulse_start_ = now;
+        // The post-incident trace must record where the beam was aimed when
+        // each pulse started; "[LASER] FIRING" alone carries no coordinates.
+        if (current_target_.has_value()) {
+            println("[FIRING] Pulse started at target=({:.3f}, {:.3f}, {:.3f})",
+                         current_target_->x, current_target_->y, current_target_->z);
+        }
     }
 
     return false;

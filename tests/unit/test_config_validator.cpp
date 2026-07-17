@@ -1,5 +1,4 @@
 #include <vector>
-#include <cmath>
 #include <gtest/gtest.h>
 #include <memory>
 #include <cmath>
@@ -143,6 +142,37 @@ TEST_F(ConfigValidatorTest, NanInAnyCriticalNumericFieldAbortsStartup) {
         EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
             << "epipolar_tolerance_px: NaN passed validation";
     }
+    // The mapper's own `dac_ref_voltage_ <= 0.0` guard fails open on NaN and
+    // lround(NaN) wraps to DAC code 0 (full deflection, reported as success) —
+    // this check is the only place that can still catch it.
+    {
+        auto config = config_;
+        config.dac_ref_voltage = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "dac_ref_voltage: NaN passed validation";
+    }
+    // A NaN bounding-box coordinate: `c.z <= 0.0` and `angle_deg > cone` are
+    // both false for NaN, so an unguarded corner check sails through.
+    {
+        auto config = config_;
+        config.bounding_box.z_min = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "bounding_box.z_min: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.bounding_box.x_max = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "bounding_box.x_max: NaN passed validation";
+    }
+    // NaN or inverted galvo limits disable the cone check in map_to_dac itself
+    // (`angle < min` / `angle > max` are both false for NaN bounds).
+    {
+        auto config = config_;
+        config.galvo_limits.angle_x_max_deg = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "galvo_limits.angle_x_max_deg: NaN passed validation";
+    }
 }
 
 TEST_F(ConfigValidatorTest, HorizontalFovDerivationCorrect) {
@@ -178,4 +208,200 @@ TEST_F(ConfigValidatorTest, InvalidPulseDurationIsCritical) {
     auto warnings = validate_engagement_volume(config_);
     EXPECT_TRUE(find_warning(warnings, "pulse"));
     EXPECT_TRUE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, NonPositiveDacReferenceVoltageIsCritical) {
+    for (const double v : {0.0, -5.0}) {
+        auto config = config_;
+        config.dac_ref_voltage = v;
+        auto warnings = validate_engagement_volume(config);
+        EXPECT_TRUE(find_warning(warnings, "galvo-voltage")) << "v=" << v;
+        EXPECT_TRUE(has_critical_validation_errors(warnings)) << "v=" << v;
+    }
+}
+
+TEST_F(ConfigValidatorTest, InvertedGalvoLimitsAreCritical) {
+    config_.galvo_limits.angle_x_min_deg = 15.0;
+    config_.galvo_limits.angle_x_max_deg = -15.0;
+
+    auto warnings = validate_engagement_volume(config_);
+    EXPECT_TRUE(find_warning(warnings, "galvo-limits"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, ZeroWidthGalvoRangeIsCritical) {
+    config_.galvo_limits.angle_y_min_deg = 5.0;
+    config_.galvo_limits.angle_y_max_deg = 5.0;
+
+    auto warnings = validate_engagement_volume(config_);
+    EXPECT_TRUE(find_warning(warnings, "galvo-limits"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
+}
+
+//
+// Boundary tests for every remaining critical bound in §4.10. Each of these
+// pairs an out-of-range value (must abort) with the nearest in-range value
+// (must not abort), so a deleted or shifted bound fails one half of the pair.
+//
+
+TEST_F(ConfigValidatorTest, CooldownBoundary) {
+    // cooldown_seconds: 0 lets end_pulse set cooldown_until_ = now, so the next
+    // re-acquire re-fires within a few cycles — effectively CW 2.5W.
+    for (const double v : {0.0, 0.9}) {
+        auto config = config_;
+        config.cooldown_seconds = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "cooldown_seconds=" << v << " passed validation";
+    }
+    auto config = config_;
+    config.cooldown_seconds = 1.0;
+    EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
+}
+
+TEST_F(ConfigValidatorTest, SettleDelayBoundary) {
+    // settle_delay_ms: 0 marks the galvo settled in the same cycle the DAC was
+    // written, firing while the mirrors slew.
+    for (const double v : {0.0, 0.4, 50.1}) {
+        auto config = config_;
+        config.settle_delay_ms = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "settle_delay_ms=" << v << " passed validation";
+    }
+    for (const double v : {0.5, 50.0}) {
+        auto config = config_;
+        config.settle_delay_ms = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "settle_delay_ms=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, WatchdogTimeoutBoundary) {
+    for (const double v : {4.0, 501.0}) {
+        auto config = config_;
+        config.watchdog_timeout_ms = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "watchdog_timeout_ms=" << v << " passed validation";
+    }
+    for (const double v : {5.0, 500.0}) {
+        auto config = config_;
+        config.watchdog_timeout_ms = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "watchdog_timeout_ms=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, WatchdogStartupGraceBoundary) {
+    for (const double v : {99.0, 60001.0}) {
+        auto config = config_;
+        config.watchdog_startup_grace_ms = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "watchdog_startup_grace_ms=" << v << " passed validation";
+    }
+    for (const double v : {100.0, 60000.0}) {
+        auto config = config_;
+        config.watchdog_startup_grace_ms = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "watchdog_startup_grace_ms=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, TargetFpsBoundary) {
+    // main derives cycle periods as 1'000'000 / target_fps; zero is a SIGFPE.
+    for (const int v : {0, -120}) {
+        auto config = config_;
+        config.target_fps = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "target_fps=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, FrameDimensionsBoundary) {
+    for (const int v : {0, -640}) {
+        auto config = config_;
+        config.frame_width = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "frame_width=" << v << " passed validation";
+        config = config_;
+        config.frame_height = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "frame_height=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, PrincipalPointBoundary) {
+    // The last valid column in a 640-wide frame is 639; 640 is outside.
+    for (const double cx : {-1.0, 640.0, 1000.0}) {
+        auto config = config_;
+        config.stereo.cx = cx;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "cx=" << cx << " passed validation";
+    }
+    for (const double cy : {-1.0, 400.0, 1000.0}) {
+        auto config = config_;
+        config.stereo.cy = cy;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "cy=" << cy << " passed validation";
+    }
+    auto config = config_;
+    config.stereo.cx = 639.0;
+    config.stereo.cy = 399.0;
+    EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
+}
+
+TEST_F(ConfigValidatorTest, DetectionThresholdBoundary) {
+    for (const int v : {0, 255, -1}) {
+        auto config = config_;
+        config.detection.threshold = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "threshold=" << v << " passed validation";
+    }
+    for (const int v : {1, 254}) {
+        auto config = config_;
+        config.detection.threshold = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "threshold=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, BlobAreaBoundsBoundary) {
+    {
+        auto config = config_;
+        config.detection.min_blob_area_px = 0;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "min_blob_area_px=0 passed validation";
+    }
+    {
+        auto config = config_;
+        config.detection.min_blob_area_px = 500;
+        config.detection.max_blob_area_px = 400;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "min > max blob area passed validation";
+    }
+    {
+        auto config = config_;
+        config.detection.max_blobs = 0;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "max_blobs=0 passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, EpipolarToleranceBoundary) {
+    for (const double v : {0.0, -1.0}) {
+        auto config = config_;
+        config.detection.epipolar_tolerance_px = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "epipolar_tolerance_px=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, PulseDurationBoundary) {
+    for (const double v : {0.0, 100.1}) {
+        auto config = config_;
+        config.max_pulse_duration_ms = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "max_pulse_duration_ms=" << v << " passed validation";
+    }
+    auto config = config_;
+    config.max_pulse_duration_ms = 100.0;
+    EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
 }

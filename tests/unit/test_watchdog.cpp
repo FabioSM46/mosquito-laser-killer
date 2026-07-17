@@ -174,8 +174,14 @@ TEST_F(WatchdogTest, TriggerForcesLaserOffAndZeroesGalvosBeforeHalting) {
     auto laser = std::make_unique<NiceMock<MockLaser>>();
     auto galvo = std::make_unique<NiceMock<MockGalvoDriver>>();
 
-    EXPECT_CALL(*laser, emergency_shutdown()).Times(1).WillOnce(Return(kOk));
-    EXPECT_CALL(*galvo, zero()).Times(1).WillOnce(Return(kOk));
+    // The name claims ordering, so pin it: the beam must be off and the galvos
+    // centred BEFORE the state machine reaches SAFE_HALT, not merely sometime
+    // during the same call.
+    testing::Sequence seq;
+    EXPECT_CALL(*laser, emergency_shutdown())
+        .Times(1).InSequence(seq).WillOnce(Return(kOk));
+    EXPECT_CALL(*galvo, zero())
+        .Times(1).InSequence(seq).WillOnce(Return(kOk));
 
     Watchdog wd(sm_, *laser, *galvo, kTimeout, kGrace);
     wd.feed(t0_);

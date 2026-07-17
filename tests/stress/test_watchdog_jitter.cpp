@@ -167,6 +167,12 @@ TEST_F(WatchdogJitterStressTest, ProducerThatNeverStartsRidesTheGraceThenHalts) 
 }
 
 TEST_F(WatchdogJitterStressTest, ConcurrentFeedAndCheckDoNotCorruptTheHeartbeat) {
+    // Race smoke test only: the 500ms timeout against a max 100ms staleness
+    // means a naive store() in place of the compare-exchange would NOT trip
+    // either, so this test cannot catch deletion of feed()'s strictly-newer
+    // guard. That semantic is pinned exactly by WatchdogTest unit tests with
+    // injected time; what this adds is concurrency coverage that the CAS and
+    // the check path do not corrupt state or false-trip under contention.
     Watchdog wd(sm_, *mock_laser_, *mock_galvo_, 500ms, 5000ms);
 
     std::atomic<bool> stop{false};

@@ -94,7 +94,9 @@ Implementation: `ThreadSafeQueue::drain_all()` returns all queued items; caller 
 - `TRACKING → IDLE` / `ARMED → IDLE`: Arm switch OFF (disarm)
 - `FIRING → COOLDOWN`: Pulse complete, abort, or max pulse duration exceeded
 - `COOLDOWN → IDLE`: 10-second cooldown elapsed (re-arms to ARMED if switch still ON)
-- `ANY → SAFE_HALT`: Watchdog timeout, E-stop, hardware error, capture failure, signal shutdown
+- `ANY → SAFE_HALT`: Watchdog timeout, E-stop, control-thread hardware error
+
+Capture-thread failures and signal shutdown (SIGINT/SIGTERM) do NOT route through the state machine: the capture thread may only set atomics, and the signal handler only sets the shutdown flag. Both paths stop the threads and make the laser safe via the control-thread exit path (`laser->emergency_shutdown()`, `galvo->zero()`) plus RAII destructors, exiting with a non-zero code (`hardware_init_failed` for a capture fault) rather than entering SAFE_HALT.
 
 No transition from `SAFE_HALT` back to any operational state — requires full system restart.
 
@@ -188,7 +190,7 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 
 **Enforced by:** `validate_engagement_volume()` at startup. Critical findings **abort** process start; non-critical findings log warnings only.
 
-**Critical:** box beyond galvo cone; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances.
+**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances.
 
 Every bound above exists because the parameter can disable a guard from YAML alone:
 - `cooldown_seconds: 0` → `end_pulse` sets `cooldown_until_ = now` → re-fire within ~15ms → ~87% duty cycle, effectively CW 2.5W.
@@ -221,13 +223,15 @@ The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**
 
 **Fail-closed at the boundary.** `triangulate` rejects non-finite pixels itself rather than delegating validity to a distant consumer.
 
+**Coasting through brief detection gaps.** A single frame without a match does not drop the track: the processing thread coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction; it can only fire at a point the track extrapolates to from a target that was verified inside the box ≤100 ms earlier. Past the horizon `predict()` returns nullopt, the track is reset, and the command goes out invalid — fail closed. Resetting on every lost frame instead would discard the velocity estimate and force re-acquisition from zero on every transient occlusion.
+
 ---
 
 ## 5. C++23 Mandatory Features
 
 | Feature | Usage |
 |---------|-------|
-| `std::println` / `std::print` | All console logging. Thread-safe, no `std::cout` anywhere |
+| `std::format` + custom `println` (`core/print.h`) | All console logging via the non-blocking logger (see §4.11). `std::println`/`std::print` are deliberately NOT used — they offer no way to decline to block. No `std::cout` anywhere |
 | `std::expected<T, E>` | All hardware operations return expected; no exceptions for hardware |
 | `std::optional` + monadic ops | Target detection pipeline: `.and_then()`, `.transform()`, `.or_else()` |
 | `std::jthread` | All three worker threads; auto-join on destruction |
@@ -280,13 +284,15 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `EStopTest` | Active-low debounce, press/release, read failure and uninitialised → **pressed** |
 | `CoordinateMapperTest` | Bounds, galvo cone, voltage-scale DAC **rejection** (no clamp), **non-finite → `Invalid3DPoint`** (asserting the specific error, not merely that something rejected) |
 | `FiringControllerTest` | Startup blanking, arm gate, max pulse (incl. late cycles), cooldown on **every** pulse-end path, motion blanking, settle, DAC-before-fire ordering, faults latch `is_halted()` |
-| `ControlLoopTest` | The real `control_step()`: guard **ordering**, e-stop/watchdog halts, arm gating, fire sequence, fault → SAFE_HALT, fail-safe GPIO reads |
+| `ControlLoopTest` | The real `control_step()`: guard **ordering**, e-stop/watchdog halts, arm gating, fire sequence, target-loss glue (TRACKING→ARMED+clear, FIRING→COOLDOWN+abort), cooldown exit → re-arm, fault → SAFE_HALT, fail-safe GPIO reads |
 | `SystemStateMachineTest` | Valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
 | `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness |
 | `DetectorTest` | **Per-blob centroids (no frame-wide phantom)**, area gates, short frame and >max_blobs → fail closed, threshold boundary |
 | `StereoMatcherTest` | Triangulation, **epipolar rejection**, disparity window, **ambiguous scene → fail closed**, non-finite rejection |
 | `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
+| `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
+| `MCP4922Test` | Command-bit format, range rejection, **destructor re-centres both channels** (§4.6 RAII shutdown) |
 
 ### 7.2 Stress Tests
 
@@ -365,6 +371,7 @@ mosquito-laser-killer/
 │   │   ├── test_stereo_matcher.cpp
 │   │   ├── test_kalman_tracker.cpp
 │   │   ├── test_config_validator.cpp
+│   │   ├── test_print.cpp             # non-blocking logger (§4.11)
 │   │   └── test_signal_handling.cpp
 │   └── stress/
 │       ├── test_frame_flooding.cpp
@@ -419,7 +426,7 @@ For the physical wiring corresponding to these protocols, see `docs/HARDWARE_WIR
 ## 12. Coding Standards (Non-Negotiable)
 
 - No raw `new`/`delete` — `std::unique_ptr`, `std::make_unique` only
-- No `std::cout` — `std::println` / `std::print` only
+- No `std::cout` and no `std::println`/`std::print` — the non-blocking `println` from `core/print.h` only (see §4.11)
 - No exceptions for hardware errors — `std::expected` only
 - No raw loops over `std::optional` chains — monadic operations only
 - No polling without timeout — all waits have bounded duration

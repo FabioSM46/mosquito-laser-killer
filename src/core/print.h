@@ -39,31 +39,38 @@ inline std::mutex g_mutex;
 inline int g_stdout_flags{-1};
 inline int g_stderr_flags{-1};
 
-// A previous line was truncated mid-write, so the next output must start with a
-// newline to terminate the orphaned fragment rather than splice onto it.
-inline bool g_needs_resync{false};
-
-inline auto set_nonblocking(int fd) -> int {
-    const int flags = ::fcntl(fd, F_GETFL, 0);
-    if (flags < 0) {
-        return -1;
-    }
-    if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        return -1;
-    }
-    return flags;
-}
+// A previous line on that descriptor was truncated mid-write, so the next
+// output ON THE SAME DESCRIPTOR must start with a newline to terminate the
+// orphaned fragment rather than splice onto it. Tracked per descriptor: a
+// fragment on stdout must not be "resynced" by a write to stderr.
+inline bool g_needs_resync_stdout{false};
+inline bool g_needs_resync_stderr{false};
 
 // Call once from main before any worker thread starts. Without it, logging still
 // works — it just blocks, which is fine for tests and tools but not for the
 // process that owns the laser.
 inline auto log_init() -> void {
-    g_stdout_flags = set_nonblocking(STDOUT_FILENO);
-    g_stderr_flags = set_nonblocking(STDERR_FILENO);
+    // Read BOTH descriptors' original flags BEFORE touching either. O_NONBLOCK
+    // is a property of the shared open file description, and stdout/stderr
+    // usually share one (same terminal, same log file, same pipe): reading
+    // stderr's flags after setting stdout's would store the already-polluted
+    // value, and log_shutdown would then "restore" O_NONBLOCK back ON.
+    g_stdout_flags = ::fcntl(STDOUT_FILENO, F_GETFL, 0);
+    g_stderr_flags = ::fcntl(STDERR_FILENO, F_GETFL, 0);
+
+    bool failed = false;
+    if (g_stdout_flags < 0 ||
+        ::fcntl(STDOUT_FILENO, F_SETFL, g_stdout_flags | O_NONBLOCK) < 0) {
+        failed = true;
+    }
+    if (g_stderr_flags < 0 ||
+        ::fcntl(STDERR_FILENO, F_SETFL, g_stderr_flags | O_NONBLOCK) < 0) {
+        failed = true;
+    }
 
     // A failure here is not fatal, but it means logging can still block, which is
     // the condition this exists to prevent. Say so rather than fail silently.
-    if (g_stdout_flags < 0 || g_stderr_flags < 0) {
+    if (failed) {
         const char* msg = "[LOG] WARNING: could not set O_NONBLOCK on stdio; "
                           "logging may block the control thread\n";
         // Bound into a variable rather than (void)-cast: glibc marks write() with
@@ -73,9 +80,10 @@ inline auto log_init() -> void {
     }
 }
 
-// Call once from main on the way out.
+// Call once from main on the way out. Idempotent: after the first call the
+// stored flags are reset to "unknown", so repeat calls are no-ops.
 inline auto log_shutdown() -> void {
-    const auto dropped = g_dropped_lines.load(std::memory_order_relaxed);
+    const auto dropped = g_dropped_lines.exchange(0, std::memory_order_relaxed);
     if (dropped > 0) {
         // Best-effort, and worth knowing: dropped lines mean the log is an
         // incomplete record of a run that involved a Class 4 laser.
@@ -87,9 +95,11 @@ inline auto log_shutdown() -> void {
 
     if (g_stdout_flags >= 0) {
         (void)::fcntl(STDOUT_FILENO, F_SETFL, g_stdout_flags);
+        g_stdout_flags = -1;
     }
     if (g_stderr_flags >= 0) {
         (void)::fcntl(STDERR_FILENO, F_SETFL, g_stderr_flags);
+        g_stderr_flags = -1;
     }
 }
 
@@ -102,12 +112,15 @@ inline auto write_all(int fd, std::string_view s) -> void {
     // block for long: the write() below never blocks once log_init() has run.
     std::lock_guard lock(g_mutex);
 
-    if (g_needs_resync) {
+    bool& needs_resync =
+        (fd == STDERR_FILENO) ? g_needs_resync_stderr : g_needs_resync_stdout;
+
+    if (needs_resync) {
         // Terminate the previous truncated line. If this too fails to go out,
         // nothing is lost that was not already lost.
         const char nl = '\n';
         if (::write(fd, &nl, 1) == 1) {
-            g_needs_resync = false;
+            needs_resync = false;
         }
     }
 
@@ -126,8 +139,13 @@ inline auto write_all(int fd, std::string_view s) -> void {
         // line is survivable, a stalled control thread holding a live pulse is not.
         g_dropped_lines.fetch_add(1, std::memory_order_relaxed);
         // A partial write left a fragment with no newline; flag it so the next
-        // line does not splice onto it and read as a single corrupt entry.
-        g_needs_resync = offset > 0;
+        // line does not splice onto it and read as a single corrupt entry. Only
+        // ever SET here: clearing a still-pending resync (a fragment landed, the
+        // resync newline itself failed, then this line failed at offset 0) would
+        // splice the next successful line onto the older fragment.
+        if (offset > 0) {
+            needs_resync = true;
+        }
         return;
     }
 }

@@ -29,36 +29,46 @@ auto Detector::detect_blobs(const uint8_t* data, size_t size) const
 
     const cv::Mat frame(height_, width_, CV_8UC1, const_cast<uint8_t*>(data));
 
-    cv::Mat mask;
-    cv::threshold(frame, mask, static_cast<double>(config_.threshold), 255.0,
-                  cv::THRESH_BINARY);
+    // OpenCV reports allocation failures and internal errors by THROWING, and
+    // this runs on the processing thread: an exception escaping the jthread
+    // lambda calls std::terminate with no unwinding, so the RAII laser/galvo
+    // shutdown never runs. Fail closed instead — an empty detection list only
+    // ever means "no target this frame".
+    try {
+        cv::Mat mask;
+        cv::threshold(frame, mask, static_cast<double>(config_.threshold), 255.0,
+                      cv::THRESH_BINARY);
 
-    cv::Mat labels;
-    cv::Mat stats;
-    cv::Mat centroids;
-    const int n_labels =
-        cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
+        cv::Mat labels;
+        cv::Mat stats;
+        cv::Mat centroids;
+        const int n_labels =
+            cv::connectedComponentsWithStats(mask, labels, stats, centroids, 8, CV_32S);
 
-    // Label 0 is the background.
-    for (int i = 1; i < n_labels; ++i) {
-        const int area = stats.at<int>(i, cv::CC_STAT_AREA);
-        if (area < config_.min_blob_area_px || area > config_.max_blob_area_px) {
-            continue;
+        // Label 0 is the background.
+        for (int i = 1; i < n_labels; ++i) {
+            const int area = stats.at<int>(i, cv::CC_STAT_AREA);
+            if (area < config_.min_blob_area_px || area > config_.max_blob_area_px) {
+                continue;
+            }
+
+            Blob blob;
+            blob.centroid.u = centroids.at<double>(i, 0);
+            blob.centroid.v = centroids.at<double>(i, 1);
+            blob.area_px = area;
+            blob.width_px = stats.at<int>(i, cv::CC_STAT_WIDTH);
+            blob.height_px = stats.at<int>(i, cv::CC_STAT_HEIGHT);
+            blobs.push_back(blob);
+
+            // Bail out as soon as the scene is provably too busy to disambiguate.
+            if (static_cast<int>(blobs.size()) > config_.max_blobs) {
+                blobs.clear();
+                return blobs;
+            }
         }
-
-        Blob blob;
-        blob.centroid.u = centroids.at<double>(i, 0);
-        blob.centroid.v = centroids.at<double>(i, 1);
-        blob.area_px = area;
-        blob.width_px = stats.at<int>(i, cv::CC_STAT_WIDTH);
-        blob.height_px = stats.at<int>(i, cv::CC_STAT_HEIGHT);
-        blobs.push_back(blob);
-
-        // Bail out as soon as the scene is provably too busy to disambiguate.
-        if (static_cast<int>(blobs.size()) > config_.max_blobs) {
-            blobs.clear();
-            return blobs;
-        }
+    } catch (...) {
+        println(stderr, "[DETECTOR] OpenCV failure, treating frame as empty");
+        blobs.clear();
     }
 
     return blobs;

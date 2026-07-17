@@ -228,7 +228,16 @@ TEST(SpiBackpressureStressTest, DrainToNewestKeepsTheBacklogBoundedUnderASlowCon
     const auto remaining = cmd_queue.drain_all();
     EXPECT_LT(remaining.size(), total_pushed.load())
         << "the consumer never kept up with any of the backlog";
-    EXPECT_GT(newest_seen.load(), 0);
+
+    // The property the whole design exists for: the consumer's last observed
+    // item is the NEWEST one pushed before it stopped, not an old one it is
+    // still working through. A consumer that lags arbitrarily (e.g. a blocking
+    // pop-one loop) passes the size assertions above but fails this one.
+    const int pushed = static_cast<int>(total_pushed.load());
+    const int remaining_count = static_cast<int>(remaining.size());
+    EXPECT_EQ(newest_seen.load(), pushed - remaining_count - 1)
+        << "the consumer ended on an old item, " << pushed - remaining_count - 1
+        << " was the newest un-consumed";
 }
 
 }

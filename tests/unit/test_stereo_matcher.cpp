@@ -107,6 +107,31 @@ TEST_F(StereoMatcherTest, EpipolarMismatchIsRejected) {
     EXPECT_FALSE(matcher_->triangulate({330.0, 250.0}, {270.0, 230.0}).has_value());
 }
 
+// A NaN tolerance makes `std::abs(dv) > tol` false for every pair — the
+// epipolar gate passes everything, i.e. fails OPEN. The constructor must
+// sanitize an invalid tolerance to the strictest gate rather than trust the
+// config blindly (config_validator catches NaN today, but triangulate's own
+// inputs are already sanitized at this same boundary).
+TEST_F(StereoMatcherTest, NanEpipolarToleranceFailsClosed) {
+    auto config = config_;
+    config.detection.epipolar_tolerance_px = std::numeric_limits<double>::quiet_NaN();
+    StereoMatcher matcher(config.stereo, config.detection, config.bounding_box);
+
+    // Even a 1 px vertical offset — normally well inside tolerance — is rejected.
+    EXPECT_FALSE(matcher.triangulate({320.0, 200.0}, {260.0, 201.0}).has_value());
+    // Only an exactly-aligned pair survives the strictest gate.
+    EXPECT_TRUE(matcher.triangulate({320.0, 200.0}, {260.0, 200.0}).has_value());
+}
+
+TEST_F(StereoMatcherTest, NonPositiveEpipolarToleranceFailsClosed) {
+    auto config = config_;
+    config.detection.epipolar_tolerance_px = -1.0;
+    StereoMatcher matcher(config.stereo, config.detection, config.bounding_box);
+
+    EXPECT_FALSE(matcher.triangulate({320.0, 200.0}, {260.0, 201.0}).has_value());
+    EXPECT_TRUE(matcher.triangulate({320.0, 200.0}, {260.0, 200.0}).has_value());
+}
+
 TEST_F(StereoMatcherTest, DisparityOutsideTheWindowIsRejected) {
     // Below the floor -> the point is further than z_max = 1.0 m.
     EXPECT_FALSE(matcher_->triangulate({320.0, 200.0}, {265.0, 200.0}).has_value());

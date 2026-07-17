@@ -49,6 +49,7 @@ add_unit_test(test_mcp4922 unit/test_mcp4922.cpp)
 add_unit_test(test_detector unit/test_detector.cpp)
 add_unit_test(test_signal_handling unit/test_signal_handling.cpp)
 add_unit_test(test_config_validator unit/test_config_validator.cpp)
+add_unit_test(test_print unit/test_print.cpp)
 
 # Exercises the real control_step() from src/control/control_loop.cpp. This
 # replaces test_control_arm_gating.cpp, which hand-copied main()'s gating logic

@@ -6,8 +6,6 @@
 KalmanTracker::KalmanTracker() {
     P_ = Eigen::Matrix<double, 6, 6>::Identity() * 1000.0;
 
-    F_ = Eigen::Matrix<double, 6, 6>::Identity();
-
     H_ = Eigen::Matrix<double, 3, 6>::Zero();
     H_(0, 0) = 1.0;
     H_(1, 1) = 1.0;
@@ -80,12 +78,15 @@ auto KalmanTracker::update(const Point3D& measurement,
         return measurement;
     }
 
-    F_(0, 3) = dt;
-    F_(1, 4) = dt;
-    F_(2, 5) = dt;
+    // Local transition matrix, exactly like predict(): keeping this in a
+    // member would make the filter's only mutable shared state an ambiguity.
+    Eigen::Matrix<double, 6, 6> f = Eigen::Matrix<double, 6, 6>::Identity();
+    f(0, 3) = dt;
+    f(1, 4) = dt;
+    f(2, 5) = dt;
 
-    x_ = F_ * x_;
-    P_ = F_ * P_ * F_.transpose() + Q_;
+    x_ = f * x_;
+    P_ = f * P_ * f.transpose() + Q_;
 
     const Eigen::Vector3d z(measurement.x, measurement.y, measurement.z);
     const Eigen::Vector3d y = z - H_ * x_;

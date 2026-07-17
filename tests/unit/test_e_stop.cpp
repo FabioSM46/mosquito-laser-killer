@@ -43,8 +43,16 @@ TEST_F(EStopTest, ReleasedInitially) {
     EXPECT_CALL(*mock_gpio_, set_direction_input())
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
+    MockGpio* raw_ptr = mock_gpio_.get();
     EStop e_stop(std::move(mock_gpio_), 3);
     (void)e_stop.initialize();
+
+    // Drive the debounce, not just the member initializer: a released button
+    // (active LOW -> reads HIGH) must stay un-pressed through update() calls.
+    EXPECT_CALL(*raw_ptr, read()).WillRepeatedly(Return(true));
+    e_stop.update();
+    e_stop.update();
+    e_stop.update();
 
     EXPECT_FALSE(e_stop.is_pressed());
 }

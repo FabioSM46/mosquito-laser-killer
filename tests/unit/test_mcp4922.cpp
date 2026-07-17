@@ -124,3 +124,22 @@ TEST_F(MCP4922Test, NullSpiLeavesUninitialized) {
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), HardwareError::SpiTransferFailed);
 }
+
+// §4.6 RAII shutdown: the galvo must not be left holding the last commanded
+// deflection when the process tears down — the destructor re-centres both
+// channels to mid-scale (0 V differential) without any caller involvement.
+TEST_F(MCP4922Test, DestructorCentersBothChannels) {
+    std::vector<uint16_t> calls;
+    EXPECT_CALL(*raw_spi_, write16(_)).WillRepeatedly(Invoke(make_recorder(calls)));
+
+    {
+        MCP4922 dac(std::move(mock_spi_));
+        ASSERT_TRUE(dac.is_initialized());
+        calls.clear();  // ignore the constructor's centring writes
+        ASSERT_TRUE(dac.write({4095, 0}).has_value());
+        calls.clear();  // ignore the deflection writes too
+    }  // ~MCP4922 runs here
+
+    constexpr uint16_t kCenter = 2048;
+    EXPECT_THAT(calls, ElementsAre(DAC_A_CMD | kCenter, DAC_B_CMD | kCenter));
+}

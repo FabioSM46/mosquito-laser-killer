@@ -18,7 +18,15 @@ StereoMatcher::StereoMatcher(const SystemConfig::Stereo& config,
     , focal_length_px_(config.focal_length_px)
     , cx_(config.cx)
     , cy_(config.cy)
-    , epipolar_tolerance_px_(detection.epipolar_tolerance_px) {
+    , epipolar_tolerance_px_(
+          // A NaN or non-positive tolerance fails the epipolar gate OPEN
+          // (`std::abs(dv) > tol` is false for NaN, and <= 0 only rejects
+          // exact-zero offsets), so sanitize at the boundary: anything that is
+          // not a finite positive tolerance becomes 0, the strictest gate.
+          std::isfinite(detection.epipolar_tolerance_px) &&
+                  detection.epipolar_tolerance_px > 0.0
+              ? detection.epipolar_tolerance_px
+              : 0.0) {
     // d = f * b / z, so the near plane gives the largest disparity.
     if (bounds.z_max > 0.0 && bounds.z_min > 0.0) {
         min_disparity_px_ = (focal_length_px_ * baseline_m_) / bounds.z_max;
