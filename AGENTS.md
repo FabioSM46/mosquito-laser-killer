@@ -293,6 +293,7 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
 | `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
 | `MCP4922Test` | Command-bit format, range rejection, **destructor re-centres both channels** (§4.6 RAII shutdown) |
+| `DifferentialGalvoDriverTest` | Complementary A/B channel writes for the differential pair, init centres both axes (and fails closed on a null/uninitialised/failing DAC), out-of-range rejection, DAC-failure propagation, `zero()` centres at midpoint |
 
 ### 7.2 Stress Tests
 
@@ -329,10 +330,12 @@ mosquito-laser-killer/
 │   │   ├── icamera.h            # Camera interface (pure virtual)
 │   │   ├── idac.h               # DAC interface (pure virtual)
 │   │   ├── ilaser.h             # Laser interface (pure virtual)
+│   │   ├── igalvo_driver.h      # Galvo driver interface (pure virtual)
 │   │   ├── gpio_impl.h/.cpp     # Raspberry Pi GPIO via sysfs/libgpiod
 │   │   ├── spi_impl.h/.cpp      # Linux SPI via spidev
 │   │   ├── camera_impl.h/.cpp   # OV9281 via V4L2
 │   │   ├── mcp4922.h/.cpp       # MCP4922 DAC via SPI
+│   │   ├── differential_galvo_driver.h/.cpp  # ±5V differential galvo drive over the DAC pair
 │   │   └── laser.h/.cpp         # Laser TTL control with safety timers
 │   ├── safety/
 │   │   ├── system_state.h       # SystemState enum + SystemStateMachine
@@ -370,6 +373,8 @@ mosquito-laser-killer/
 │   │   ├── test_detector.cpp
 │   │   ├── test_stereo_matcher.cpp
 │   │   ├── test_kalman_tracker.cpp
+│   │   ├── test_differential_galvo_driver.cpp
+│   │   ├── test_mcp4922.cpp
 │   │   ├── test_config_validator.cpp
 │   │   ├── test_print.cpp             # non-blocking logger (§4.11)
 │   │   └── test_signal_handling.cpp
