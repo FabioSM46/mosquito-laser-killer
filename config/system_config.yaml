@@ -4,10 +4,18 @@
 # the safety implications of each parameter.
 
 # --- Laser Safety Parameters ---
-settle_delay_ms: 3.0          # Galvo mechanical settling time before laser fire
-max_pulse_duration_ms: 100.0  # Hard limit on consecutive laser emission
-cooldown_seconds: 10.0        # Mandatory cooldown period after each pulse
-watchdog_missed_threshold: 3  # Number of missed heartbeats before SAFE_HALT
+# Every value below is range-checked at startup by validate_engagement_volume();
+# a value outside its bound aborts the process rather than degrading a guard.
+settle_delay_ms: 3.0          # Galvo settling before fire. Must be in [0.5, 50].
+max_pulse_duration_ms: 100.0  # Hard limit on consecutive laser emission. Must be in (0, 100].
+cooldown_seconds: 10.0        # Mandatory cooldown after each pulse. Must be >= 1.0.
+# Absolute heartbeat timeout, deliberately NOT derived from target_fps: a
+# performance knob must never retune a safety interlock. Budget: ~10ms worst-case
+# non-RTOS scheduling latency, plus margin. Must be in [5, 500].
+watchdog_timeout_ms: 25.0
+# How long the processing pipeline has to produce its first heartbeat before the
+# watchdog fails closed. Cameras take a few hundred ms to open. Must be in [100, 60000].
+watchdog_startup_grace_ms: 5000.0
 laser_pin: 18                 # GPIO pin for laser TTL output (3.3V, level-shifted to 5V)
 arm_switch_pin: 24            # GPIO pin for arming key switch (reads HIGH when armed)
 e_stop_pin: 25                # GPIO pin for mushroom E-stop (active LOW, pulled HIGH when released)
@@ -107,3 +115,22 @@ stereo:
   focal_length_px: 500.0 # Calibrated focal length in pixels (3mm lens @ 640-wide full sensor ~= 500; override with chessboard calibration)
   cx: 320.0              # Principal point x (= frame_width / 2)
   cy: 200.0              # Principal point y (= frame_height / 2)
+
+# --- Target Detection ---
+# Each camera's frame is segmented into connected bright regions, and blobs are
+# paired across cameras only when they satisfy the epipolar constraint and the
+# disparity implied by the bounding_box z range. An ambiguous scene yields no
+# target: a wrong correspondence fabricates a z, and z is what decides whether
+# something is a mosquito at 0.7m or a face across the room.
+detection:
+  threshold: 128            # 8-bit intensity gate. Must be in [1, 254].
+  # Blob area bounds in pixels. A 5mm target at f=500px subtends ~5px across at
+  # z=0.5m (~20px area) and ~2.5px at z=1.0m (~5px area), so the floor must stay
+  # low. The ceiling is what rejects lamps, windows and specular glints.
+  # The startup validator cross-checks min_blob_area_px against target_size_m,
+  # focal_length_px and z_max, and warns if no real target could ever pass.
+  min_blob_area_px: 4
+  max_blob_area_px: 400
+  max_blobs: 8              # Busier frames cannot be matched unambiguously -> no target.
+  epipolar_tolerance_px: 2.0  # Max |v_left - v_right| for a rectified pair.
+  target_size_m: 0.005      # Nominal mosquito body length, used for the area sanity check.

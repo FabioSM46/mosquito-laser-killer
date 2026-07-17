@@ -28,6 +28,18 @@ CoordinateMapper::CoordinateMapper(const BoundingBox3D& bounding_box,
 
 auto CoordinateMapper::map_to_dac(const Point3D& target)
     -> std::expected<DacValues, MappingError> {
+    // Reject non-finite coordinates up front. Every comparison below is false for
+    // NaN, so each individual guard fails OPEN — and lround(NaN) is unspecified,
+    // yielding DAC code 0 (full deflection) while reporting success. Today only
+    // BoundingBox3D::contains happens to catch NaN, and relying on one
+    // incidentally-correct comparison polarity is not defense in depth.
+    if (!std::isfinite(target.x) || !std::isfinite(target.y) ||
+        !std::isfinite(target.z)) {
+        println(stderr, "[MAPPER] Rejecting non-finite target: ({}, {}, {})",
+                     target.x, target.y, target.z);
+        return std::unexpected(MappingError::Invalid3DPoint);
+    }
+
     if (!bounding_box_.contains(target)) {
         println(stderr, "[MAPPER] Target OUTSIDE bounding box: ({:.3f}, {:.3f}, {:.3f})",
                      target.x, target.y, target.z);
@@ -65,7 +77,10 @@ auto CoordinateMapper::point_to_angles(const Point3D& p)
 
 auto CoordinateMapper::angle_to_dac_code(double angle_deg) const
     -> std::expected<uint16_t, MappingError> {
-    if (input_scale_v_per_deg_ <= 0.0 || dac_ref_voltage_ <= 0.0) {
+    // Both comparisons are phrased so a NaN field falls into the reject branch:
+    // `x <= 0.0` is false for NaN and would pass a NaN scale or reference through.
+    if (!std::isfinite(input_scale_v_per_deg_) || input_scale_v_per_deg_ <= 0.0 ||
+        !std::isfinite(dac_ref_voltage_) || dac_ref_voltage_ <= 0.0) {
         return std::unexpected(MappingError::ConversionError);
     }
 
@@ -81,14 +96,17 @@ auto CoordinateMapper::angle_to_dac_code(double angle_deg) const
 
     const double normalized = (v_diff / dac_ref_voltage_) + 1.0;
     const double code = normalized * (dac_max_value_ / 2.0);
-    const int dac = static_cast<int>(std::lround(code));
 
-    if (dac < 0 || dac > 4095) {
-        println(stderr, "[MAPPER] DAC code {} out of 0–4095 range", dac);
+    // Range-check in the double domain, before lround: a NaN here fails every
+    // comparison and falls into the reject branch, while lround(NaN) is
+    // unspecified and can wrap into [0, 4095] as a legitimate-looking code.
+    if (!(code >= 0.0 && code <= dac_max_value_)) {
+        println(stderr, "[MAPPER] DAC code {:.3f} out of 0–{} range", code,
+                     dac_max_value_);
         return std::unexpected(MappingError::DacRangeInvalid);
     }
 
-    return static_cast<uint16_t>(dac);
+    return static_cast<uint16_t>(std::lround(code));
 }
 
 auto CoordinateMapper::angles_to_dac(double angle_x, double angle_y)

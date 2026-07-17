@@ -32,13 +32,19 @@ DifferentialGalvoDriver::DifferentialGalvoDriver(std::unique_ptr<IDac> dac_x,
 }
 
 DifferentialGalvoDriver::~DifferentialGalvoDriver() {
-    if (dac_x_ && dac_y_) {
-        auto result = zero();
-        if (!result.has_value()) {
-            println(stderr, "[GALVO] Failed to zero on shutdown: {}",
-                         to_string(result.error()));
-        }
+    // Only confirm what was actually achieved — see the note in ~Laser.
+    if (!dac_x_ || !dac_y_) {
+        println(stderr, "[GALVO] Shutdown: DAC missing, galvo position UNKNOWN");
+        return;
     }
+
+    auto result = zero();
+    if (!result.has_value()) {
+        println(stderr, "[GALVO] Shutdown: FAILED to zero: {} — "
+                     "GALVO POSITION UNKNOWN", to_string(result.error()));
+        return;
+    }
+
     println("[GALVO] Shutdown complete, both axes at center (0V differential)");
 }
 
@@ -68,6 +74,15 @@ auto DifferentialGalvoDriver::set_position(uint16_t x, uint16_t y)
     if (!y_result.has_value()) {
         println(stderr, "[GALVO] Y-axis DAC write failed: {}",
                      to_string(y_result.error()));
+        // X already took its new value, leaving the galvo at a partial,
+        // never-commanded position. Best-effort re-center X before reporting
+        // the failure; if this too fails the higher layer halts anyway.
+        constexpr uint16_t k_center = 2048;
+        auto restore = dac_x_->write({k_center, k_center});
+        if (!restore.has_value()) {
+            println(stderr, "[GALVO] X-axis re-center also failed: {}",
+                         to_string(restore.error()));
+        }
         return std::unexpected(y_result.error());
     }
 

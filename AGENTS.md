@@ -57,7 +57,9 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 
 The Processing Thread dequeues **all** frames at once, discarding all but the newest. If the queue accumulated N frames during processing, N-1 are dropped. This guarantees the tracking pipeline always operates on the freshest data — stale frames would cause the laser to aim at positions the target already vacated.
 
-Implementation: `ThreadSafeQueue::drain_all()` returns all queued items; caller keeps only the last.
+The Control Thread does the same with `TargetCommand`s, for the same reason: a queued command aims at a position the target has already left. It previously used a blocking `pop(16ms)`, which took the *oldest* command and let the controller lag arbitrarily far behind after any stall — and, because that blocking pop sat between the max-pulse checks, it widened the true pulse bound to ~116ms.
+
+Implementation: `ThreadSafeQueue::drain_all()` returns all queued items; caller keeps only the last. It never blocks, so the control loop's period is set by its own pacing sleep.
 
 ### 2.3 Thread Lifecycle
 
@@ -92,7 +94,9 @@ Implementation: `ThreadSafeQueue::drain_all()` returns all queued items; caller 
 - `TRACKING → IDLE` / `ARMED → IDLE`: Arm switch OFF (disarm)
 - `FIRING → COOLDOWN`: Pulse complete, abort, or max pulse duration exceeded
 - `COOLDOWN → IDLE`: 10-second cooldown elapsed (re-arms to ARMED if switch still ON)
-- `ANY → SAFE_HALT`: Watchdog timeout, E-stop, hardware error, capture failure, signal shutdown
+- `ANY → SAFE_HALT`: Watchdog timeout, E-stop, control-thread hardware error
+
+Capture-thread failures and signal shutdown (SIGINT/SIGTERM) do NOT route through the state machine: the capture thread may only set atomics, and the signal handler only sets the shutdown flag. Both paths stop the threads and make the laser safe via the control-thread exit path (`laser->emergency_shutdown()`, `galvo->zero()`) plus RAII destructors, exiting with a non-zero code (`hardware_init_failed` for a capture fault) rather than entering SAFE_HALT.
 
 No transition from `SAFE_HALT` back to any operational state — requires full system restart.
 
@@ -102,7 +106,13 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 ### 4.1 Laser Pulse Duration Limit (≤100ms)
 
-**Enforced by:** `FiringController` owns a `std::chrono::steady_clock::time_point` tracking pulse start. On every SPI cycle (~8.3ms), a check `(now - pulse_start) > 100ms` forces `laser.write(false)`. There is no code path that can hold the pin HIGH for longer — the check happens in the same function that writes the pin.
+**Enforced by:** `FiringController::execute_cycle()` checks `(now - pulse_start_) >= max_pulse_ms_` before anything else and forces `laser.fire(false)`. `Laser::enforce_max_pulse()` repeats the check at the HAL level, independently of the sequencer, and `control_step()` calls it first thing every cycle. `Laser::fire()` additionally re-checks on re-entry.
+
+**The real bound is ~105ms, not 100ms.** The check only runs when the control thread runs, so the true limit is `max_pulse_duration_ms` plus one control cycle (~4.8ms at 210fps) plus scheduling jitter. Quoting a flat 100ms would be a claim the software cannot make.
+
+**Residual risk — no hardware backstop.** Every mechanism that can end a pulse (`enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, the E-stop) runs on the *control thread itself*. There is no `/dev/watchdog`, monostable, or independent timer behind the GPIO. If that thread stalls with the pin HIGH, no software path turns the laser off; recovery is the operator opening the arm switch, which is a true hardware interlock (it cuts 12V to the driver — see `docs/HARDWARE_WIRING.md`). The E-stop is *not* a substitute here: its GPIO is polled by the very thread that would be hung.
+
+This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall. **A retriggerable monostable on the laser TTL line remains the recommended hardware mitigation**; it is the only thing that would make a flat pulse-duration guarantee true.
 
 ### 4.2 Firing Cooldown (10 seconds)
 
@@ -112,29 +122,41 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 **Enforced by:** `FiringController::execute_cycle()`:
 1. If a pulse is active, only enforce max pulse duration — **no galvo writes** while the laser is ON
-2. When not firing: write DAC for the target, wait `settle_delay_ms_`, set `galvo_settled_`
-3. Fire only when `armed_ && target_valid_ && galvo_settled_ && may_fire()`
-4. After pulse ends, clear settle/target before the next DAC command
+2. When not firing: write DAC for the target, stamp `galvo_command_time_`, and set `galvo_settled_` only once `now - galvo_command_time_` **strictly exceeds** `settle_delay_ms_`
+3. Fire only when `armed_ && target_valid_ && galvo_settled_ && may_fire(now)`
+4. After a pulse ends — by max duration **or** abort — clear settle/target before the next DAC command
 
 The galvo command path is dead code while `pulse_active_ == true`.
 
+The comparison in (2) is strictly `>`, not `>=`. `galvo_command_time_` is stamped in the *same* cycle the DAC is written, so with a `>=` comparison a `settle_delay_ms` of 0 marks the galvo settled at zero elapsed time and fires microseconds after the SPI write, while the mirrors are still slewing — painting the beam across the whole scan field at full power. `config_validator` also rejects `settle_delay_ms < 0.5`; the strict comparison means the controller fails closed even if that bound is ever loosened.
+
+Settle is measured against a real deadline (`galvo_command_time_`), not an assumption that the caller sleeps.
+
 ### 4.4 Software Watchdog
 
-**Enforced by:** `Watchdog` class in the Control Thread reads `heartbeat_atomic_`. If three consecutive cycles pass without an updated heartbeat, `SystemStateMachine::transition(SAFE_HALT)` is called, which:
+**Enforced by:** `Watchdog`, polled by the Control Thread, watches the Processing Thread's heartbeat. If the heartbeat is older than `watchdog_timeout_ms`, it:
 1. Forces laser GPIO LOW via `Laser::emergency_shutdown()`
 2. Commands galvos to mid-scale center (0 V differential)
-3. Sets internal state to `SAFE_HALT`
-4. Logs the event with timestamp
+3. Transitions to `SAFE_HALT`
 
-**Tolerance:** 3 missed frames × 8.3ms ≈ 25ms accounts for non-RTOS scheduling jitter.
+**Tolerance:** `watchdog_timeout_ms` (default 25ms), an **absolute duration**. It is deliberately *not* derived from `target_fps`: frame rate is a performance knob, and a performance knob must never retune a safety interlock. (It previously was derived, so raising `target_fps` to 210 silently cut the tolerance from 25ms to 14.3ms against a documented ~10ms worst-case scheduling latency.)
+
+**Startup grace:** `watchdog_startup_grace_ms` (default 5s). Until the first *real* heartbeat arrives, `check()` passes — USB cameras take hundreds of ms to open. The grace is bounded: once it expires with no heartbeat, the watchdog fails closed.
+
+**`feed()` accepts strictly newer heartbeats only.** The control thread forwards the producer's atomic every cycle whether or not the producer has run, so a value that has not advanced must not reset the timer. `main` seeds that atomic with `time_point::min()`, not `now()`; seeding it with a real timestamp made the first `feed()` look like a genuine heartbeat, which destroyed the grace and made the watchdog measure wall-time-since-launch — halting the system ~16-32ms after start, before the cameras could open, permanently (SAFE_HALT is terminal).
+
+**Scope:** this watches the *Processing* thread. Nothing watches the Control Thread — see §4.1.
 
 ### 4.5 Coordinate Bounds Checking
 
 **Enforced by:** `CoordinateMapper::map_to_dac()` returns `std::expected<DacValues, MappingError>`. The validation chain:
+0. Reject non-finite coordinates (`std::isfinite` on x/y/z) → `Invalid3DPoint`
 1. Check 3D point against `BoundingBox3D` (safe firing volume)
 2. Convert to angles, verify within galvo mechanical limits
 3. Convert via driver scale (`θ · V/° → V_diff → DAC code`); reject if `|V_diff|` exceeds `dac_max_diff_voltage` or code is outside 0–4095 (**no silent clamp**)
 4. If any step fails, return `std::unexpected(error)` → no DAC write occurs
+
+**Step 0 is load-bearing.** Every subsequent comparison fails *open* on NaN — `a < b` and `a > b` are both false — and `std::lround(NaN)` is unspecified (LONG_MIN here), which casts to 0 and passes the 0–4095 range check as a legitimate code: full negative deflection on both axes, reported as success. Only `BoundingBox3D::contains()` happens to catch NaN today, and that is an accident of its comparison polarity, not defense in depth.
 
 ### 4.5b Arm Switch Gating
 
@@ -152,7 +174,9 @@ The galvo command path is dead code while `pulse_active_ == true`.
 
 ### 4.7 Hardware Error Propagation
 
-**Enforced by:** All HAL operations return `std::expected<T, HardwareError>`. Callers MUST handle the error — the `std::expected` API forces explicit `.value()` or `.and_then()` calls. Unchecked errors are a compile-time warning (via `-Werror=unused-result`). Failures propagate to `SAFE_HALT` transition.
+**Enforced by:** All HAL operations return `std::expected<T, HardwareError>`. Callers MUST handle the error — `[[nodiscard]]` plus `-Werror=unused-result` makes an ignored result a compile error, **in the tests too** (`tests/CMakeLists.txt` must never relax it; when it did, 16 discarded safety results went unnoticed, two of them in tests whose only call was a dropped `execute_cycle()`).
+
+**Propagation to SAFE_HALT:** `FiringController` deliberately holds no `SystemStateMachine` — it is a control component, not a safety authority. On a hardware fault it latches itself off (`force_laser_off_and_halt`) and exposes `is_halted()`. `control_step()` polls that every cycle and drives the transition. Without that poll the loop spins forever with the laser dead while the operator's readout still reads ARMED — which is what happened before, because the function named `..._and_halt` had no way to halt anything.
 
 ### 4.8 Hardware Emergency Stop (E-Stop)
 
@@ -164,7 +188,42 @@ The galvo command path is dead code while `pulse_active_ == true`.
 
 ### 4.10 Config Engagement Validation
 
-**Enforced by:** `validate_engagement_volume()` at startup. Critical findings (box beyond galvo cone, galvo limits beyond DAC voltage budget, invalid stereo/pulse limits) **abort** process start. Non-critical findings (e.g. camera FOV narrower than galvo cone) log warnings only.
+**Enforced by:** `validate_engagement_volume()` at startup. Critical findings **abort** process start; non-critical findings log warnings only.
+
+**Critical:** box beyond galvo cone; non-finite or inverted galvo limits; galvo limits beyond DAC voltage budget; non-positive stereo baseline/focal length; non-positive `dac_reference_voltage`; non-finite bounding-box coordinates; `max_pulse_duration_ms` outside (0, 100]; `cooldown_seconds` < 1.0; `settle_delay_ms` outside [0.5, 50]; `watchdog_timeout_ms` outside [5, 500]; `watchdog_startup_grace_ms` outside [100, 60000]; non-positive `target_fps` or frame dimensions; principal point outside the frame; invalid detection thresholds/areas/tolerances.
+
+Every bound above exists because the parameter can disable a guard from YAML alone:
+- `cooldown_seconds: 0` → `end_pulse` sets `cooldown_until_ = now` → re-fire within ~15ms → ~87% duty cycle, effectively CW 2.5W.
+- `settle_delay_ms: 0` → galvo marked settled in the same cycle the DAC was written → fires while the mirrors slew, painting the beam across the scan field at full power.
+- `target_fps: 0` → `1'000'000 / target_fps` → SIGFPE.
+
+A safety bound enforced by a code comment is not enforced. Comparisons are phrased so a NaN from YAML falls into the reject branch.
+
+**Non-critical:** camera FOV narrower than the galvo cone; principal point far from frame centre; `min_blob_area_px` larger than the area a `target_size_m` target projects to at `z_max` (this last one exists because the original `min_contour_area = 50` could not be met by a 5mm mosquito anywhere in the engagement volume — it admitted only objects 2-3× larger, i.e. glints and reflectors).
+
+### 4.11 Non-Blocking Logging
+
+**Enforced by:** `core/print.h`. `log_init()` marks stdout/stderr `O_NONBLOCK` before any thread starts; writes that would block are dropped and counted. See §4.1 for why: the control thread logs while the pin is HIGH, and a blocking write there stalls the only thread that can end a pulse. `std::println` is deliberately unused — it offers no way to decline to block.
+
+`log_shutdown()` runs on every exit path. It reports the dropped-line count (dropped lines mean the log is an incomplete record of a run involving a Class 4 laser, which the reader must know) and **restores the original descriptor flags**. That restore matters: `O_NONBLOCK` is a property of the shared *open file description*, not of the fd, so when stdout is inherited from an interactive shell the flag is visible to the shell too, and a shell getting EAGAIN on its own stdout misbehaves.
+
+A write truncated by `EAGAIN` leaves a fragment with no newline, so the next line is prefixed with one rather than splicing onto it and reading as a single corrupt entry.
+
+Destructor and shutdown logs state only what was actually achieved. `~Laser` prints "pin LOW confirmed" only when the write succeeded, and reports `PIN STATE UNKNOWN` otherwise; an unconditional confirmation makes the post-incident trace assert a state that was never verified.
+
+---
+
+### 4.12 Target Validity — Detection and Correspondence
+
+The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**: the beam direction depends only on the left pixel. z's sole job is therefore the safety discriminator — is this a mosquito at 0.7m, or a face across the room? A z computed from an unverified correspondence defeats the primary guard, so correspondence is validated rather than assumed.
+
+**Per-blob segmentation (`Detector::detect_blobs`).** Each frame is segmented into connected components; every blob keeps its own centroid. A frame-wide centroid averages unrelated objects into a point where nothing physically exists, and that phantom passes every downstream gate: it has a clean centroid, triangulates to a real depth, and sits inside the bounding box. Worse, it sits *between* the real targets — two mosquitoes at u=200 and u=440 collapsed to a single "detection" at u=320, which at cx=320 is dead on the optical axis. Blobs outside `[min_blob_area_px, max_blob_area_px]` are dropped; a short frame or a scene with more than `max_blobs` candidates yields **nothing** (fail closed).
+
+**Validated correspondence (`StereoMatcher::match`).** A blob pair is a candidate only if it satisfies the epipolar constraint (`|v_left − v_right| <= epipolar_tolerance_px` — for a rectified pair the same object lands on the same row, so a vertical offset *proves* they are different objects), falls inside the disparity window implied by the bounding-box z range (`d = f·b/z`), and has a plausible area ratio. **If more than one candidate survives, the result is nullopt** — an ambiguous scene is a guess, and a wrong guess aims a Class 4 beam at a point never verified to hold a target.
+
+**Fail-closed at the boundary.** `triangulate` rejects non-finite pixels itself rather than delegating validity to a distant consumer.
+
+**Coasting through brief detection gaps.** A single frame without a match does not drop the track: the processing thread coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction; it can only fire at a point the track extrapolates to from a target that was verified inside the box ≤100 ms earlier. Past the horizon `predict()` returns nullopt, the track is reset, and the command goes out invalid — fail closed. Resetting on every lost frame instead would discard the velocity estimate and force re-acquisition from zero on every transient occlusion.
 
 ---
 
@@ -172,7 +231,7 @@ The galvo command path is dead code while `pulse_active_ == true`.
 
 | Feature | Usage |
 |---------|-------|
-| `std::println` / `std::print` | All console logging. Thread-safe, no `std::cout` anywhere |
+| `std::format` + custom `println` (`core/print.h`) | All console logging via the non-blocking logger (see §4.11). `std::println`/`std::print` are deliberately NOT used — they offer no way to decline to block. No `std::cout` anywhere |
 | `std::expected<T, E>` | All hardware operations return expected; no exceptions for hardware |
 | `std::optional` + monadic ops | Target detection pipeline: `.and_then()`, `.transform()`, `.or_else()` |
 | `std::jthread` | All three worker threads; auto-join on destruction |
@@ -194,42 +253,57 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 
 | Component | Mock | What We Test |
 |-----------|------|--------------|
-| `IGpio` | `MockGpio` | Laser pin enforced LOW on init/shutdown/error; pulse duration tracking |
-| `ISpi` | `MockSpi` | DAC values validated in 0–4095 range; SPI errors → SAFE_HALT |
-| `ICamera` | `MockCamera` | Frame timestamps; queue behavior under backpressure |
-| `IDac` | `MockDac` | DAC values validated in 0–4095 range; SPI errors → SAFE_HALT |
+| `IGpio` | `MockGpio` | Laser pin enforced LOW on init/shutdown/error; **drives a real `Laser` so the pin state is observed, not asserted about a mock** |
+| `ISpi` | `MockSpi` | Wire format via a real `MCP4922`; SPI errors → controller latches → SAFE_HALT |
+| `ICamera` | `MockCamera` | Frame timestamps; capture failure → halt |
+| `IDac` | `MockDac` | DAC values validated in 0–4095 range |
 | `IGalvoDriver` | `MockGalvoDriver` | Motion blanking ordering — DAC write before laser fire |
-| `ILaser` | `MockLaser` | Cooldown enforcement; max pulse duration; emergency shutdown |
+| `ILaser` | `MockLaser` | Arm/cooldown/max-pulse gating; `enforce_max_pulse` called every cycle; emergency shutdown |
+
+`ILaser` includes `enforce_max_pulse()` deliberately: it is a safety guard, the control loop must be able to call it on any `ILaser`, and **a guard that cannot be mocked cannot be tested**. It was previously only on the concrete `Laser`, so deleting the call from the control loop failed no test.
+
+Prefer driving the **real** component over a mocked dependency (a real `Laser` over `MockGpio`, a real `MCP4922` over `MockSpi`) rather than mocking the component under test. A test that calls a mock and then asserts the expectation it just satisfied proves nothing.
 
 ---
 
 ## 7. Testing Plan
 
+**The standard a safety test must meet:** *if the guard were deleted from `src/`, would this test fail?* If not, the test is decoration. This is not hypothetical — the suite once had 151 passing tests on a system that could not start, and the tests below are the ones that survived asking that question of every case.
+
+Specifically, do not write: tests that assert on a mock the test itself called; `EXPECT_CALL` with no assertion on the outcome; tests that re-implement the logic under test (a bug in `src/` then gets mirrored into the test); or fixtures configured more permissively than production (`FiringControllerTest` once ran a ±2m box and a ±25° cone — a config this project's own `config_validator` rejects as critical).
+
+`tests/CMakeLists.txt` must never relax `-Werror=unused-result`.
+
 ### 7.1 Unit Tests (Google Test + Google Mock)
 
 | Test Suite | Coverage |
 |-----------|----------|
-| `LaserSafetyTest` | Pin LOW on init, pulse ≤100ms, cooldown enforced, emergency shutdown |
-| `WatchdogTest` | Heartbeat timeout detection, SAFE_HALT transition, tolerance for 3 missed cycles |
-| `ArmSwitchTest` | Debounce HIGH→armed, LOW→disarmed, glitch rejection, init failure |
-| `EStopTest` | Active-low debounce, press/release detection, init failure |
-| `CoordinateMapperTest` | Bounds validation, voltage-scale mapping, DAC range **rejection** (no clamp) |
-| `FiringControllerTest` | Motion blanking (no galvo while firing), arm gate, cooldown, pulse limits |
-| `ControlArmGatingTest` | TRACKING disarm → IDLE, re-arm, no fire when disarmed |
-| `SystemStateMachineTest` | All valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
-| `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness, backpressure behavior |
-| `StereoMatcherTest` | Disparity calculation correctness, invalid match rejection |
-| `KalmanTrackerTest` | Prediction convergence, covariance updates |
-| `SignalHandlerTest` | SIGINT/SIGTERM → laser LOW, DAC zeroed |
+| `LaserSafetyTest` | Pin LOW on init/shutdown/destructor, max-pulse enforcement, emergency shutdown |
+| `WatchdogTest` | Absolute timeout boundary, bounded startup grace, **sentinel vs. real heartbeat**, stale-feed rejection, latching, halt survives hardware failure |
+| `ArmSwitchTest` | Debounce HIGH→armed, LOW→disarmed, glitch rejection, read failure → **disarmed** |
+| `EStopTest` | Active-low debounce, press/release, read failure and uninitialised → **pressed** |
+| `CoordinateMapperTest` | Bounds, galvo cone, voltage-scale DAC **rejection** (no clamp), **non-finite → `Invalid3DPoint`** (asserting the specific error, not merely that something rejected) |
+| `FiringControllerTest` | Startup blanking, arm gate, max pulse (incl. late cycles), cooldown on **every** pulse-end path, motion blanking, settle, DAC-before-fire ordering, faults latch `is_halted()` |
+| `ControlLoopTest` | The real `control_step()`: guard **ordering**, e-stop/watchdog halts, arm gating, fire sequence, target-loss glue (TRACKING→ARMED+clear, FIRING→COOLDOWN+abort), cooldown exit → re-arm, fault → SAFE_HALT, fail-safe GPIO reads |
+| `SystemStateMachineTest` | Valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
+| `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness |
+| `DetectorTest` | **Per-blob centroids (no frame-wide phantom)**, area gates, short frame and >max_blobs → fail closed, threshold boundary |
+| `StereoMatcherTest` | Triangulation, **epipolar rejection**, disparity window, **ambiguous scene → fail closed**, non-finite rejection |
+| `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
+| `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
+| `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
+| `MCP4922Test` | Command-bit format, range rejection, **destructor re-centres both channels** (§4.6 RAII shutdown) |
 
 ### 7.2 Stress Tests
 
 | Test | Method |
 |------|--------|
 | Frame flooding | Push 10× normal frame rate into queue; verify only newest processed |
-| Watchdog jitter | Delay Processing Thread by 20ms, 30ms, 50ms; verify 3-miss tolerance, SAFE_HALT on 4th |
-| Concurrent shutdown | Signal while all threads active; verify laser LOW within one cycle |
-| SPI backpressure | Mock SPI delays; verify queue doesn't overflow |
+| Watchdog jitter | **Real threads**: sustained sub-timeout jitter must not halt; a real producer stall must halt; a producer that never starts rides the grace then fails closed; concurrent stale feeds must not rewind the timer |
+| Concurrent shutdown | **Real `Laser` over `MockGpio`, observing the actual pin**: get it genuinely firing, then shut down / E-stop / SIGINT; verify pin LOW, galvos zeroed, promptly |
+| SPI backpressure | Real `MCP4922` over a delaying/failing `MockSpi` |
+
+Exact timing boundaries belong in unit tests with injected time; stress tests use real threads with generous margins, so scheduler noise cannot produce a false failure.
 
 ---
 
@@ -243,11 +317,12 @@ mosquito-laser-killer/
 ├── config/
 │   └── system_config.yaml       # Runtime configuration (bounding box, settle ms, etc.)
 ├── src/
-│   ├── main.cpp                 # Entry point, signal handlers, thread orchestration
+│   ├── main.cpp                 # Entry point, config load, thread orchestration
 │   ├── core/
 │   │   ├── types.h              # Common types: Point3D, StereoFrame, TargetCommand
 │   │   ├── error.h              # HardwareError enum, MappingError enum
-│   │   └── thread_safe_queue.h  # Lock-protected SPSC/MPSC queue with drain_all
+│   │   ├── thread_safe_queue.h  # Lock-protected SPSC/MPSC queue with drain_all
+│   │   └── print.h              # Non-blocking, best-effort logging (see 4.11)
 │   ├── hal/
 │   │   ├── igpio.h              # GPIO interface (pure virtual)
 │   │   ├── ispi.h               # SPI interface (pure virtual)
@@ -266,12 +341,13 @@ mosquito-laser-killer/
 │   │   ├── arm_switch.h/.cpp    # Arm switch input with debounce
 │   │   └── e_stop.h/.cpp        # Mushroom E-stop input with debounce
 │   ├── vision/
-│   │   ├── detector.h/.cpp      # Mosquito detection (thresholding, morphology)
-│   │   ├── stereo_matcher.h/.cpp # Block-matching stereo disparity
+│   │   ├── detector.h/.cpp      # Per-blob connected-component detection
+│   │   ├── stereo_matcher.h/.cpp # Epipolar-gated correspondence + triangulation
 │   │   └── tracker.h/.cpp       # Kalman filter tracker
 │   └── control/
 │       ├── coordinate_mapper.h/.cpp  # 3D→DAC conversion with bounds checking
-│       └── firing_controller.h/.cpp  # Laser fire sequencing with all safety gates
+│       ├── firing_controller.h/.cpp  # Laser fire sequencing with all safety gates
+│       └── control_loop.h/.cpp       # control_step(): one control-thread iteration
 ├── tests/
 │   ├── CMakeLists.txt
 │   ├── mocks/
@@ -281,18 +357,27 @@ mosquito-laser-killer/
 │   │   ├── mock_dac.h
 │   │   ├── mock_galvo_driver.h
 │   │   └── mock_laser.h
-│   └── unit/
-│       ├── test_safety_guards.cpp
-│       ├── test_watchdog.cpp
-│       ├── test_arm_switch.cpp
-│       ├── test_e_stop.cpp
-│       ├── test_coordinate_mapper.cpp
-│       ├── test_firing_controller.cpp
-│       ├── test_system_state.cpp
-│       ├── test_thread_safe_queue.cpp
-│       ├── test_stereo_matcher.cpp
-│       ├── test_kalman_tracker.cpp
-│       └── test_signal_handling.cpp
+│   ├── unit/
+│   │   ├── test_safety_guards.cpp
+│   │   ├── test_watchdog.cpp
+│   │   ├── test_arm_switch.cpp
+│   │   ├── test_e_stop.cpp
+│   │   ├── test_coordinate_mapper.cpp
+│   │   ├── test_firing_controller.cpp
+│   │   ├── test_control_loop.cpp      # exercises the real control_step()
+│   │   ├── test_system_state.cpp
+│   │   ├── test_thread_safe_queue.cpp
+│   │   ├── test_detector.cpp
+│   │   ├── test_stereo_matcher.cpp
+│   │   ├── test_kalman_tracker.cpp
+│   │   ├── test_config_validator.cpp
+│   │   ├── test_print.cpp             # non-blocking logger (§4.11)
+│   │   └── test_signal_handling.cpp
+│   └── stress/
+│       ├── test_frame_flooding.cpp
+│       ├── test_watchdog_jitter.cpp
+│       ├── test_concurrent_shutdown.cpp
+│       └── test_spi_backpressure.cpp
 └── .clang-format
 ```
 
@@ -301,7 +386,8 @@ mosquito-laser-killer/
 ## 9. Build System
 
 - **CMake 3.25+** with `CXX_STANDARD 23`
-- Compile flags: `-Wall -Wextra -Werror -Werror=unused-result -Wpedantic`
+- Compile flags: `-Wall -Wextra -Werror -Werror=unused-result -Wpedantic` — **including the tests** (`tests/CMakeLists.txt` must not relax `-Werror=unused-result`; see §4.7)
+- Libraries: `mosquito_hal` → `mosquito_safety` → `mosquito_control`, plus `mosquito_vision`. Tests link these libraries rather than re-listing `src/*.cpp`, so a test can never link a different build of a safety component than the binary ships.
 - Architecture-specific tuning: `-march=native` — automatically targets the host CPU's full instruction set (arm64 NEON/v8 on RPi 5) without hardcoding architecture names
 - Release build: `-O3 -DNDEBUG` — aggressive optimization, assertions stripped
 - Debug build: `-O0 -g3` — no optimization, full debug symbols
@@ -340,7 +426,7 @@ For the physical wiring corresponding to these protocols, see `docs/HARDWARE_WIR
 ## 12. Coding Standards (Non-Negotiable)
 
 - No raw `new`/`delete` — `std::unique_ptr`, `std::make_unique` only
-- No `std::cout` — `std::println` / `std::print` only
+- No `std::cout` and no `std::println`/`std::print` — the non-blocking `println` from `core/print.h` only (see §4.11)
 - No exceptions for hardware errors — `std::expected` only
 - No raw loops over `std::optional` chains — monadic operations only
 - No polling without timeout — all waits have bounded duration

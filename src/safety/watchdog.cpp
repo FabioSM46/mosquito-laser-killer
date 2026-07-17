@@ -4,26 +4,40 @@
 Watchdog::Watchdog(SystemStateMachine& state_machine,
                    ILaser& laser,
                    IGalvoDriver& galvo,
-                   uint32_t missed_threshold,
-                   int target_fps)
+                   std::chrono::milliseconds timeout,
+                   std::chrono::milliseconds startup_grace)
     : state_machine_(state_machine)
     , laser_(laser)
     , galvo_(galvo)
-    , missed_threshold_(missed_threshold)
-    , frame_period_(target_fps > 0 ? 1'000'000 / target_fps : 8333) {
-    last_heartbeat_.store(std::chrono::steady_clock::time_point::min(),
-                          std::memory_order_release);
-    println("[WATCHDOG] Initialized, threshold: {} missed cycles, frame period: {}us "
-                 "(target_fps: {})", missed_threshold_, frame_period_.count(), target_fps);
+    , timeout_(std::chrono::duration_cast<std::chrono::steady_clock::duration>(timeout))
+    , startup_grace_(
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(startup_grace)) {
+    println("[WATCHDOG] Initialized, timeout: {}ms, startup grace: {}ms",
+            timeout.count(), startup_grace.count());
 }
 
 auto Watchdog::feed(std::chrono::steady_clock::time_point heartbeat) -> void {
-    last_heartbeat_.store(heartbeat, std::memory_order_release);
+    auto prev = last_heartbeat_.load(std::memory_order_acquire);
 
-    auto current_missed = missed_count_.load(std::memory_order_acquire);
-    if (current_missed > 0) {
-        missed_count_.store(0, std::memory_order_release);
+    // Strictly-newer check: the control thread forwards the producer's atomic
+    // unconditionally every cycle, so a value that has not advanced means the
+    // producer has not run. Accepting it would defeat the timeout entirely.
+    while (heartbeat > prev) {
+        if (last_heartbeat_.compare_exchange_weak(prev, heartbeat,
+                                                  std::memory_order_release,
+                                                  std::memory_order_acquire)) {
+            return;
+        }
     }
+}
+
+auto Watchdog::time_since_heartbeat(std::chrono::steady_clock::time_point now) const
+    -> std::chrono::steady_clock::duration {
+    auto last = last_heartbeat_.load(std::memory_order_acquire);
+    if (last == std::chrono::steady_clock::time_point::min()) {
+        return std::chrono::steady_clock::duration::max();
+    }
+    return now - last;
 }
 
 auto Watchdog::check(std::chrono::steady_clock::time_point now) -> bool {
@@ -31,21 +45,35 @@ auto Watchdog::check(std::chrono::steady_clock::time_point now) -> bool {
         return false;
     }
 
+    auto expected_first = std::chrono::steady_clock::time_point::min();
+    first_check_.compare_exchange_strong(expected_first, now,
+                                         std::memory_order_release,
+                                         std::memory_order_acquire);
+    auto first = first_check_.load(std::memory_order_acquire);
+
     auto last = last_heartbeat_.load(std::memory_order_acquire);
 
     if (last == std::chrono::steady_clock::time_point::min()) {
+        // No heartbeat has ever arrived. Allow a bounded window for the capture
+        // and processing threads to come up, then fail closed — an unbounded
+        // grace period would mean a producer that never starts is never noticed.
+        if (now - first > startup_grace_) {
+            println(stderr, "[WATCHDOG] No heartbeat within startup grace ({}ms). "
+                    "Triggering SAFE_HALT.",
+                    std::chrono::duration_cast<std::chrono::milliseconds>(startup_grace_)
+                        .count());
+            trigger_safe_halt();
+            return false;
+        }
         return true;
     }
 
     auto elapsed = now - last;
-    auto expected_cycles = static_cast<uint32_t>(
-        elapsed / frame_period_);
-
-    missed_count_.store(expected_cycles, std::memory_order_release);
-
-    if (expected_cycles >= missed_threshold_) {
-        println(stderr, "[WATCHDOG] Heartbeat lost for {} cycles (threshold: {}). "
-                     "Triggering SAFE_HALT.", expected_cycles, missed_threshold_);
+    if (elapsed > timeout_) {
+        println(stderr, "[WATCHDOG] Heartbeat stale for {}ms (timeout: {}ms). "
+                "Triggering SAFE_HALT.",
+                std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(),
+                std::chrono::duration_cast<std::chrono::milliseconds>(timeout_).count());
         trigger_safe_halt();
         return false;
     }

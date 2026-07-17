@@ -36,13 +36,22 @@ Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin, double max_pulse_ms)
 }
 
 Laser::~Laser() {
-    if (gpio_) {
-        auto result = gpio_->write(false);
-        if (!result.has_value()) {
-            println(stderr, "[LASER] Destructor: failed to force pin LOW: {}",
-                         to_string(result.error()));
-        }
+    // Only claim the pin is LOW if the write that makes it so actually succeeded.
+    // An unconditional confirmation is worse than no log at all: the post-incident
+    // trace would read "pin LOW confirmed" for a pin that is still HIGH.
+    if (!gpio_) {
+        println(stderr, "[LASER] Shutdown: NO GPIO interface, pin state UNKNOWN");
+        return;
     }
+
+    auto result = gpio_->write(false);
+    if (!result.has_value()) {
+        println(stderr, "[LASER] Shutdown: FAILED to force pin LOW: {} — "
+                     "PIN STATE UNKNOWN, remove power at the arm switch",
+                     to_string(result.error()));
+        return;
+    }
+
     println("[LASER] Shutdown complete, pin LOW confirmed");
 }
 
@@ -64,11 +73,13 @@ auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
             println(stderr, "[LASER] Max pulse exceeded ({:.0f}ms), forcing OFF",
                          max_pulse_ms_);
             auto off = gpio_->write(false);
-            firing_ = false;
             if (!off.has_value()) {
+                // Keep firing_ set: the pin may still be HIGH and is_firing()
+                // must not claim otherwise.
                 emergency_shutdown_ = true;
                 return std::unexpected(off.error());
             }
+            firing_ = false;
             return std::unexpected(HardwareError::LaserEmergencyShutdown);
         }
     }
@@ -109,12 +120,15 @@ auto Laser::enforce_max_pulse(std::chrono::steady_clock::time_point now) -> void
     println(stderr, "[LASER] enforce_max_pulse: duration {:.0f}ms exceeded, forcing OFF",
                  max_pulse_ms_);
     auto result = gpio_->write(false);
-    firing_ = false;
     if (!result.has_value()) {
+        // Keep firing_ set: the write did not land, so the pin may still be
+        // HIGH and is_firing() must not claim otherwise.
         emergency_shutdown_ = true;
         println(stderr, "[LASER] enforce_max_pulse write failed: {}",
                      to_string(result.error()));
+        return;
     }
+    firing_ = false;
 }
 
 auto Laser::emergency_shutdown() -> std::expected<void, HardwareError> {
@@ -122,13 +136,19 @@ auto Laser::emergency_shutdown() -> std::expected<void, HardwareError> {
 
     emergency_shutdown_ = true;
 
-    if (gpio_) {
-        auto result = gpio_->write(false);
-        if (!result.has_value()) {
-            println(stderr, "[LASER] Emergency shutdown: failed to force pin LOW: {}",
-                         to_string(result.error()));
-            return std::unexpected(result.error());
-        }
+    if (!gpio_) {
+        // Same honesty rule as the destructor: claim only what was achieved.
+        println(stderr, "[LASER] Emergency shutdown: NO GPIO interface, "
+                     "PIN STATE UNKNOWN");
+        return std::unexpected(HardwareError::GpioWriteFailed);
+    }
+
+    auto result = gpio_->write(false);
+    if (!result.has_value()) {
+        println(stderr, "[LASER] Emergency shutdown: failed to force pin LOW: {} — "
+                     "PIN STATE UNKNOWN, remove power at the arm switch",
+                     to_string(result.error()));
+        return std::unexpected(result.error());
     }
 
     firing_ = false;

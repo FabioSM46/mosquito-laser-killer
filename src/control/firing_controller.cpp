@@ -6,31 +6,26 @@ FiringController::FiringController(ILaser& laser,
                                    CoordinateMapper& mapper,
                                    double max_pulse_ms,
                                    double cooldown_s,
-                                   double settle_ms)
+                                   double settle_ms,
+                                   std::chrono::steady_clock::time_point start_time)
     : laser_(laser)
     , galvo_(galvo)
     , mapper_(mapper)
     , max_pulse_ms_(max_pulse_ms)
     , cooldown_s_(cooldown_s)
-    , settle_delay_ms_(settle_ms) {
-    // Production configs use cooldown_s >= 1; tests may pass 0 for deterministic timing.
-    if (cooldown_s_ > 0.0) {
-        cooldown_until_ = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    } else {
-        cooldown_until_ = std::chrono::steady_clock::now();
-    }
+    , settle_delay_ms_(settle_ms)
+    , cooldown_until_(start_time + k_startup_blanking) {
     println("[FIRING] Controller initialized: max_pulse={:.0f}ms, cooldown={:.0f}s, "
                  "settle={:.1f}ms", max_pulse_ms_, cooldown_s_, settle_delay_ms_);
 }
 
-auto FiringController::may_fire() const -> bool {
+auto FiringController::may_fire(std::chrono::steady_clock::time_point now) const -> bool {
     // Cooldown / emergency only. Arm is a separate structural gate checked
     // before set_target and before starting a pulse.
     if (emergency_stop_) {
         return false;
     }
 
-    auto now = std::chrono::steady_clock::now();
     if (now < cooldown_until_) {
         return false;
     }
@@ -46,18 +41,18 @@ auto FiringController::is_armed() const -> bool {
     return armed_ && !emergency_stop_;
 }
 
-auto FiringController::set_armed(bool armed) -> void {
+auto FiringController::set_armed(bool armed, std::chrono::steady_clock::time_point now)
+    -> void {
     if (armed == armed_) {
         return;
     }
 
     if (!armed) {
-        disarm();
+        disarm(now);
         return;
     }
 
     if (emergency_stop_) {
-        println(stderr, "[FIRING] Arm rejected: emergency stop active");
         return;
     }
 
@@ -65,19 +60,14 @@ auto FiringController::set_armed(bool armed) -> void {
     println("[FIRING] Armed");
 }
 
-auto FiringController::set_target(const Point3D& position) -> void {
-    if (emergency_stop_) {
-        println(stderr, "[FIRING] Target rejected: emergency stop active");
-        return;
-    }
-
-    if (!armed_) {
-        println(stderr, "[FIRING] Target rejected: not armed");
+auto FiringController::set_target(const Point3D& position,
+                                  std::chrono::steady_clock::time_point now) -> void {
+    if (emergency_stop_ || !armed_) {
         return;
     }
 
     if (pulse_active_) {
-        abort_active_pulse("Target changed while pulse active, aborting pulse");
+        abort_active_pulse("Target changed while pulse active, aborting pulse", now);
     }
 
     bool position_changed = !current_target_.has_value() ||
@@ -94,18 +84,18 @@ auto FiringController::set_target(const Point3D& position) -> void {
     target_valid_ = true;
 }
 
-auto FiringController::clear_target() -> void {
-    abort_active_pulse("Target lost while pulse active, aborting pulse");
+auto FiringController::clear_target(std::chrono::steady_clock::time_point now) -> void {
+    abort_active_pulse("Target lost while pulse active, aborting pulse", now);
 
     current_target_.reset();
     target_valid_ = false;
     galvo_settled_ = false;
 }
 
-auto FiringController::disarm() -> void {
+auto FiringController::disarm(std::chrono::steady_clock::time_point now) -> void {
     println("[FIRING] Disarming (immediate laser OFF)");
 
-    abort_active_pulse("Disarming while pulse active");
+    abort_active_pulse("Disarming while pulse active", now);
 
     armed_ = false;
     current_target_.reset();
@@ -115,7 +105,14 @@ auto FiringController::disarm() -> void {
     println("[FIRING] Disarmed, ready for re-arm");
 }
 
-auto FiringController::abort_active_pulse(const char* reason) -> void {
+auto FiringController::start_cooldown(std::chrono::steady_clock::time_point now) -> void {
+    cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(cooldown_s_));
+}
+
+auto FiringController::abort_active_pulse(const char* reason,
+                                          std::chrono::steady_clock::time_point now)
+    -> void {
     if (!pulse_active_) {
         return;
     }
@@ -131,9 +128,13 @@ auto FiringController::abort_active_pulse(const char* reason) -> void {
     }
     pulse_active_ = false;
 
-    auto now = std::chrono::steady_clock::now();
-    cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(cooldown_s_));
+    // Same teardown as end_pulse: an aborted pulse must not leave the galvo
+    // marked settled on a target the caller is about to replace.
+    galvo_settled_ = false;
+    target_valid_ = false;
+    current_target_.reset();
+
+    start_cooldown(now);
     println("[FIRING] Cooldown started after pulse abort ({}s)", cooldown_s_);
 }
 
@@ -160,8 +161,7 @@ auto FiringController::end_pulse(std::chrono::steady_clock::time_point now) -> b
     }
 
     pulse_active_ = false;
-    cooldown_until_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(cooldown_s_));
+    start_cooldown(now);
     println("[FIRING] Cooldown active for {}s", cooldown_s_);
     galvo_settled_ = false;
     target_valid_ = false;
@@ -174,8 +174,6 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
     if (emergency_stop_) {
         auto result = laser_.fire(false);
         if (!result.has_value()) {
-            println(stderr, "[FIRING] Emergency: laser off failed: {}",
-                         to_string(result.error()));
             (void)laser_.emergency_shutdown();
         }
         return false;
@@ -227,12 +225,15 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
     if (!galvo_settled_ && target_valid_) {
         auto elapsed = std::chrono::duration<double, std::milli>(now - galvo_command_time_);
-        if (elapsed.count() >= settle_delay_ms_) {
+        // Strictly greater: galvo_command_time_ is stamped in this same cycle, so
+        // a >= comparison would call a zero-elapsed galvo "settled" and fire while
+        // the mirrors are still slewing.
+        if (elapsed.count() > settle_delay_ms_) {
             galvo_settled_ = true;
         }
     }
 
-    if (armed_ && target_valid_ && galvo_settled_ && may_fire() && !pulse_active_) {
+    if (armed_ && target_valid_ && galvo_settled_ && may_fire(now) && !pulse_active_) {
         auto fire_result = laser_.fire(true);
         if (!fire_result.has_value()) {
             println(stderr, "[FIRING] Laser fire failed: {}",
@@ -243,8 +244,12 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
 
         pulse_active_ = true;
         pulse_start_ = now;
-        println("[FIRING] Pulse started at target=({:.3f},{:.3f},{:.3f})",
-                     current_target_->x, current_target_->y, current_target_->z);
+        // The post-incident trace must record where the beam was aimed when
+        // each pulse started; "[LASER] FIRING" alone carries no coordinates.
+        if (current_target_.has_value()) {
+            println("[FIRING] Pulse started at target=({:.3f}, {:.3f}, {:.3f})",
+                         current_target_->x, current_target_->y, current_target_->z);
+        }
     }
 
     return false;

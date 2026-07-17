@@ -43,6 +43,16 @@ set(HAL_SOURCES
     src/hal/laser.cpp
 )
 
+set(SAFETY_SOURCES
+    src/safety/system_state.cpp
+    src/safety/watchdog.cpp
+    src/safety/bounding_box.cpp
+    src/safety/arm_switch.cpp
+    src/safety/e_stop.cpp
+    src/safety/signal_handler.cpp
+    src/safety/config_validator.cpp
+)
+
 set(VISION_SOURCES
     src/vision/detector.cpp
     src/vision/stereo_matcher.cpp
@@ -52,6 +62,7 @@ set(VISION_SOURCES
 set(CONTROL_SOURCES
     src/control/coordinate_mapper.cpp
     src/control/firing_controller.cpp
+    src/control/control_loop.cpp
 )
 
 add_library(mosquito_hal STATIC ${HAL_SOURCES})
@@ -64,6 +75,15 @@ target_link_libraries(mosquito_hal PUBLIC
     ${LIBGPIODCXX_LIBRARIES}
     OpenCV::core
     OpenCV::imgproc
+    Eigen3::Eigen
+)
+
+add_library(mosquito_safety STATIC ${SAFETY_SOURCES})
+target_include_directories(mosquito_safety PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(mosquito_safety PUBLIC
+    mosquito_hal
     Eigen3::Eigen
 )
 
@@ -84,20 +104,14 @@ target_include_directories(mosquito_control PUBLIC
 )
 target_link_libraries(mosquito_control PUBLIC
     mosquito_hal
+    mosquito_safety
     Eigen3::Eigen
 )
 
-add_executable(mosquito_laser_killer src/main.cpp
-    src/safety/system_state.cpp
-    src/safety/watchdog.cpp
-    src/safety/bounding_box.cpp
-    src/safety/arm_switch.cpp
-    src/safety/e_stop.cpp
-    src/safety/signal_handler.cpp
-    src/safety/config_validator.cpp
-)
+add_executable(mosquito_laser_killer src/main.cpp)
 target_link_libraries(mosquito_laser_killer PRIVATE
     mosquito_hal
+    mosquito_safety
     mosquito_vision
     mosquito_control
     yaml-cpp

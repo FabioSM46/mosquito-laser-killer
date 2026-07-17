@@ -64,6 +64,17 @@ cp ../config/system_config.yaml ./
 sudo ./mosquito_laser_killer
 ```
 
+### Exit codes
+
+Abnormal exits are distinguishable, so a supervisor (`systemd` with `Restart=on-failure`, a wrapper script) can tell a clean Ctrl-C from a safety abort. Anything non-zero means **review the log before restarting**.
+
+| Code | Meaning |
+|------|---------|
+| 0 | Clean shutdown (SIGINT/SIGTERM) |
+| 1 | Config validation failed — a parameter is outside its safety bound |
+| 2 | Hardware init or capture failure (GPIO, SPI, camera) |
+| 3 | SAFE_HALT — a safety interlock fired (watchdog, E-stop, hardware fault while armed) |
+
 ## Requirements
 
 | Dependency | Version | Purpose |
@@ -89,26 +100,30 @@ Three decoupled threads communicate via lock-protected queues:
 
 All runtime parameters are in `config/system_config.yaml`:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `settle_delay_ms` | 3.0 | Galvo mechanical settling time before laser fire |
-| `max_pulse_duration_ms` | 100.0 | Hard limit on laser emission duration |
-| `cooldown_seconds` | 10.0 | Mandatory cooldown after each pulse |
-| `watchdog_missed_threshold` | 3 | Missed heartbeats before SAFE_HALT |
-| `laser_pin` | 18 | GPIO pin for laser TTL output (3.3 V, level-shifted to 5 V) |
-| `arm_switch_pin` | 24 | GPIO pin for arm switch (reads HIGH when armed) |
-| `e_stop_pin` | 25 | GPIO pin for mushroom E-stop (active LOW when pressed) |
-| `frame_width` | 640 | Capture frame width (OV9281 default mode) |
-| `frame_height` | 480 | Capture frame height |
-| `target_fps` | 120 | Camera frame rate |
-| `spi_device_x` | `/dev/spidev0.0` | X-axis DAC SPI device |
-| `spi_device_y` | `/dev/spidev0.1` | Y-axis DAC SPI device |
-| `spi_speed_hz` | 20'000'000 | SPI clock (20 MHz, MCP4922 max) |
-| `bounding_box` | -1..1m xyz | 3D safe firing zone |
-| `galvo_limits` | ±20° | Galvanometer mechanical limits |
-| `stereo` | baseline, focal, principal point | Stereo camera calibration |
-| `left_camera_device` | `""` | Left camera device path (/dev/v4l/by-path/... or /dev/videoN) |
-| `right_camera_device` | `""` | Right camera device path (/dev/v4l/by-path/... or /dev/videoN) |
+Every fire-control and timing parameter is range-checked at startup by `validate_engagement_volume()`; a value outside its bound **aborts the process** rather than quietly degrading a guard.
+
+| Parameter | Default | Bound | Description |
+|-----------|---------|-------|-------------|
+| `settle_delay_ms` | 3.0 | [0.5, 50] | Galvo settling before fire. `0` would fire while the mirrors slew |
+| `max_pulse_duration_ms` | 100.0 | (0, 100] | Hard limit on laser emission |
+| `cooldown_seconds` | 10.0 | ≥ 1.0 | Mandatory cooldown. `0` gives a ~87% duty cycle, effectively CW |
+| `watchdog_timeout_ms` | 25.0 | [5, 500] | **Absolute** heartbeat timeout — independent of `target_fps` |
+| `watchdog_startup_grace_ms` | 5000.0 | [100, 60000] | Window for the pipeline's first heartbeat, then fails closed |
+| `laser_pin` | 18 | — | GPIO pin for laser TTL output (3.3 V, level-shifted to 5 V) |
+| `arm_switch_pin` | 24 | — | GPIO pin for arm switch (reads HIGH when armed) |
+| `e_stop_pin` | 25 | — | GPIO pin for mushroom E-stop (active LOW when pressed) |
+| `frame_width` | 640 | > 0 | Capture frame width |
+| `frame_height` | 400 | > 0 | Capture frame height (OV9281 binned mode) |
+| `target_fps` | 120 | > 0 | Camera frame rate. A performance knob only — it does not affect the watchdog |
+| `spi_device_x` | `/dev/spidev0.0` | — | X-axis DAC SPI device |
+| `spi_device_y` | `/dev/spidev0.1` | — | Y-axis DAC SPI device |
+| `spi_speed_hz` | 20'000'000 | — | SPI clock (20 MHz, MCP4922 max) |
+| `bounding_box` | x,y ±0.09m; z 0.5–1.0m | inside galvo cone | 3D safe firing zone |
+| `galvo_limits` | ±15° | within DAC voltage budget | Galvanometer mechanical limits |
+| `stereo` | baseline, focal, principal point | cx,cy inside frame | Stereo camera calibration |
+| `detection` | threshold, blob area, epipolar tol. | see below | Target detection and stereo correspondence gates |
+| `left_camera_device` | `""` | — | Left camera device path (/dev/v4l/by-path/... or /dev/videoN) |
+| `right_camera_device` | `""` | — | Right camera device path (/dev/v4l/by-path/... or /dev/videoN) |
 
 ### Camera Identification via USB Port
 
@@ -136,16 +151,22 @@ If `left_camera_device` or `right_camera_device` is left empty, the system falls
 
 The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration ≤ 100ms** — control-loop + HAL max-pulse enforcement
-2. **10-second firing cooldown** — `may_fire()` gate with no bypass path
+1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real bound is ~105ms (limit + one control cycle), not a flat 100ms
+2. **10-second firing cooldown** — `may_fire(now)` gate, applied on *every* pulse-end path (clean, aborted, and fault)
 3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
 4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
-5. **Software watchdog** — 3 missed heartbeats (~25ms) triggers SAFE_HALT
-6. **Coordinate bounds** — box + galvo cone + voltage-scale DAC (**reject**, no clamp)
-7. **E-stop** — active-low mushroom → SAFE_HALT; GPIO fault → pressed
-8. **Config validation** — critical engagement mismatches abort startup
-9. **RAII shutdown** — destructor order guarantees laser LOW, galvos centered
-10. **Signal shutdown** — SIGINT/SIGTERM polled by all worker threads
+5. **Software watchdog** — absolute 25ms heartbeat timeout (not derived from `target_fps`) + bounded startup grace → SAFE_HALT
+6. **Validated targeting** — per-blob detection, epipolar-gated stereo correspondence, ambiguous scene → no target
+7. **Coordinate bounds** — non-finite reject + box + galvo cone + voltage-scale DAC (**reject**, no clamp)
+8. **E-stop** — active-low mushroom → SAFE_HALT; GPIO fault → pressed
+9. **Config validation** — any bound that could disable a guard aborts startup
+10. **Fault propagation** — hardware faults latch the controller; `control_step` polls `is_halted()` → SAFE_HALT
+11. **RAII shutdown** — declaration order puts `~Laser` first; shutdown logs claim only what was verified
+12. **Signal shutdown** — SIGINT/SIGTERM polled by all worker threads; logging is non-blocking so the laser-owning thread cannot stall on a write
+
+### Known residual risk
+
+Every path that can end a pulse runs on the **control thread**. There is no hardware one-shot behind the laser TTL line, so if that thread stalls with the pin HIGH, no software path turns the laser off — recovery is the operator opening the arm switch, which is a true hardware interlock. The E-stop is not a substitute: its GPIO is polled by the same thread. **A retriggerable monostable on the TTL line is the recommended hardware mitigation.**
 
 ## Building and Running Tests
 
@@ -164,11 +185,13 @@ ctest --output-on-failure
 ./tests/test_e_stop
 ./tests/test_coordinate_mapper
 ./tests/test_firing_controller
-./tests/test_control_arm_gating
+./tests/test_control_loop
 ./tests/test_system_state
 ./tests/test_thread_safe_queue
+./tests/test_detector
 ./tests/test_stereo_matcher
 ./tests/test_kalman_tracker
+./tests/test_config_validator
 ./tests/test_signal_handling
 ```
 
@@ -196,8 +219,10 @@ ctest --output-on-failure
 ## Tuning Guidance
 
 ### Detection
-- Adjust `threshold_` (default 128) in `vision/detector.h` for your lighting conditions
-- Modify `min_contour_area_` (default 50) to filter noise vs. targets
+All detection parameters live in the `detection:` block of `config/system_config.yaml` — none are hardcoded.
+- `threshold` (default 128) for your lighting conditions
+- `min_blob_area_px` / `max_blob_area_px` to separate targets from noise and from lamps/glints. The startup validator warns if `min_blob_area_px` is larger than the area your `target_size_m` actually projects to at `z_max` — i.e. if the floor is set so high that no real mosquito could pass it
+- `epipolar_tolerance_px` — how far apart, vertically, two blobs may be and still be considered the same object. Depends on your rectification quality
 
 ### Stereo Calibration
 - Update `config/system_config.yaml` stereo section with calibrated values

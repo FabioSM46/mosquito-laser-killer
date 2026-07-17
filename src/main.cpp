@@ -28,6 +28,7 @@
 
 #include "control/coordinate_mapper.h"
 #include "control/firing_controller.h"
+#include "control/control_loop.h"
 
 #include "core/print.h"
 #include <atomic>
@@ -41,128 +42,109 @@ namespace {
 
 std::atomic<bool> g_shutdown_requested{false};
 
+// Set when a worker thread halts the system because of a hardware fault, as
+// opposed to an operator-requested shutdown. The capture thread may only touch
+// atomics — the control thread owns the laser and the state machine — so a
+// capture failure cannot reach SAFE_HALT by itself, and without this flag it
+// would exit 0 and look identical to a clean Ctrl-C to a supervisor.
+std::atomic<bool> g_hardware_fault{false};
+
+namespace exit_code {
+constexpr int ok = 0;
+constexpr int config_error = 1;
+constexpr int hardware_init_failed = 2;
+constexpr int safe_halt = 3;
+}
+
+// Runs log_shutdown() on EVERY exit path from main, including the early
+// hardware/config failure returns: O_NONBLOCK is a property of the shared open
+// file description, so skipping the restore hands EAGAIN back to whatever owns
+// our stdout (an interactive shell, a supervisor). Declared right after
+// log_init() so it is destroyed last, after every logger has gone quiet.
+struct LogSessionGuard {
+    ~LogSessionGuard() { mlk_log::log_shutdown(); }
+};
+
+// Assigns only when the key is present, so types.h stays the single source of
+// truth for defaults. The previous `node[k] ? node[k].as<T>() : <literal>` style
+// duplicated every default at the call site, and one had already drifted (cy was
+// 240 here versus 200 in types.h — a 40 px principal-point error).
+template <typename T>
+auto load_field(const YAML::Node& parent, const char* key, T& out) -> void {
+    if (parent && parent[key]) {
+        out = parent[key].as<T>();
+    }
+}
+
 auto load_config() -> SystemConfig {
     SystemConfig config{};
 
     try {
         YAML::Node yaml = YAML::LoadFile("config/system_config.yaml");
 
-        if (yaml["settle_delay_ms"]) {
-            config.settle_delay_ms = yaml["settle_delay_ms"].as<double>();
-        }
-        if (yaml["max_pulse_duration_ms"]) {
-            config.max_pulse_duration_ms = yaml["max_pulse_duration_ms"].as<double>();
-        }
-        if (yaml["cooldown_seconds"]) {
-            config.cooldown_seconds = yaml["cooldown_seconds"].as<double>();
-        }
-        if (yaml["watchdog_missed_threshold"]) {
-            config.watchdog_missed_threshold = yaml["watchdog_missed_threshold"].as<uint32_t>();
-        }
-        if (yaml["frame_width"]) {
-            config.frame_width = yaml["frame_width"].as<int>();
-        }
-        if (yaml["frame_height"]) {
-            config.frame_height = yaml["frame_height"].as<int>();
-        }
-        if (yaml["target_fps"]) {
-            config.target_fps = yaml["target_fps"].as<int>();
-        }
-        if (yaml["spi_device_x"]) {
-            config.spi_device_x = yaml["spi_device_x"].as<std::string>();
-        }
-        if (yaml["spi_device_y"]) {
-            config.spi_device_y = yaml["spi_device_y"].as<std::string>();
-        }
-        if (yaml["spi_speed_hz"]) {
-            config.spi_speed_hz = yaml["spi_speed_hz"].as<int>();
-        }
-        if (yaml["dac_reference_voltage"]) {
-            config.dac_ref_voltage = yaml["dac_reference_voltage"].as<double>();
-        }
-        if (yaml["laser_pin"]) {
-            config.laser_pin = yaml["laser_pin"].as<unsigned int>();
-        }
-        if (yaml["arm_switch_pin"]) {
-            config.arm_switch_pin = yaml["arm_switch_pin"].as<unsigned int>();
-        }
-        if (yaml["e_stop_pin"]) {
-            config.e_stop_pin = yaml["e_stop_pin"].as<unsigned int>();
-        }
-        if (yaml["left_camera_device"] && yaml["left_camera_device"].as<std::string>() != "") {
-            config.left_camera_device = yaml["left_camera_device"].as<std::string>();
-        }
-        if (yaml["right_camera_device"] && yaml["right_camera_device"].as<std::string>() != "") {
-            config.right_camera_device = yaml["right_camera_device"].as<std::string>();
-        }
+        load_field(yaml, "settle_delay_ms", config.settle_delay_ms);
+        load_field(yaml, "max_pulse_duration_ms", config.max_pulse_duration_ms);
+        load_field(yaml, "cooldown_seconds", config.cooldown_seconds);
+        load_field(yaml, "watchdog_timeout_ms", config.watchdog_timeout_ms);
+        load_field(yaml, "watchdog_startup_grace_ms", config.watchdog_startup_grace_ms);
+        load_field(yaml, "frame_width", config.frame_width);
+        load_field(yaml, "frame_height", config.frame_height);
+        load_field(yaml, "target_fps", config.target_fps);
+        load_field(yaml, "spi_device_x", config.spi_device_x);
+        load_field(yaml, "spi_device_y", config.spi_device_y);
+        load_field(yaml, "spi_speed_hz", config.spi_speed_hz);
+        load_field(yaml, "dac_reference_voltage", config.dac_ref_voltage);
+        load_field(yaml, "laser_pin", config.laser_pin);
+        load_field(yaml, "arm_switch_pin", config.arm_switch_pin);
+        load_field(yaml, "e_stop_pin", config.e_stop_pin);
+        load_field(yaml, "left_camera_device", config.left_camera_device);
+        load_field(yaml, "right_camera_device", config.right_camera_device);
 
-        if (yaml["bounding_box"]) {
-            auto bb = yaml["bounding_box"];
-            config.bounding_box.x_min = bb["x_min"] ? bb["x_min"].as<double>() : -0.09;
-            config.bounding_box.x_max = bb["x_max"] ? bb["x_max"].as<double>() : 0.09;
-            config.bounding_box.y_min = bb["y_min"] ? bb["y_min"].as<double>() : -0.09;
-            config.bounding_box.y_max = bb["y_max"] ? bb["y_max"].as<double>() : 0.09;
-            config.bounding_box.z_min = bb["z_min"] ? bb["z_min"].as<double>() : 0.5;
-            config.bounding_box.z_max = bb["z_max"] ? bb["z_max"].as<double>() : 1.0;
-        }
+        auto bb = yaml["bounding_box"];
+        load_field(bb, "x_min", config.bounding_box.x_min);
+        load_field(bb, "x_max", config.bounding_box.x_max);
+        load_field(bb, "y_min", config.bounding_box.y_min);
+        load_field(bb, "y_max", config.bounding_box.y_max);
+        load_field(bb, "z_min", config.bounding_box.z_min);
+        load_field(bb, "z_max", config.bounding_box.z_max);
 
-        if (yaml["galvo_limits"]) {
-            auto gl = yaml["galvo_limits"];
-            config.galvo_limits.angle_x_min_deg = gl["angle_x_min_deg"]
-                ? gl["angle_x_min_deg"].as<double>() : -15.0;
-            config.galvo_limits.angle_x_max_deg = gl["angle_x_max_deg"]
-                ? gl["angle_x_max_deg"].as<double>() : 15.0;
-            config.galvo_limits.angle_y_min_deg = gl["angle_y_min_deg"]
-                ? gl["angle_y_min_deg"].as<double>() : -15.0;
-            config.galvo_limits.angle_y_max_deg = gl["angle_y_max_deg"]
-                ? gl["angle_y_max_deg"].as<double>() : 15.0;
-        }
+        auto gl = yaml["galvo_limits"];
+        load_field(gl, "angle_x_min_deg", config.galvo_limits.angle_x_min_deg);
+        load_field(gl, "angle_x_max_deg", config.galvo_limits.angle_x_max_deg);
+        load_field(gl, "angle_y_min_deg", config.galvo_limits.angle_y_min_deg);
+        load_field(gl, "angle_y_max_deg", config.galvo_limits.angle_y_max_deg);
 
-        if (yaml["galvo_driver"]) {
-            auto gd = yaml["galvo_driver"];
-            config.galvo_driver.input_scale_v_per_deg = gd["input_scale_v_per_deg"]
-                ? gd["input_scale_v_per_deg"].as<double>() : 0.33;
-            config.galvo_driver.dac_max_diff_voltage = gd["dac_max_diff_voltage"]
-                ? gd["dac_max_diff_voltage"].as<double>() : 5.0;
-            config.galvo_driver.driver_input_voltage = gd["driver_input_voltage"]
-                ? gd["driver_input_voltage"].as<double>() : 15.0;
-        }
+        auto gd = yaml["galvo_driver"];
+        load_field(gd, "input_scale_v_per_deg", config.galvo_driver.input_scale_v_per_deg);
+        load_field(gd, "dac_max_diff_voltage", config.galvo_driver.dac_max_diff_voltage);
+        load_field(gd, "driver_input_voltage", config.galvo_driver.driver_input_voltage);
 
-        if (yaml["camera_optics"]) {
-            auto co = yaml["camera_optics"];
-            config.camera_optics.lens_focal_length_mm = co["lens_focal_length_mm"]
-                ? co["lens_focal_length_mm"].as<double>() : 3.0;
-            config.camera_optics.image_sensor_width_mm = co["image_sensor_width_mm"]
-                ? co["image_sensor_width_mm"].as<double>() : 3.84;
-            config.camera_optics.image_sensor_height_mm = co["image_sensor_height_mm"]
-                ? co["image_sensor_height_mm"].as<double>() : 2.4;
-        }
+        auto co = yaml["camera_optics"];
+        load_field(co, "lens_focal_length_mm", config.camera_optics.lens_focal_length_mm);
+        load_field(co, "image_sensor_width_mm", config.camera_optics.image_sensor_width_mm);
+        load_field(co, "image_sensor_height_mm", config.camera_optics.image_sensor_height_mm);
 
-        if (yaml["camera_controls"]) {
-            auto cc = yaml["camera_controls"];
-            config.camera_controls.exposure_auto = cc["exposure_auto"]
-                ? cc["exposure_auto"].as<int>() : 1;
-            config.camera_controls.exposure_absolute_us = cc["exposure_absolute_us"]
-                ? cc["exposure_absolute_us"].as<int>() : 156;
-            config.camera_controls.brightness = cc["brightness"]
-                ? cc["brightness"].as<int>() : 0;
-            config.camera_controls.gamma = cc["gamma"]
-                ? cc["gamma"].as<int>() : 100;
-            config.camera_controls.sharpness = cc["sharpness"]
-                ? cc["sharpness"].as<int>() : 0;
-            config.camera_controls.gain = cc["gain"]
-                ? cc["gain"].as<int>() : 0;
-        }
+        auto cc = yaml["camera_controls"];
+        load_field(cc, "exposure_auto", config.camera_controls.exposure_auto);
+        load_field(cc, "exposure_absolute_us", config.camera_controls.exposure_absolute_us);
+        load_field(cc, "brightness", config.camera_controls.brightness);
+        load_field(cc, "gamma", config.camera_controls.gamma);
+        load_field(cc, "sharpness", config.camera_controls.sharpness);
+        load_field(cc, "gain", config.camera_controls.gain);
 
-        if (yaml["stereo"]) {
-            auto st = yaml["stereo"];
-            config.stereo.baseline_m = st["baseline_m"]
-                ? st["baseline_m"].as<double>() : 0.12;
-            config.stereo.focal_length_px = st["focal_length_px"]
-                ? st["focal_length_px"].as<double>() : 500.0;
-            config.stereo.cx = st["cx"] ? st["cx"].as<double>() : 320.0;
-            config.stereo.cy = st["cy"] ? st["cy"].as<double>() : 240.0;
-        }
+        auto st = yaml["stereo"];
+        load_field(st, "baseline_m", config.stereo.baseline_m);
+        load_field(st, "focal_length_px", config.stereo.focal_length_px);
+        load_field(st, "cx", config.stereo.cx);
+        load_field(st, "cy", config.stereo.cy);
+
+        auto det = yaml["detection"];
+        load_field(det, "threshold", config.detection.threshold);
+        load_field(det, "min_blob_area_px", config.detection.min_blob_area_px);
+        load_field(det, "max_blob_area_px", config.detection.max_blob_area_px);
+        load_field(det, "max_blobs", config.detection.max_blobs);
+        load_field(det, "epipolar_tolerance_px", config.detection.epipolar_tolerance_px);
+        load_field(det, "target_size_m", config.detection.target_size_m);
 
         println("[CONFIG] Loaded config/system_config.yaml");
 
@@ -178,6 +160,11 @@ auto load_config() -> SystemConfig {
 auto main(int argc, char* argv[]) -> int {
     (void)argc;
     (void)argv;
+
+    // Before any thread starts: the control thread must never block on a log
+    // write while it owns a live laser pulse.
+    mlk_log::log_init();
+    LogSessionGuard log_guard;
 
     println("===========================================");
     println("  Mosquito Laser Killer v1.0.0");
@@ -201,21 +188,24 @@ auto main(int argc, char* argv[]) -> int {
         }
         if (has_critical_validation_errors(validation_warnings)) {
             println(stderr, "[CONFIG] Aborting: critical engagement-volume validation failed");
-            return 1;
+            return exit_code::config_error;
         }
     }
 
     SystemStateMachine state_machine;
 
-    auto gpio_laser = std::make_unique<GpioImpl>(config.laser_pin);
-    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin,
-                                         config.max_pulse_duration_ms);
-
+    // Declaration order is load-bearing: destruction runs in reverse, and the
+    // laser pin must be forced LOW before the galvos are commanded anywhere.
+    // Declaring the laser last makes ~Laser the FIRST of these to run.
     auto spi_x = std::make_unique<SpiImpl>(config.spi_device_x, config.spi_speed_hz);
     auto spi_y = std::make_unique<SpiImpl>(config.spi_device_y, config.spi_speed_hz);
     auto dac_x = std::make_unique<MCP4922>(std::move(spi_x));
     auto dac_y = std::make_unique<MCP4922>(std::move(spi_y));
     auto galvo = std::make_unique<DifferentialGalvoDriver>(std::move(dac_x), std::move(dac_y));
+
+    auto gpio_laser = std::make_unique<GpioImpl>(config.laser_pin);
+    auto laser = std::make_unique<Laser>(std::move(gpio_laser), config.laser_pin,
+                                         config.max_pulse_duration_ms);
 
     println("[MAIN] Laser TTL on GPIO {}", config.laser_pin);
     println("[MAIN] SPI X-axis DAC: {} (CS0)", config.spi_device_x);
@@ -229,7 +219,7 @@ auto main(int argc, char* argv[]) -> int {
         println(stderr, "[MAIN] Arm switch init failed: {}",
                      to_string(arm_init.error()));
         (void)state_machine.transition(SystemState::SAFE_HALT);
-        return 1;
+        return exit_code::hardware_init_failed;
     }
     println("[MAIN] Arm switch on GPIO {}", config.arm_switch_pin);
 
@@ -240,20 +230,20 @@ auto main(int argc, char* argv[]) -> int {
         println(stderr, "[MAIN] E-stop init failed: {}",
                      to_string(estop_init.error()));
         (void)state_machine.transition(SystemState::SAFE_HALT);
-        return 1;
+        return exit_code::hardware_init_failed;
     }
     println("[MAIN] E-stop on GPIO {}", config.e_stop_pin);
 
     if (!laser->is_initialized()) {
         println(stderr, "[MAIN] Laser hardware initialization failed");
         (void)state_machine.transition(SystemState::SAFE_HALT);
-        return 1;
+        return exit_code::hardware_init_failed;
     }
 
     if (!galvo->is_initialized()) {
         println(stderr, "[MAIN] Galvo driver initialization failed");
         (void)state_machine.transition(SystemState::SAFE_HALT);
-        return 1;
+        return exit_code::hardware_init_failed;
     }
 
     BoundingBox3D bounding_box(config.bounding_box);
@@ -262,30 +252,37 @@ auto main(int argc, char* argv[]) -> int {
     FiringController firing_controller(*laser, *galvo, mapper,
         config.max_pulse_duration_ms,
         config.cooldown_seconds,
-        config.settle_delay_ms);
+        config.settle_delay_ms,
+        std::chrono::steady_clock::now());
     Watchdog watchdog(state_machine, *laser, *galvo,
-        config.watchdog_missed_threshold, config.target_fps);
+        std::chrono::milliseconds(static_cast<long>(config.watchdog_timeout_ms)),
+        std::chrono::milliseconds(static_cast<long>(config.watchdog_startup_grace_ms)));
 
-    Detector detector_left(config.frame_width, config.frame_height);
-    Detector detector_right(config.frame_width, config.frame_height);
-    StereoMatcher stereo_matcher(config.stereo);
+    Detector detector_left(config.frame_width, config.frame_height, config.detection);
+    Detector detector_right(config.frame_width, config.frame_height, config.detection);
+    StereoMatcher stereo_matcher(config.stereo, config.detection, config.bounding_box);
     KalmanTracker tracker;
 
     ThreadSafeQueue<StereoFrame> frame_queue;
     ThreadSafeQueue<TargetCommand> target_queue;
+
+    // Starts at the sentinel, not at now(): the control thread forwards this value
+    // to the watchdog every cycle, and a real timestamp here would look like a
+    // heartbeat from a processing thread that has not yet run.
     std::atomic<std::chrono::steady_clock::time_point> heartbeat{
-        std::chrono::steady_clock::now()};
+        std::chrono::steady_clock::time_point::min()};
 
     auto init_ok = state_machine.transition(SystemState::IDLE);
     if (!init_ok) {
         println(stderr, "[MAIN] Failed to enter IDLE state");
-        return 1;
+        return exit_code::hardware_init_failed;
     }
     println("[MAIN] System ready in IDLE state");
 
-    // Capture thread may only set the atomic; control thread owns laser/state cleanup.
+    // Capture thread may only set atomics; control thread owns laser/state cleanup.
     auto request_system_halt = [&](const char* reason) {
         println(stderr, "[MAIN] System halt requested: {}", reason);
+        g_hardware_fault.store(true, std::memory_order_release);
         g_shutdown_requested.store(true, std::memory_order_release);
     };
 
@@ -332,6 +329,8 @@ auto main(int argc, char* argv[]) -> int {
         }
 
         auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
+        const size_t frame_bytes =
+            static_cast<size_t>(config.frame_width) * config.frame_height;
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire) &&
@@ -341,8 +340,8 @@ auto main(int argc, char* argv[]) -> int {
             StereoFrame frame;
             frame.frame_id = frame_id++;
             frame.timestamp = cycle_start;
-            frame.left_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
-            frame.right_frame.resize(static_cast<size_t>(config.frame_width) * config.frame_height);
+            frame.left_frame.resize(frame_bytes);
+            frame.right_frame.resize(frame_bytes);
 
             auto left_result = left_cam.capture(frame.left_frame.data(),
                                                  frame.left_frame.size());
@@ -405,38 +404,42 @@ auto main(int argc, char* argv[]) -> int {
             auto& frame = latest_frame.value();
             heartbeat.store(std::chrono::steady_clock::now(), std::memory_order_release);
 
-            auto left_detection = detector_left.detect(frame.left_frame.data(),
-                                                          frame.left_frame.size());
-            auto right_detection = detector_right.detect(frame.right_frame.data(),
+            auto left_blobs = detector_left.detect_blobs(frame.left_frame.data(),
+                                                         frame.left_frame.size());
+            auto right_blobs = detector_right.detect_blobs(frame.right_frame.data(),
                                                            frame.right_frame.size());
 
             TargetCommand cmd;
             cmd.frame_id = frame.frame_id;
             cmd.timestamp = frame.timestamp;
 
-            auto target_3d = left_detection
-                .and_then([&](const Pixel2D& left_pt) -> std::optional<Point3D> {
-                    return right_detection.and_then([&](const Pixel2D& right_pt) {
-                        return stereo_matcher.triangulate(left_pt, right_pt);
-                    });
-                });
+            // Correspondence is established per blob and validated against the
+            // epipolar constraint; an ambiguous scene yields no target.
+            auto target_3d = stereo_matcher.match(left_blobs, right_blobs);
 
-            cmd.target_valid = target_3d.has_value();
-
-            target_3d
+            // Brief detection gap: coast the track on the Kalman prediction
+            // instead of throwing the velocity estimate away and re-acquiring
+            // from zero. predict() is pure and bounded by
+            // k_max_predict_horizon_s, and the coasted point still passes
+            // through every downstream gate (bounding box, galvo cone, DAC
+            // range). Past the horizon predict yields nullopt and the track is
+            // dropped — fail closed.
+            auto filtered = target_3d
                 .and_then([&](const Point3D& pt) -> std::optional<Point3D> {
                     return tracker.update(pt, frame.timestamp);
                 })
-                .transform([&](const Point3D& filtered) {
-                    cmd.target_position = filtered;
-                    return filtered;
-                })
                 .or_else([&]() -> std::optional<Point3D> {
-                    if (!cmd.target_valid) {
-                        tracker.reset();
-                    }
-                    return std::nullopt;
+                    return tracker.predict(frame.timestamp);
                 });
+
+            if (!filtered.has_value()) {
+                tracker.reset();
+            }
+
+            cmd.target_valid = filtered.has_value();
+            if (filtered.has_value()) {
+                cmd.target_position = filtered.value();
+            }
 
             target_queue.push(std::move(cmd));
         }
@@ -447,107 +450,33 @@ auto main(int argc, char* argv[]) -> int {
     println("[MAIN] Starting control thread...");
     std::jthread control_thread([&](std::stop_token stoken) {
         println("[CONTROL] Thread started");
-        auto max_wait = std::chrono::milliseconds(16);
         auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
+
+        ControlDeps deps{state_machine, firing_controller, watchdog,
+                         arm_switch, e_stop, *laser};
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire) &&
                !signal_handler.is_shutdown_requested()) {
             auto cycle_start = std::chrono::steady_clock::now();
 
-            auto now = std::chrono::steady_clock::now();
-            laser->enforce_max_pulse(now);
-            if (!watchdog.check(now)) {
-                println(stderr, "[CONTROL] Watchdog triggered, halting");
+            // Take the freshest command and drop the rest, for the same reason the
+            // processing thread drops stale frames: acting on a queued command
+            // aims at a position the target has already left. A blocking pop here
+            // would also widen the interval between max-pulse checks.
+            std::optional<TargetCommand> cmd;
+            auto commands = target_queue.drain_all();
+            if (!commands.empty()) {
+                cmd = std::move(commands.back());
+            }
+
+            auto outcome = control_step(deps, cmd,
+                                        heartbeat.load(std::memory_order_acquire),
+                                        cycle_start);
+            if (outcome == ControlOutcome::Halt) {
+                // Every halt path must stop the other threads, or the joins below
+                // block forever.
                 g_shutdown_requested.store(true, std::memory_order_release);
-                firing_controller.emergency_stop();
-                (void)state_machine.transition(SystemState::SAFE_HALT);
-                break;
-            }
-
-            e_stop.update();
-            if (e_stop.is_pressed()) {
-                println(stderr, "[CONTROL] E-STOP PRESSED, halting");
-                g_shutdown_requested.store(true, std::memory_order_release);
-                firing_controller.emergency_stop();
-                (void)state_machine.transition(SystemState::SAFE_HALT);
-                break;
-            }
-
-            arm_switch.update();
-            bool is_armed = arm_switch.is_armed();
-            auto cs = state_machine.current();
-
-            // Structural arm gate: controller refuses targets/fire when disarmed.
-            firing_controller.set_armed(is_armed);
-
-            if (!is_armed && cs != SystemState::IDLE &&
-                cs != SystemState::SAFE_HALT && cs != SystemState::COOLDOWN) {
-                println("[CONTROL] Arm switch OFF, disarming");
-                if (cs == SystemState::FIRING) {
-                    (void)state_machine.transition(SystemState::COOLDOWN);
-                } else {
-                    (void)state_machine.transition(SystemState::IDLE);
-                }
-            }
-
-            if (is_armed && cs == SystemState::IDLE) {
-                println("[CONTROL] Arm switch ON, arming");
-                (void)state_machine.transition(SystemState::ARMED);
-            }
-
-            auto cmd_opt = target_queue.pop(max_wait);
-
-            watchdog.feed(heartbeat.load(std::memory_order_acquire));
-
-            if (cmd_opt.has_value()) {
-                auto& cmd = cmd_opt.value();
-                auto current_state = state_machine.current();
-
-                if (!is_armed) {
-                    firing_controller.clear_target();
-                } else if (current_state == SystemState::FIRING) {
-                    // Hold aim while firing (motion blanking). Abort only on loss.
-                    if (!cmd.target_valid || !cmd.target_position.has_value()) {
-                        (void)state_machine.transition(SystemState::COOLDOWN);
-                        firing_controller.clear_target();
-                    }
-                } else if (cmd.target_valid && cmd.target_position.has_value() &&
-                           (current_state == SystemState::ARMED ||
-                            current_state == SystemState::TRACKING)) {
-                    if (current_state == SystemState::ARMED) {
-                        (void)state_machine.transition(SystemState::TRACKING);
-                    }
-                    firing_controller.set_target(cmd.target_position.value());
-                } else {
-                    if (current_state == SystemState::TRACKING) {
-                        (void)state_machine.transition(SystemState::ARMED);
-                    }
-                    firing_controller.clear_target();
-                }
-            }
-
-            bool pulse_was_active = firing_controller.is_firing();
-            const auto exec_now = std::chrono::steady_clock::now();
-            bool pulse_ended = firing_controller.execute_cycle(exec_now);
-            if (pulse_ended && state_machine.current() == SystemState::FIRING) {
-                (void)state_machine.transition(SystemState::COOLDOWN);
-            } else if (!pulse_was_active && firing_controller.is_firing() &&
-                       state_machine.current() == SystemState::TRACKING) {
-                (void)state_machine.transition(SystemState::FIRING);
-            }
-
-            if (state_machine.current() == SystemState::COOLDOWN &&
-                !firing_controller.is_firing() &&
-                firing_controller.may_fire()) {
-                (void)state_machine.transition(SystemState::IDLE);
-                if (is_armed) {
-                    (void)state_machine.transition(SystemState::ARMED);
-                }
-            }
-
-            if (state_machine.current() == SystemState::SAFE_HALT) {
-                println(stderr, "[CONTROL] SAFE_HALT detected, breaking control loop");
                 break;
             }
 
@@ -576,8 +505,22 @@ auto main(int argc, char* argv[]) -> int {
     processing_thread.join();
     control_thread.join();
 
-    println("[MAIN] All threads joined. System shutdown complete.");
-    println("[MAIN] Laser GPIO LOW, galvos at center (0V differential)");
+    const auto final_state = state_machine.current();
+    if (final_state == SystemState::SAFE_HALT) {
+        println(stderr, "[MAIN] Shutdown complete in SAFE_HALT — a safety interlock "
+                "fired. Review the log above before restarting.");
+        return exit_code::safe_halt;
+    }
 
-    return 0;
+    // A capture-thread hardware fault never reaches SAFE_HALT (that thread may
+    // only set atomics), so without this check it would fall through to exit 0 and
+    // a supervisor with Restart=on-failure would leave the system dead.
+    if (g_hardware_fault.load(std::memory_order_acquire)) {
+        println(stderr, "[MAIN] Shutdown complete after a hardware fault. "
+                "Review the log above before restarting.");
+        return exit_code::hardware_init_failed;
+    }
+
+    println("[MAIN] All threads joined. System shutdown complete.");
+    return exit_code::ok;
 }
