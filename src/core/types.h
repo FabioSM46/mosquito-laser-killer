@@ -60,7 +60,10 @@ struct SystemConfig {
     double settle_delay_ms{3.0};
     double max_pulse_duration_ms{100.0};
     double cooldown_seconds{10.0};
-    uint32_t watchdog_missed_threshold{3};
+    // Absolute, deliberately not derived from target_fps: a performance knob must
+    // never retune a safety interlock.
+    double watchdog_timeout_ms{25.0};
+    double watchdog_startup_grace_ms{5000.0};
     int frame_width{640};
     int frame_height{400};
     int target_fps{120};
@@ -108,4 +111,31 @@ struct SystemConfig {
         double cx{320.0};
         double cy{200.0};
     } stereo;
+
+    struct Detection {
+        // 8-bit intensity gate for the dark-field/bright-target regime.
+        int threshold{128};
+        // Per-blob area bounds, in pixels. A 5 mm target at f=500 px subtends
+        // ~5 px across at z=0.5 m (~20 px area) and ~2.5 px at z=1.0 m (~5 px
+        // area), so the floor must stay low. The ceiling is what rejects lamps,
+        // windows, and specular glints, which are orders of magnitude larger.
+        int min_blob_area_px{4};
+        int max_blob_area_px{400};
+        // Frames busier than this are ambiguous; fail closed rather than guess.
+        int max_blobs{8};
+        // Rectified-pair epipolar gate: |v_left - v_right| above this proves the
+        // two blobs are not the same object.
+        double epipolar_tolerance_px{2.0};
+        // Nominal target size, used to sanity-check min_blob_area_px against the
+        // configured z range at startup.
+        double target_size_m{0.005};
+    } detection;
+};
+
+// A connected bright region in one camera's frame.
+struct Blob {
+    Pixel2D centroid{};
+    int area_px{0};
+    int width_px{0};
+    int height_px{0};
 };

@@ -22,8 +22,7 @@ public:
     [[nodiscard]] auto is_firing() const -> bool override;
     [[nodiscard]] auto is_initialized() const -> bool override;
 
-    // Defense-in-depth pulse limit: force OFF if pin has been HIGH too long.
-    auto enforce_max_pulse(std::chrono::steady_clock::time_point now) -> void;
+    auto enforce_max_pulse(std::chrono::steady_clock::time_point now) -> void override;
 
 private:
     std::unique_ptr<IGpio> gpio_;

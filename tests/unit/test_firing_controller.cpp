@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <chrono>
+#include <cmath>
 #include <memory>
-#include <thread>
 
 #include "mocks/mock_galvo_driver.h"
 #include "mocks/mock_laser.h"
@@ -15,390 +15,425 @@
 using namespace testing;
 using namespace std::chrono_literals;
 
+namespace {
+
+constexpr auto kOk = std::expected<void, HardwareError>{};
+
+// Every test below runs the production config from core/types.h and drives time
+// explicitly. The previous fixture used a +/-2m box with a +/-25 deg cone and
+// cooldown_s = 0 — a configuration this project's own config_validator rejects as
+// a critical error — and three tests slept 1050ms of real time to work around the
+// controller reading a hidden clock.
 class FiringControllerTest : public Test {
 protected:
     void SetUp() override {
         mock_laser_ = std::make_unique<NiceMock<MockLaser>>();
         mock_galvo_ = std::make_unique<NiceMock<MockGalvoDriver>>();
+        ON_CALL(*mock_laser_, fire(_)).WillByDefault(Return(kOk));
+        ON_CALL(*mock_laser_, emergency_shutdown()).WillByDefault(Return(kOk));
+        ON_CALL(*mock_galvo_, set_position(_, _)).WillByDefault(Return(kOk));
+        ON_CALL(*mock_galvo_, zero()).WillByDefault(Return(kOk));
 
-        SystemConfig::BoundingBox bb;
-        bb.x_min = -2.0;
-        bb.x_max = 2.0;
-        bb.y_min = -2.0;
-        bb.y_max = 2.0;
-        bb.z_min = 0.1;
-        bb.z_max = 10.0;
+        t0_ = std::chrono::steady_clock::now();
 
-        SystemConfig::GalvoLimits gl;
-        gl.angle_x_min_deg = -25.0;
-        gl.angle_x_max_deg = 25.0;
-        gl.angle_y_min_deg = -25.0;
-        gl.angle_y_max_deg = 25.0;
-
-        bbox_ = std::make_unique<BoundingBox3D>(bb);
-        mapper_ = std::make_unique<CoordinateMapper>(*bbox_, gl);
-        // cooldown_s=0 skips the 1s production startup blanking for unit tests.
-        controller_ = std::make_unique<FiringController>(
-            *mock_laser_, *mock_galvo_, *mapper_,
-            100.0, 0.0, 3.0);
+        bbox_ = std::make_unique<BoundingBox3D>(config_.bounding_box);
+        mapper_ = std::make_unique<CoordinateMapper>(
+            *bbox_, config_.galvo_limits, config_.dac_ref_voltage, config_.galvo_driver);
+        controller_ = make_controller(config_.max_pulse_duration_ms,
+                                      config_.cooldown_seconds,
+                                      config_.settle_delay_ms);
     }
 
     auto make_controller(double max_pulse_ms, double cooldown_s, double settle_ms)
         -> std::unique_ptr<FiringController> {
         return std::make_unique<FiringController>(
             *mock_laser_, *mock_galvo_, *mapper_,
-            max_pulse_ms, cooldown_s, settle_ms);
+            max_pulse_ms, cooldown_s, settle_ms, t0_);
     }
 
-    std::unique_ptr<MockLaser> mock_laser_;
-    std::unique_ptr<MockGalvoDriver> mock_galvo_;
+    // Past the 1s startup blanking that every config applies.
+    [[nodiscard]] auto after_blanking() const -> std::chrono::steady_clock::time_point {
+        return t0_ + FiringController::k_startup_blanking + 1ms;
+    }
+
+    // Arms, targets and steps until the pulse starts. Returns the time the laser
+    // went ON.
+    auto fire_once(FiringController& fc, Point3D target = kValidTarget)
+        -> std::chrono::steady_clock::time_point {
+        auto now = after_blanking();
+        fc.set_armed(true, now);
+        fc.set_target(target, now);
+        for (int i = 0; i < 10 && !fc.is_firing(); ++i) {
+            now += 5ms;
+            (void)fc.execute_cycle(now);
+        }
+        return now;
+    }
+
+    // Inside the production box: x,y in [-0.09, 0.09], z in [0.5, 1.0].
+    static constexpr Point3D kValidTarget{0.0, 0.0, 0.7};
+
+    SystemConfig config_{};
+    std::chrono::steady_clock::time_point t0_;
+    std::unique_ptr<NiceMock<MockLaser>> mock_laser_;
+    std::unique_ptr<NiceMock<MockGalvoDriver>> mock_galvo_;
     std::unique_ptr<BoundingBox3D> bbox_;
     std::unique_ptr<CoordinateMapper> mapper_;
     std::unique_ptr<FiringController> controller_;
 };
 
-TEST_F(FiringControllerTest, MayFireTrueWithZeroCooldown) {
-    EXPECT_TRUE(controller_->may_fire());
+//
+// Startup blanking
+//
+
+TEST_F(FiringControllerTest, StartupBlankingPreventsFiringImmediatelyAfterBoot) {
+    EXPECT_FALSE(controller_->may_fire(t0_));
+    EXPECT_FALSE(controller_->may_fire(t0_ + 999ms));
+    EXPECT_TRUE(controller_->may_fire(t0_ + FiringController::k_startup_blanking));
 }
 
-TEST_F(FiringControllerTest, MayFireInitiallyFalseWithProductionCooldown) {
-    auto fc = make_controller(100.0, 10.0, 3.0);
-    EXPECT_FALSE(fc->may_fire());
-}
-
-TEST_F(FiringControllerTest, SetTargetRejectedWhenDisarmed) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+TEST_F(FiringControllerTest, NoFireDuringStartupBlankingEvenWhenArmedAndTargeted) {
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
     EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
 
-    controller_->set_target({0.0, 0.0, 1.0});
-
-    auto now = std::chrono::steady_clock::now();
-    (void)controller_->execute_cycle(now);
-    (void)controller_->execute_cycle(now + 4ms);
+    auto now = t0_;
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
+    for (int i = 0; i < 100; ++i) {
+        now += 5ms;  // 500ms, still inside the 1s blanking
+        (void)controller_->execute_cycle(now);
+    }
     EXPECT_FALSE(controller_->is_firing());
 }
 
-TEST_F(FiringControllerTest, SetTargetDoesNotFireImmediately) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+//
+// Arm gate
+//
+
+TEST_F(FiringControllerTest, SetTargetIsRejectedWhenDisarmed) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
     EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
 
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
+    auto now = after_blanking();
+    controller_->set_target(kValidTarget, now);
+    (void)controller_->execute_cycle(now);
+    (void)controller_->execute_cycle(now + 5ms);
 
-    auto now = std::chrono::steady_clock::now();
-    controller_->execute_cycle(now);
+    EXPECT_FALSE(controller_->is_firing());
 }
 
-TEST_F(FiringControllerTest, DacWriteBeforeFire) {
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
+TEST_F(FiringControllerTest, DisarmDuringPulseAbortsImmediately) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AtLeast(1));
+    controller_->disarm(fire_time + 10ms);
+
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->is_armed());
+}
+
+//
+// Max pulse duration
+//
+
+TEST_F(FiringControllerTest, PulseEndsExactlyAtMaxDuration) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    // One tick short of the limit: still firing.
+    EXPECT_FALSE(controller_->execute_cycle(fire_time + 99ms));
+    EXPECT_TRUE(controller_->is_firing());
+
+    // At the limit: the pulse ends.
+    EXPECT_TRUE(controller_->execute_cycle(fire_time + 100ms));
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+TEST_F(FiringControllerTest, PulseNeverExceedsMaxDurationEvenWithLateCycles) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AtLeast(1));
+
+    // The control thread stalls and returns 500ms late: the pulse must end on the
+    // very next cycle regardless.
+    EXPECT_TRUE(controller_->execute_cycle(fire_time + 500ms));
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+//
+// Cooldown
+//
+
+TEST_F(FiringControllerTest, CooldownBlocksRefireForTheFullConfiguredDuration) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->execute_cycle(fire_time + 100ms));
+    const auto pulse_end = fire_time + 100ms;
+
+    // cooldown_seconds = 10.0 in the production config.
+    EXPECT_FALSE(controller_->may_fire(pulse_end));
+    EXPECT_FALSE(controller_->may_fire(pulse_end + 5s));
+    EXPECT_FALSE(controller_->may_fire(pulse_end + 9999ms));
+    EXPECT_TRUE(controller_->may_fire(pulse_end + 10s));
+}
+
+TEST_F(FiringControllerTest, NoRefireDuringCooldownEvenWithAHeldTarget) {
+    auto fire_time = fire_once(*controller_);
+    auto now = fire_time + 100ms;
+    ASSERT_TRUE(controller_->execute_cycle(now));
+
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
+
+    for (int i = 0; i < 200; ++i) {
+        now += 25ms;  // 5s total, well inside the 10s cooldown
+        controller_->set_target(kValidTarget, now);
+        (void)controller_->execute_cycle(now);
+        ASSERT_FALSE(controller_->is_firing()) << "re-fired during cooldown at " << i;
+    }
+}
+
+TEST_F(FiringControllerTest, AbortedPulseAlsoStartsTheCooldown) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    // Abort via target loss rather than the clean max-duration path.
+    controller_->clear_target(fire_time + 10ms);
+    ASSERT_FALSE(controller_->is_firing());
+
+    EXPECT_FALSE(controller_->may_fire(fire_time + 10ms));
+    EXPECT_FALSE(controller_->may_fire(fire_time + 5s));
+    EXPECT_TRUE(controller_->may_fire(fire_time + 10ms + 10s));
+}
+
+TEST_F(FiringControllerTest, TargetChangeDuringPulseAbortsAndCoolsDown) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AtLeast(1));
+    controller_->set_target({0.02, 0.02, 0.7}, fire_time + 10ms);
+
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->may_fire(fire_time + 5s));
+}
+
+//
+// Motion blanking
+//
+
+TEST_F(FiringControllerTest, NoGalvoWriteWhileThePulseIsActive) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+    EXPECT_FALSE(controller_->execute_cycle(fire_time + 10ms));
+    EXPECT_FALSE(controller_->execute_cycle(fire_time + 20ms));
+}
+
+TEST_F(FiringControllerTest, DoesNotFireBeforeTheSettleDelayElapses) {
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
+
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
+
+    // settle_delay_ms = 3.0. The first cycle stamps galvo_command_time_ = now, so
+    // elapsed is 0 and the galvo cannot be settled yet.
+    (void)controller_->execute_cycle(now);
+    EXPECT_FALSE(controller_->is_firing());
+
+    (void)controller_->execute_cycle(now + 2ms);
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+TEST_F(FiringControllerTest, FiresOnceTheSettleDelayHasElapsed) {
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
+
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(1);
+
+    (void)controller_->execute_cycle(now);        // stamps the galvo command
+    (void)controller_->execute_cycle(now + 4ms);  // settle (3ms) has elapsed
+    EXPECT_TRUE(controller_->is_firing());
+}
+
+// A settle delay of zero must not mark the galvo settled in the same cycle the
+// DAC was written — that fires while the mirrors are still slewing, painting the
+// beam across the scan field at full power. config_validator rejects settle = 0,
+// and the comparison is strict so the controller fails closed regardless.
+TEST_F(FiringControllerTest, ZeroSettleDelayStillDefersFiringByOneCycle) {
+    auto fc = make_controller(100.0, 10.0, 0.0);
+    auto now = after_blanking();
+
+    fc->set_armed(true, now);
+    fc->set_target(kValidTarget, now);
+
+    (void)fc->execute_cycle(now);
+    EXPECT_FALSE(fc->is_firing()) << "fired in the same cycle the galvo was commanded";
+}
+
+TEST_F(FiringControllerTest, GalvoIsCommandedBeforeTheLaserFires) {
+    auto now = after_blanking();
+
+    // Declared outside the sequence: fire(false) is routine and unordered.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
 
     {
+        // The galvo is re-commanded every cycle while the target holds, so the
+        // property under test is the ordering, not the count: every DAC write
+        // must precede the pin going HIGH.
         InSequence seq;
-        // Galvo commanded each pre-fire cycle until settle completes, then laser.
         EXPECT_CALL(*mock_galvo_, set_position(_, _))
-            .Times(2)
-            .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-        EXPECT_CALL(*mock_laser_, fire(true))
-            .WillOnce(Return(std::expected<void, HardwareError>{}));
+            .Times(AtLeast(1))
+            .WillRepeatedly(Return(kOk));
+        EXPECT_CALL(*mock_laser_, fire(true)).Times(1).WillOnce(Return(kOk));
     }
 
-    auto now = std::chrono::steady_clock::now();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
     (void)controller_->execute_cycle(now);
     (void)controller_->execute_cycle(now + 4ms);
     EXPECT_TRUE(controller_->is_firing());
-    // Motion blanking: no further galvo writes while pulse active.
-    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
-    (void)controller_->execute_cycle(now + 8ms);
 }
 
-TEST_F(FiringControllerTest, NoGalvoWriteWhileLaserFiring) {
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
+//
+// Coordinate bounds
+//
 
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .Times(2)
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
+TEST_F(FiringControllerTest, TargetOutsideTheBoxNeverReachesTheGalvoOrLaser) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
 
-    auto now = std::chrono::steady_clock::now();
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target({0.0, 0.0, 3.0}, now);  // z beyond z_max = 1.0
+
+    for (int i = 0; i < 10; ++i) {
+        now += 5ms;
+        (void)controller_->execute_cycle(now);
+    }
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+TEST_F(FiringControllerTest, NonFiniteTargetNeverReachesTheGalvoOrLaser) {
+    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target({std::nan(""), 0.0, 0.7}, now);
+
+    for (int i = 0; i < 10; ++i) {
+        now += 5ms;
+        (void)controller_->execute_cycle(now);
+    }
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+//
+// Hardware faults latch the controller
+//
+
+TEST_F(FiringControllerTest, GalvoWriteFailureLatchesTheControllerHalted) {
+    ON_CALL(*mock_galvo_, set_position(_, _))
+        .WillByDefault(Return(std::unexpected(HardwareError::SpiTransferFailed)));
+    EXPECT_CALL(*mock_laser_, emergency_shutdown()).Times(AtLeast(1));
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
+    (void)controller_->execute_cycle(now);
+
+    EXPECT_TRUE(controller_->is_halted());
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->is_armed());
+}
+
+TEST_F(FiringControllerTest, LaserFireFailureLatchesTheControllerHalted) {
+    ON_CALL(*mock_laser_, fire(true))
+        .WillByDefault(Return(std::unexpected(HardwareError::GpioWriteFailed)));
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
     (void)controller_->execute_cycle(now);
     (void)controller_->execute_cycle(now + 4ms);
+
+    EXPECT_TRUE(controller_->is_halted());
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+TEST_F(FiringControllerTest, HaltedControllerCannotBeRearmedOrRetargeted) {
+    controller_->emergency_stop();
+    ASSERT_TRUE(controller_->is_halted());
+
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
+    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    EXPECT_FALSE(controller_->is_armed());
+
+    controller_->set_target(kValidTarget, now);
+    for (int i = 0; i < 10; ++i) {
+        now += 5ms;
+        (void)controller_->execute_cycle(now);
+    }
+    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_FALSE(controller_->may_fire(now + 1h));
+}
+
+//
+// Emergency stop
+//
+
+TEST_F(FiringControllerTest, EmergencyStopDuringPulseForcesLaserOffAndLatches) {
+    fire_once(*controller_);
     ASSERT_TRUE(controller_->is_firing());
 
-    Mock::VerifyAndClearExpectations(mock_galvo_.get());
-    EXPECT_CALL(*mock_galvo_, set_position(_, _)).Times(0);
-    (void)controller_->execute_cycle(now + 8ms);
-    (void)controller_->execute_cycle(now + 12ms);
-    (void)controller_->execute_cycle(now + 16ms);
-    EXPECT_TRUE(controller_->is_firing());
-}
-
-TEST_F(FiringControllerTest, EmergencyStopForcesLaserOff) {
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, emergency_shutdown())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-
+    EXPECT_CALL(*mock_laser_, emergency_shutdown()).Times(AtLeast(1));
     controller_->emergency_stop();
 
-    auto now = std::chrono::steady_clock::now();
-    auto result = controller_->execute_cycle(now);
-
-    EXPECT_FALSE(result);
-
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
-    auto cycle_result = controller_->execute_cycle(now + 1ms);
-    EXPECT_FALSE(cycle_result);
-}
-
-TEST_F(FiringControllerTest, ClearTargetPreventsFiring) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
-    controller_->clear_target();
-
-    auto now = std::chrono::steady_clock::now();
-    auto result = controller_->execute_cycle(now);
-    EXPECT_FALSE(result);
-}
-
-TEST_F(FiringControllerTest, LaserForceDisabledWhenNotMayFire) {
-    auto fc = make_controller(100.0, 10.0, 3.0);
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    auto now = std::chrono::steady_clock::now();
-    fc->execute_cycle(now);
-}
-
-TEST_F(FiringControllerTest, PulseEndsAfterMaxDuration) {
-    auto fc = make_controller(20.0, 0.0, 3.0);
-
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(_))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    fc->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    fc->set_target({0.0, 0.0, 1.0});
-
-    (void)fc->execute_cycle(t0);
-    (void)fc->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(fc->is_firing());
-
-    auto result = fc->execute_cycle(t0 + 30ms);
-    EXPECT_TRUE(result);
-    EXPECT_FALSE(fc->is_firing());
-}
-
-TEST_F(FiringControllerTest, CooldownPreventsReFireAfterPulse) {
-    auto fc = make_controller(100.0, 10.0, 3.0);
-
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(_))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    // Production cooldown has 1s startup blanking.
-    std::this_thread::sleep_for(1050ms);
-    fc->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    fc->set_target({0.0, 0.0, 1.0});
-
-    (void)fc->execute_cycle(t0);
-    (void)fc->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(fc->is_firing());
-
-    auto pulse_end = fc->execute_cycle(t0 + 110ms);
-    EXPECT_TRUE(pulse_end);
-    EXPECT_FALSE(fc->may_fire());
-
-    fc->set_target({0.5, 0.0, 1.0});
-    auto fire_result = fc->execute_cycle(t0 + 115ms);
-    EXPECT_FALSE(fire_result);
-    EXPECT_FALSE(fc->is_firing());
-}
-
-TEST_F(FiringControllerTest, DisarmTurnsOffLaserImmediately) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    controller_->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    controller_->set_target({0.0, 0.0, 1.0});
-
-    (void)controller_->execute_cycle(t0);
-    (void)controller_->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(controller_->is_firing());
-
-    controller_->disarm();
     EXPECT_FALSE(controller_->is_firing());
+    EXPECT_TRUE(controller_->is_halted());
     EXPECT_FALSE(controller_->is_armed());
-
-    auto result = controller_->execute_cycle(t0 + 12ms);
-    EXPECT_FALSE(result);
 }
 
-TEST_F(FiringControllerTest, ClearTargetAbortsPulseAndCooldown) {
-    auto fc = make_controller(100.0, 10.0, 3.0);
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(_))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
+TEST_F(FiringControllerTest, EmergencyStopIsIrreversible) {
+    controller_->emergency_stop();
 
-    std::this_thread::sleep_for(1050ms);
-    fc->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    fc->set_target({0.0, 0.0, 1.0});
-
-    (void)fc->execute_cycle(t0);
-    (void)fc->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(fc->is_firing());
-
-    fc->clear_target();
-
-    EXPECT_FALSE(fc->is_firing());
-    EXPECT_FALSE(fc->may_fire());
-}
-
-TEST_F(FiringControllerTest, SetTargetDuringPulseAbortsPulseAndCooldown) {
-    auto fc = make_controller(100.0, 10.0, 3.0);
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(_))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    std::this_thread::sleep_for(1050ms);
-    fc->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    fc->set_target({0.0, 0.0, 1.0});
-
-    (void)fc->execute_cycle(t0);
-    (void)fc->execute_cycle(t0 + 4ms);
-
-    EXPECT_TRUE(fc->is_firing());
-
-    fc->set_target({0.5, 0.0, 1.0});
-
-    EXPECT_FALSE(fc->is_firing());
-    EXPECT_FALSE(fc->may_fire());
-}
-
-TEST_F(FiringControllerTest, IsFiringFalseInitially) {
-    EXPECT_FALSE(controller_->is_firing());
-}
-
-TEST_F(FiringControllerTest, SetArmedFalseDisarmsAndBlocksFire) {
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    controller_->set_armed(true);
-    controller_->set_target({0.0, 0.0, 1.0});
-
-    auto t0 = std::chrono::steady_clock::now();
-    (void)controller_->execute_cycle(t0);
-    (void)controller_->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(controller_->is_firing());
-
-    controller_->set_armed(false);
-    EXPECT_FALSE(controller_->is_firing());
+    // No amount of time or re-arming clears the latch.
+    EXPECT_FALSE(controller_->may_fire(t0_ + 24h));
+    controller_->set_armed(true, t0_ + 24h);
     EXPECT_FALSE(controller_->is_armed());
-
-    controller_->set_target({0.0, 0.0, 1.0});
-    (void)controller_->execute_cycle(t0 + 8ms);
-    (void)controller_->execute_cycle(t0 + 12ms);
-    EXPECT_FALSE(controller_->is_firing());
+    EXPECT_TRUE(controller_->is_halted());
 }
 
-TEST_F(FiringControllerTest, LaserOffFailureTriggersEmergencyHalt) {
-    auto fc = make_controller(20.0, 0.0, 3.0);
-
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(false))
-        .WillOnce(Return(std::unexpected(HardwareError::GpioWriteFailed)));
-    EXPECT_CALL(*mock_laser_, emergency_shutdown())
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-
-    fc->set_armed(true);
-
-    auto t0 = std::chrono::steady_clock::now();
-    fc->set_target({0.0, 0.0, 1.0});
-    (void)fc->execute_cycle(t0);
-    (void)fc->execute_cycle(t0 + 4ms);
-    ASSERT_TRUE(fc->is_firing());
-
-    auto result = fc->execute_cycle(t0 + 30ms);
-    EXPECT_FALSE(result);
-    EXPECT_FALSE(fc->is_firing());
-    EXPECT_FALSE(fc->may_fire());
-}
-
-TEST_F(FiringControllerTest, RepeatedSetTargetSamePositionStillFires) {
-    controller_->set_armed(true);
-
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-
-    auto t0 = std::chrono::steady_clock::now();
-
-    // Simulate the production control loop calling set_target every cycle.
-    controller_->set_target({0.0, 0.0, 1.0});
-    (void)controller_->execute_cycle(t0);
-
-    controller_->set_target({0.0, 0.0, 1.0});
-    (void)controller_->execute_cycle(t0 + 4ms);
-
-    EXPECT_TRUE(controller_->is_firing())
-        << "Repeated set_target with the same position should not reset the settle timer";
-}
-
-TEST_F(FiringControllerTest, SetTargetWithChangedPositionResetsSettle) {
-    controller_->set_armed(true);
-
-    EXPECT_CALL(*mock_galvo_, set_position(_, _))
-        .WillRepeatedly(Return(std::expected<void, HardwareError>{}));
-
-    auto t0 = std::chrono::steady_clock::now();
-
-    controller_->set_target({0.0, 0.0, 1.0});
-    (void)controller_->execute_cycle(t0);
-
-    // Changing the target position before the first settle completes resets the timer,
-    // so no fire occurs at t0+4ms.
-    // Choose a position within the galvo cone: ~11.3 deg < 25 deg limit.
-    controller_->set_target({0.2, 0.0, 1.0});
-    (void)controller_->execute_cycle(t0 + 4ms);
-
-    EXPECT_FALSE(controller_->is_firing())
-        << "A changed target position should restart the settle timer";
-
-    EXPECT_CALL(*mock_laser_, fire(true))
-        .WillOnce(Return(std::expected<void, HardwareError>{}));
-    (void)controller_->execute_cycle(t0 + 8ms);
-    EXPECT_TRUE(controller_->is_firing());
 }

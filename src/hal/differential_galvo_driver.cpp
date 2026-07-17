@@ -32,13 +32,19 @@ DifferentialGalvoDriver::DifferentialGalvoDriver(std::unique_ptr<IDac> dac_x,
 }
 
 DifferentialGalvoDriver::~DifferentialGalvoDriver() {
-    if (dac_x_ && dac_y_) {
-        auto result = zero();
-        if (!result.has_value()) {
-            println(stderr, "[GALVO] Failed to zero on shutdown: {}",
-                         to_string(result.error()));
-        }
+    // Only confirm what was actually achieved — see the note in ~Laser.
+    if (!dac_x_ || !dac_y_) {
+        println(stderr, "[GALVO] Shutdown: DAC missing, galvo position UNKNOWN");
+        return;
     }
+
+    auto result = zero();
+    if (!result.has_value()) {
+        println(stderr, "[GALVO] Shutdown: FAILED to zero: {} — "
+                     "GALVO POSITION UNKNOWN", to_string(result.error()));
+        return;
+    }
+
     println("[GALVO] Shutdown complete, both axes at center (0V differential)");
 }
 

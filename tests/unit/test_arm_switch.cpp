@@ -41,7 +41,7 @@ TEST_F(ArmSwitchTest, IsArmedReturnsFalseInitially) {
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
     ArmSwitch arm_switch(std::move(mock_gpio_), 3);
-    arm_switch.initialize();
+    (void)arm_switch.initialize();
 
     EXPECT_FALSE(arm_switch.is_armed());
 }
@@ -52,7 +52,7 @@ TEST_F(ArmSwitchTest, DebounceHighToArmed) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     ArmSwitch arm_switch(std::move(mock_gpio_), 3);
-    arm_switch.initialize();
+    (void)arm_switch.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(3)
@@ -72,7 +72,7 @@ TEST_F(ArmSwitchTest, DebounceLowToDisarmed) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     ArmSwitch arm_switch(std::move(mock_gpio_), 3);
-    arm_switch.initialize();
+    (void)arm_switch.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(3)
@@ -101,7 +101,7 @@ TEST_F(ArmSwitchTest, SingleGlitchDoesNotChangeState) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     ArmSwitch arm_switch(std::move(mock_gpio_), 4);
-    arm_switch.initialize();
+    (void)arm_switch.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(4)
@@ -140,7 +140,7 @@ TEST_F(ArmSwitchTest, GpioReadFailureForcesDisarmed) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     ArmSwitch arm_switch(std::move(mock_gpio_), 3);
-    arm_switch.initialize();
+    (void)arm_switch.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(3)

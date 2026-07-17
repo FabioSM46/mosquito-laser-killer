@@ -28,6 +28,18 @@ CoordinateMapper::CoordinateMapper(const BoundingBox3D& bounding_box,
 
 auto CoordinateMapper::map_to_dac(const Point3D& target)
     -> std::expected<DacValues, MappingError> {
+    // Reject non-finite coordinates up front. Every comparison below is false for
+    // NaN, so each individual guard fails OPEN — and lround(NaN) is unspecified,
+    // yielding DAC code 0 (full deflection) while reporting success. Today only
+    // BoundingBox3D::contains happens to catch NaN, and relying on one
+    // incidentally-correct comparison polarity is not defense in depth.
+    if (!std::isfinite(target.x) || !std::isfinite(target.y) ||
+        !std::isfinite(target.z)) {
+        println(stderr, "[MAPPER] Rejecting non-finite target: ({}, {}, {})",
+                     target.x, target.y, target.z);
+        return std::unexpected(MappingError::Invalid3DPoint);
+    }
+
     if (!bounding_box_.contains(target)) {
         println(stderr, "[MAPPER] Target OUTSIDE bounding box: ({:.3f}, {:.3f}, {:.3f})",
                      target.x, target.y, target.z);

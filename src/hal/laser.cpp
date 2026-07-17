@@ -36,13 +36,22 @@ Laser::Laser(std::unique_ptr<IGpio> gpio, unsigned int pin, double max_pulse_ms)
 }
 
 Laser::~Laser() {
-    if (gpio_) {
-        auto result = gpio_->write(false);
-        if (!result.has_value()) {
-            println(stderr, "[LASER] Destructor: failed to force pin LOW: {}",
-                         to_string(result.error()));
-        }
+    // Only claim the pin is LOW if the write that makes it so actually succeeded.
+    // An unconditional confirmation is worse than no log at all: the post-incident
+    // trace would read "pin LOW confirmed" for a pin that is still HIGH.
+    if (!gpio_) {
+        println(stderr, "[LASER] Shutdown: NO GPIO interface, pin state UNKNOWN");
+        return;
     }
+
+    auto result = gpio_->write(false);
+    if (!result.has_value()) {
+        println(stderr, "[LASER] Shutdown: FAILED to force pin LOW: {} — "
+                     "PIN STATE UNKNOWN, remove power at the arm switch",
+                     to_string(result.error()));
+        return;
+    }
+
     println("[LASER] Shutdown complete, pin LOW confirmed");
 }
 

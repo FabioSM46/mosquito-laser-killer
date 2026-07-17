@@ -1,3 +1,5 @@
+#include <vector>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <memory>
 #include <cmath>
@@ -68,6 +70,79 @@ TEST_F(ConfigValidatorTest, NarrowLensFovIsNonCriticalWarning) {
 TEST_F(ConfigValidatorTest, ThreeMmLensFovIsConsistent) {
     auto warnings = validate_engagement_volume(config_);
     EXPECT_FALSE(find_warning(warnings, "camera-fov"));
+}
+
+// A NaN reaching any of these fields must abort startup. `x <= 0.0` is FALSE for
+// NaN, so the natural phrasing fails OPEN — and the validator is the last line of
+// defense for the two galvo-driver fields: a NaN scale makes map_to_dac's own
+// voltage guards false as well, and std::lround(NaN) then yields DAC code 0
+// (full deflection on both axes) returned as a SUCCESS, with the beam steered to
+// a corner of the cone the bounding box was never checked against.
+TEST_F(ConfigValidatorTest, NanInAnyCriticalNumericFieldAbortsStartup) {
+    const double nan = std::nan("");
+
+    struct Field {
+        const char* name;
+        double SystemConfig::* member;
+    };
+
+    // Top-level doubles.
+    for (const auto& f : std::vector<Field>{
+             {"settle_delay_ms", &SystemConfig::settle_delay_ms},
+             {"max_pulse_duration_ms", &SystemConfig::max_pulse_duration_ms},
+             {"cooldown_seconds", &SystemConfig::cooldown_seconds},
+             {"watchdog_timeout_ms", &SystemConfig::watchdog_timeout_ms},
+             {"watchdog_startup_grace_ms", &SystemConfig::watchdog_startup_grace_ms},
+         }) {
+        auto config = config_;
+        config.*(f.member) = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << f.name << ": NaN passed validation";
+    }
+
+    // Nested fields that feed the DAC voltage chain and the back-projection.
+    {
+        auto config = config_;
+        config.galvo_driver.input_scale_v_per_deg = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "input_scale_v_per_deg: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.galvo_driver.dac_max_diff_voltage = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "dac_max_diff_voltage: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.stereo.baseline_m = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "baseline_m: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.stereo.focal_length_px = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "focal_length_px: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.stereo.cx = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "stereo.cx: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.stereo.cy = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "stereo.cy: NaN passed validation";
+    }
+    {
+        auto config = config_;
+        config.detection.epipolar_tolerance_px = nan;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "epipolar_tolerance_px: NaN passed validation";
+    }
 }
 
 TEST_F(ConfigValidatorTest, HorizontalFovDerivationCorrect) {

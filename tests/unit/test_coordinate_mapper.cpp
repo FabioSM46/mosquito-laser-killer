@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <memory>
+#include <cmath>
+#include <limits>
 
 #include "core/types.h"
 #include "core/error.h"
@@ -145,4 +147,48 @@ TEST_F(CoordinateMapperTest, DoesNotClampOutOfRangeCodes) {
     auto result = mapper.map_to_dac({0.364, 0.0, 1.0});
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::DacRangeInvalid);
+}
+
+//
+// Non-finite coordinates.
+//
+// Each of these asserts the error is specifically Invalid3DPoint — the code
+// returned by the isfinite() guard at the top of map_to_dac — rather than merely
+// asserting that some rejection happened. The distinction is the whole point.
+// BoundingBox3D::contains() also happens to reject NaN, because every one of its
+// comparisons is false for NaN, so a test that only checked has_value() would
+// pass with the isfinite guard deleted and would be measuring the bounding box
+// instead. That matters because every OTHER link in the chain fails OPEN on NaN:
+// the galvo-limit and voltage comparisons are all false for NaN, and lround(NaN)
+// is unspecified — on this target it yields LONG_MIN, which casts to 0 and passes
+// the 0..4095 range check as a legitimate DAC code, i.e. full negative deflection
+// on both axes, reported as success.
+TEST_F(CoordinateMapperTest, NanXIsRejectedAsInvalidPointNotMerelyOutOfBounds) {
+    auto result = mapper_->map_to_dac({std::nan(""), 0.0, 1.0});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MappingError::Invalid3DPoint);
+}
+
+TEST_F(CoordinateMapperTest, NanYIsRejectedAsInvalidPoint) {
+    auto result = mapper_->map_to_dac({0.0, std::nan(""), 1.0});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MappingError::Invalid3DPoint);
+}
+
+TEST_F(CoordinateMapperTest, NanZIsRejectedAsInvalidPoint) {
+    auto result = mapper_->map_to_dac({0.0, 0.0, std::nan("")});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MappingError::Invalid3DPoint);
+}
+
+TEST_F(CoordinateMapperTest, InfiniteCoordinatesAreRejectedAsInvalidPoint) {
+    constexpr double inf = std::numeric_limits<double>::infinity();
+
+    for (const auto& p : {Point3D{inf, 0.0, 1.0}, Point3D{0.0, inf, 1.0},
+                          Point3D{0.0, 0.0, inf}, Point3D{-inf, 0.0, 1.0}}) {
+        auto result = mapper_->map_to_dac(p);
+        ASSERT_FALSE(result.has_value())
+            << "accepted a non-finite point (" << p.x << ", " << p.y << ", " << p.z << ")";
+        EXPECT_EQ(result.error(), MappingError::Invalid3DPoint);
+    }
 }

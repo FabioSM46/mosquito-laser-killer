@@ -44,7 +44,7 @@ TEST_F(EStopTest, ReleasedInitially) {
         .WillOnce(Return(std::expected<void, HardwareError>{}));
 
     EStop e_stop(std::move(mock_gpio_), 3);
-    e_stop.initialize();
+    (void)e_stop.initialize();
 
     EXPECT_FALSE(e_stop.is_pressed());
 }
@@ -55,7 +55,7 @@ TEST_F(EStopTest, ActiveLowDebouncedPress) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     EStop e_stop(std::move(mock_gpio_), 3);
-    e_stop.initialize();
+    (void)e_stop.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(3)
@@ -75,7 +75,7 @@ TEST_F(EStopTest, ActiveLowDebouncedRelease) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     EStop e_stop(std::move(mock_gpio_), 3);
-    e_stop.initialize();
+    (void)e_stop.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(3)
@@ -104,7 +104,7 @@ TEST_F(EStopTest, SingleGlitchDoesNotChangeState) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     EStop e_stop(std::move(mock_gpio_), 4);
-    e_stop.initialize();
+    (void)e_stop.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .Times(4)
@@ -143,7 +143,7 @@ TEST_F(EStopTest, GpioReadFailureForcesPressed) {
 
     MockGpio* raw_ptr = mock_gpio_.get();
     EStop e_stop(std::move(mock_gpio_), 3);
-    e_stop.initialize();
+    (void)e_stop.initialize();
 
     EXPECT_CALL(*raw_ptr, read())
         .WillOnce(Return(std::unexpected(HardwareError::GpioReadFailed)));
