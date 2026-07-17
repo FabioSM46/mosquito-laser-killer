@@ -18,6 +18,7 @@ A C++23 real-time embedded system for Raspberry Pi 5 that detects, tracks, and n
 | X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
 | Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
 | Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | 3.3 V → 5 V level translation for SPI and laser TTL |
+| Pulse-duration backstop | SN74HC123N monostable + SN74HC08N AND gate (220 kΩ / 1 µF) | Independent hardware ≤~99 ms cap on laser TTL (see AGENTS.md §4.1) |
 | Arm switch | Lever SPST | System arm input (active HIGH) |
 | E-stop | Mushroom DPST push-button | Emergency stop (active LOW) |
 | Zener diode | BZX55C3V3 1/2 W | E-stop and arm-switch input overvoltage protection |
@@ -29,7 +30,7 @@ A C++23 real-time embedded system for Raspberry Pi 5 that detects, tracks, and n
 
 A complete wiring guide is in [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md). Key points:
 
-- **RPi 5 GPIO 18** → level shifter → laser TTL input (3.3 V logic shifted to 5 V). Configurable via `laser_pin`.
+- **RPi 5 GPIO 18** → level shifter → 74HC123 monostable + AND-gate pulse-duration backstop → laser TTL input (3.3 V logic shifted to 5 V). Configurable via `laser_pin`. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §11a.
 - **RPi 5 GPIO 24** → lever SPST arm switch sense circuit (active HIGH when armed). The same arm switch also switches 12 V power to the laser driver. Configurable via `arm_switch_pin`.
 - **RPi 5 GPIO 25** → mushroom DPST E-stop sense (active LOW when pressed). One E-stop pole breaks mains Live; the second pole drives the GPIO sense circuit. Configurable via `e_stop_pin`.
 - **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC).

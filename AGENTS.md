@@ -20,6 +20,10 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
 | Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
 | Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | TTL level translation for laser driver |
+| Monostable | SN74HC123N (DIP-16) dual retriggerable one-shot | Hardware pulse-duration backstop on laser TTL (§4.1) |
+| Monostable timing R | 220 kΩ (1Rext/Cext → +5 V) | Sets one-shot period with C_ext |
+| Monostable timing C | 1 µF (across 1Cext ↔ 1Rext/Cext) | Sets one-shot period ≈ 0.45·R·C ≈ 99 ms |
+| AND gate | SN74HC08N (DIP-14) quad 2-input AND | Gates laser TTL = GPIO18 ∧ one-shot-Q (§4.1) |
 | Arm switch | Lever SPST | System arm input (active HIGH on GPIO 24) |
 | E-stop | Mushroom DPST push-button | Emergency stop (active LOW on GPIO 25) |
 | Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
@@ -28,7 +32,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
 
 **Power and signal wiring:**
-- RPi 5 GPIO 18 → level shifter → laser TTL input (configurable via `laser_pin`).
+- RPi 5 GPIO 18 → level shifter → **74HC123 monostable + AND gate** → laser TTL input (configurable via `laser_pin`). The monostable is the independent hardware pulse-duration backstop; see §4.1.
 - RPi 5 GPIO 24 → lever SPST arm switch (configurable via `arm_switch_pin`).
 - RPi 5 GPIO 25 → mushroom DPST E-stop (configurable via `e_stop_pin`).
 - RPi 5 SPI0 CE0 (pin 24) → MCP4922 #1 `/CS` (X-axis); SPI0 CE1 (pin 26) → MCP4922 #2 `/CS` (Y-axis).
@@ -110,9 +114,16 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 **The real bound is ~105ms, not 100ms.** The check only runs when the control thread runs, so the true limit is `max_pulse_duration_ms` plus one control cycle (~4.8ms at 210fps) plus scheduling jitter. Quoting a flat 100ms would be a claim the software cannot make.
 
-**Residual risk — no hardware backstop.** Every mechanism that can end a pulse (`enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, the E-stop) runs on the *control thread itself*. There is no `/dev/watchdog`, monostable, or independent timer behind the GPIO. If that thread stalls with the pin HIGH, no software path turns the laser off; recovery is the operator opening the arm switch, which is a true hardware interlock (it cuts 12V to the driver — see `docs/HARDWARE_WIRING.md`). The E-stop is *not* a substitute here: its GPIO is polled by the very thread that would be hung.
+**Every *software* mechanism that can end a pulse runs on the control thread itself.** `enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, and the E-stop poll are all on the *control thread*. If that thread stalls with the pin HIGH, none of them fires. This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall — and it is why the pulse bound needs an enforcer that is *not* on that thread.
 
-This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall. **A retriggerable monostable on the laser TTL line remains the recommended hardware mitigation**; it is the only thing that would make a flat pulse-duration guarantee true.
+**Hardware backstop — 74HC123 retriggerable monostable on the TTL line.** A one-shot sits between the level shifter and the laser driver TTL, wired so the laser TTL is `GPIO18 (level-shifted) ∧ one-shot-Q`, with the one-shot triggered by GPIO 18's rising edge (and `1CLR` tied to the fire line so it re-arms between shots). Effect: a normal short pulse passes through unchanged (the AND gate follows GPIO 18), but a control thread that hangs with GPIO 18 stuck HIGH is force-cut when Q times out — **with no software path and no operator action.** This is the enforcer the software cannot be: it is the only thing that makes the pulse-duration bound independent of the control thread. Period ≈ `0.45 · R_ext · C_ext` = `0.45 · 220 kΩ · 1 µF` ≈ **99 ms** (see `docs/HARDWARE_WIRING.md` §11a).
+
+The guarantee is real **only if three conditions hold, and each must be scope-verified — an unverified backstop is a comment (§4, §7):**
+1. **The AND gating is present.** If Q drives the laser TTL *alone* (no AND with GPIO 18), every fire pulse is stretched to the full ~99 ms one-shot width — a hazard, not a guard. Verify: a short GPIO 18 pulse must produce an equally short laser pulse; a *stuck-HIGH* GPIO 18 must produce a single ~99 ms pulse and then stay dark.
+2. **Firing is a single sustained level, never a PWM burst.** "Retriggerable" means edges *restart* the timer; repeated edges within the window would hold Q HIGH indefinitely and defeat the cap. Current firing (`fire(true)`/`fire(false)`) satisfies this — it is now a constraint the firing path must never violate.
+3. **The measured period is what you intend.** At ~99 ms the one-shot sits *below* the ~105 ms real software bound, so hardware becomes the binding limit and will also clip legitimate max-length pulses (safe, and arguably desirable). If the backstop should only trip on a *failure*, raise it above the software bound (e.g. C_ext = 1.5 µF → ~130–150 ms). R/C tolerance alone can swing the period ±20%.
+
+**Remaining residual risk.** The '123 is itself a single component; a failure of the one-shot or a broken AND gate must be considered in the FMEA. The operator interlocks remain the outer layers and are *not* on the control thread: the **arm switch** cuts 12 V to the driver (a true hardware interlock), and the **E-stop** cuts mains — but both require a human hand and neither is autonomous. The monostable is the only autonomous enforcer of the *duration* bound.
 
 ### 4.2 Firing Cooldown (10 seconds)
 

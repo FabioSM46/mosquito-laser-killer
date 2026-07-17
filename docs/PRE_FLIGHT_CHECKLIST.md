@@ -46,6 +46,10 @@ Do not plug in the 230 V AC until every item below is complete.
   - E-Stop pressed → GPIO 25 LOW.
   - Arm switch OFF → GPIO 24 LOW.
   - Arm switch ON → GPIO 24 ~2.98 V (HIGH).
+- [ ] **74HC123 pulse-duration backstop is wired and scope-verified** (see `docs/HARDWARE_WIRING.md` §11a). This is the only enforcer of the pulse-duration bound that is independent of the control thread:
+  - A short (~10 ms) GPIO 18 pulse produces an equally short laser-TTL pulse (NOT stretched to ~99 ms — if stretched, the AND gate is missing/miswired: **no-go**).
+  - A stuck-HIGH GPIO 18 drives the laser TTL LOW at the measured one-shot period and keeps it LOW.
+  - The one-shot period is measured on a scope and recorded.
 - [ ] All power supplies, DACs, the Pi, and the galvo driver share a single common ground.
 - [ ] OD 4+ safety eyewear for 450 nm is available for every person in the room.
 - [ ] The 2.5 W Class 4 laser module is **disconnected** and stored. For this checklist, use a low-power laser or no laser.
@@ -129,6 +133,7 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 | Item | Required Result |
 |------|-----------------|
 | Enclosure + E-Stop + arm switch | Physically installed and functionally tested |
+| 74HC123 pulse-duration backstop | Wired with AND gating and scope-verified (short pulse passes, stuck-HIGH capped) |
 | Camera calibration | Real values entered, startup validation passes |
 | Camera by-path identification | Stable symlinks in `config/system_config.yaml` |
 | Dry-run tracking | Low-power target tracked smoothly across the bounding box |
