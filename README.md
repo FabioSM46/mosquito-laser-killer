@@ -226,6 +226,7 @@ All detection parameters live in the `detection:` block of `config/system_config
 - `epipolar_tolerance_px` — how far apart, vertically, two blobs may be and still be considered the same object. Depends on your rectification quality
 
 ### Stereo Calibration
+- Full step-by-step procedure: [`docs/CALIBRATION.md`](docs/CALIBRATION.md) (chessboard capture, intrinsic/stereo calibration script, extrinsic galvo alignment)
 - Update `config/system_config.yaml` stereo section with calibrated values
 - Baseline: distance between camera optical centers in meters
 - Focal length: from camera calibration (pixels)

@@ -129,7 +129,9 @@ stereo calibration — do not rely on the nominal lens focal length for
 triangulation accuracy. The default (`≈500 px` for the 3 mm lens at a 640-wide
 full-sensor mode) is only a placeholder; replace it with the calibrated value
 for your specific rig. `focal_length_px` affects depth (`z = f·B/disparity`),
-not the FOV-based coverage validation (which uses the physical lens).
+not the FOV-based coverage validation (which uses the physical lens). See
+[`CALIBRATION.md`](CALIBRATION.md) for the chessboard capture and OpenCV
+`stereoCalibrate` procedure that produces this value.
 
 ### 2.3 Default capture mode
 

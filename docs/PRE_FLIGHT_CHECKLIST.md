@@ -63,7 +63,7 @@ Do not plug in the 230 V AC until every item below is complete.
 
 ## 3. Calibration Required Before Aiming
 
-The default values in `config/system_config.yaml` are placeholders. The system will **not** aim correctly until these are replaced with measured values for your specific hardware.
+The default values in `config/system_config.yaml` are placeholders. The system will **not** aim correctly until these are replaced with measured values for your specific hardware. For the step-by-step procedure behind this section (chessboard capture, intrinsic/stereo calibration, and the extrinsic galvo alignment in §5), see [`CALIBRATION.md`](CALIBRATION.md).
 
 - [ ] Cameras are rigidly mounted with the baseline configured in `stereo.baseline_m` (default 0.12 m).
 - [ ] Cameras are aimed parallel to each other (no toe-in) and aligned vertically.
