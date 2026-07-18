@@ -20,7 +20,7 @@ system will not aim correctly until they are replaced with measured values for
 |---|-------------|--------|---------------------------|
 | 1 | **Per-camera intrinsics** | Chessboard, one camera at a time | (intermediate — feeds stereo) |
 | 2 | **Stereo pair** | Chessboard, both cameras together | `stereo.focal_length_px`, `stereo.cx`, `stereo.cy`, `stereo.baseline_m` |
-| 3 | **Camera↔galvo extrinsic** | Low-power laser, manual | `galvo_driver.input_scale_v_per_deg`; corrects physical axis alignment |
+| 3 | **Camera↔galvo extrinsic** | Low-power laser, manual | axis alignment is corrected **mechanically** (shim/rotate the mount); only the *scale* is a config field, `galvo_driver.input_scale_v_per_deg` |
 
 Why each matters for safety, not just accuracy:
 
@@ -47,8 +47,18 @@ what makes them right.
 - [ ] Cameras **rigidly** mounted at the final baseline (`stereo.baseline_m`,
       default 0.12 m). Nothing may move between calibration and operation — a
       bumped camera invalidates the whole calibration.
-- [ ] Cameras aimed parallel (no toe-in) and aligned vertically. Rough alignment
-      here; stereo rectification absorbs the residual.
+- [ ] Cameras aimed parallel (no toe-in) and aligned vertically. **Mechanical
+      parallelism is load-bearing — nothing rectifies at runtime.** The pipeline
+      matches raw pixels; there is no `stereoRectify`/`undistort`/`remap` in the
+      code path. The only thing absorbing a residual camera-pair misalignment is
+      the fixed `detection.epipolar_tolerance_px` (2.0 px), and a residual
+      rotation does not just add a constant vertical offset — it makes the
+      epipolar error and the effective `cx`/`fx` vary across the frame, biasing
+      aim toward the edges. Before trusting `epipolar_tolerance_px` to cover it,
+      verify a **static** chessboard produces a near-zero vertical offset between
+      the same corner in the two views **across the whole frame** (corners
+      included), not just at centre. If it doesn't, fix the mounting, not the
+      tolerance.
 - [ ] Stable device paths identified and set in `config/system_config.yaml`:
       ```
       ls -l /dev/v4l/by-path/
@@ -69,7 +79,11 @@ what makes them right.
 
 ## 2. Capture Calibration Image Pairs
 
-Capture **synchronized** left/right pairs of the chessboard at many poses.
+Capture left/right pairs of the chessboard at many poses. The grabber below
+reads the two cameras sequentially (one `read()` then the other), so the frames
+are offset by one read latency — **not** hardware-synchronized. That is fine
+*only because §2 mandates a static board*: with nothing moving, the offset
+captures the same scene. Do not reuse this grabber for anything that moves.
 
 - [ ] 20–30 pairs minimum. More poses beat more images of the same pose.
 - [ ] Cover the whole frame: corners, edges, centre. Under-sampled image regions
@@ -161,6 +175,11 @@ print(f"  baseline_m: {baseline_m:.5f}")
 print(f"  focal_length_px: {fx:.2f}   # (fy={fy:.2f}; expect fx≈fy)")
 print(f"  cx: {cx:.2f}")
 print(f"  cy: {cy:.2f}")
+
+# 3) Distortion CHECK — the runtime never undistorts, so these must be small.
+#    k1,k2 are the dominant radial terms. |k1| >~ 0.05 means real barrel/pincushion.
+print(f"\ndistortion  L k1={dL[0,0]:+.4f} k2={dL[0,1]:+.4f}   "
+      f"R k1={dR[0,0]:+.4f} k2={dR[0,1]:+.4f}   (want |k1|,|k2| < ~0.05)")
 ```
 
 ### Acceptance thresholds
@@ -172,10 +191,33 @@ print(f"  cy: {cy:.2f}")
 | `fx` vs `fy` | within ~1–2% | Large gap ⇒ wrong square size or bad corners |
 | `baseline_m` vs measured | within a few mm | Sanity-check against a physical tape measure |
 | `cx`, `cy` | near frame centre (320, 200) | Far off ⇒ suspect a bad pose set; validator rejects outside-frame |
+| Distortion `k1`, `k2` | **`\|k1\|`,`\|k2\|` < ~0.05** | Lens is not "distortion-free" — see below |
 
 Do not ship a calibration that misses these — a high RMS means the depth
 discriminator is unreliable, and depth is the guard that separates a mosquito
 from a bystander.
+
+### The distortion coefficients are checked, not applied
+
+The script computes `dL`/`dR` but the **runtime never undistorts** — there is no
+`undistort`/`initUndistortRectifyMap` in the pipeline, and the config calls the
+3 mm lens "distortion-free." That is an **assumption you must verify, not a
+given.** The distortion print above is that check: if `|k1|` or `|k2|` exceeds
+~0.05, the lens has real barrel/pincushion, and because nothing corrects it, the
+effective principal point and focal length drift toward the ±15° edges — exactly
+where §5's scale check lives, so the error masquerades as a galvo-scale problem
+you will never tune out.
+
+Two quick confirmations:
+
+- **Numeric:** `|k1|`, `|k2|` both under ~0.05 (printed by the script).
+- **Visual:** overlay a straight edge on a raw frame corner (or view the
+  chessboard at a frame corner) — the board's outer rows/columns must stay
+  straight, not bow. Bowing at the corners = distortion the runtime won't remove.
+
+If the lens fails this, the options are a lower-distortion lens or adding an
+undistort stage to the capture path (a code change, out of scope for this doc).
+Do not paste the numbers and proceed as if the lens were ideal.
 
 ---
 
