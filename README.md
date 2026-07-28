@@ -86,7 +86,7 @@ Abnormal exits are distinguishable, so a supervisor (`systemd` with `Restart=on-
 | Dependency | Version | Purpose |
 |-----------|---------|---------|
 | CMake | 3.25+ | Build system |
-| GCC/Clang | 14+ (C++23) | Compiler |
+| GCC 13+ / Clang 17+ | C++23 (`std::format`, `std::expected`) | Compiler — verified with GCC 13.4 |
 | libgpiod | 2.x | GPIO control |
 | OpenCV | 4.5+ | Image processing, stereo (Raspberry Pi OS Bookworm ships 4.6) |
 | Eigen3 | 3.4+ | Linear algebra |
