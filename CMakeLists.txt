@@ -52,6 +52,7 @@ set(HAL_SOURCES
     src/hal/gpio_impl.cpp
     src/hal/spi_impl.cpp
     src/hal/camera_impl.cpp
+    src/hal/capture_step.cpp
     src/hal/mcp4922.cpp
     src/hal/differential_galvo_driver.cpp
     src/hal/laser.cpp
@@ -73,6 +74,7 @@ set(VISION_SOURCES
     src/vision/tracker.cpp
     src/vision/multi_tracker.cpp
     src/vision/target_selector.cpp
+    src/vision/processing_step.cpp
 )
 
 set(CONTROL_SOURCES

@@ -276,7 +276,7 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 |-----------|------|--------------|
 | `IGpio` | `MockGpio` | Laser pin enforced LOW on init/shutdown/error; **drives a real `Laser` so the pin state is observed, not asserted about a mock** |
 | `ISpi` | `MockSpi` | Wire format via a real `MCP4922`; SPI errors → controller latches → SAFE_HALT |
-| `ICamera` | *(none — the dead `MockCamera` was removed)* | `CameraImpl` has no seam below real V4L2; the exposure-unit conversion is unit-tested (`test_camera_impl.cpp`) and capture-failure→halt runs only against hardware. Extracting the capture loop into a testable step function is the tracked §7 follow-up |
+| `ICamera` | `MockCamera` | `capture_step()`: frame assembly, per-camera buffer identity and timestamps, left-before-right grab order, capture failure → error propagation (the halt wiring on that error stays in `main`, which may only set atomics). `CameraImpl` itself has no seam below real V4L2; its exposure-unit conversion is unit-tested in `test_camera_impl.cpp` |
 | `IDac` | `MockDac` | DAC values validated in 0–4095 range |
 | `IGalvoDriver` | `MockGalvoDriver` | Motion blanking ordering — DAC write before laser fire |
 | `ILaser` | `MockLaser` | Arm/cooldown/max-pulse gating; `enforce_max_pulse` called every cycle; emergency shutdown |
@@ -295,7 +295,7 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 
 `tests/CMakeLists.txt` must never relax `-Werror=unused-result`.
 
-**Known gap (deliberate, tracked):** the capture and processing thread bodies are still inline lambdas in `main.cpp` and therefore untestable — the same hand-copy hazard that motivated extracting `control_step()`. Extracting `capture_step`/`processing_step` is deferred follow-up work; until then, thread-topology behaviour is exercised only by the stress tests, which re-create the topology by hand.
+All three thread bodies are now extracted step functions — `capture_step()` (`src/hal/capture_step.cpp`), `processing_step()` (`src/vision/processing_step.cpp`) and `control_step()` (`src/control/control_loop.cpp`) — so the per-iteration logic is the real code under test, not a copy. What remains inline in `main.cpp` is deliberate plumbing only: shutdown-flag polling, queue drain/push, heartbeat stamping, the skew watermark, and pacing sleeps — exercised end-to-end by the stress tests.
 
 ### 7.1 Unit Tests (Google Test + Google Mock)
 
@@ -317,6 +317,8 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `MultiTrackerTest` | Confirmation gating (3 **consecutive** hits — a flickering phantom never confirms; the latch survives coasting), **static point confirmed but never engageable**, ID stability, coasting through gaps, horizon death, mutual-NN association, max_tracks cap, non-finite rejection, NaN-config sanitization |
 | `TargetSelectorTest` | Sticky engagement vs nearer challengers, nearest-first fallback, release on non-engageable, reset |
 | `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
+| `CaptureStepTest` | `capture_step()` over `MockCamera`: frame assembly with per-camera data/timestamps, **left-before-right** grab order, left failure short-circuits, right failure propagates |
+| `ProcessingStepTest` | The real detect→match→track→select pipeline with the **motion gate ON**: seed frame yields nothing, a flying target is commanded on exactly the 3rd consecutive detection with sane x/y/z, an ambiguous four-blob cluster yields silence, empty frames still emit explicit no-target commands |
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
 | `ConfigLoaderTest` | Fail-closed loading (`test_config_loader.cpp`): missing file / malformed value / explicit null → error, **no partial config escapes**; absent keys keep the types.h defaults |
 | `SignalHandlerTest` | SIGINT/SIGTERM set the flag, reset clears it, programmatic callback fires, **the signal context never invokes the callback**. The end-to-end signal→pin-LOW property lives in the concurrent-shutdown stress test, on a real observed pin |
@@ -370,6 +372,7 @@ mosquito-laser-killer/
 │   │   ├── gpio_impl.h/.cpp     # Raspberry Pi GPIO via sysfs/libgpiod
 │   │   ├── spi_impl.h/.cpp      # Linux SPI via spidev
 │   │   ├── camera_impl.h/.cpp   # OV9281 via V4L2
+│   │   ├── capture_step.h/.cpp  # One capture-thread iteration (testable, §7)
 │   │   ├── mcp4922.h/.cpp       # MCP4922 DAC via SPI
 │   │   ├── differential_galvo_driver.h/.cpp  # ±5V differential galvo drive over the DAC pair
 │   │   └── laser.h/.cpp         # Laser TTL control with safety timers
@@ -386,7 +389,8 @@ mosquito-laser-killer/
 │   │   ├── stereo_matcher.h/.cpp # Epipolar-gated multi-target correspondence + triangulation
 │   │   ├── tracker.h/.cpp       # Kalman filter tracker
 │   │   ├── multi_tracker.h/.cpp # Multi-track association, confirmation, coasting
-│   │   └── target_selector.h/.cpp # Sticky single-target engagement policy
+│   │   ├── target_selector.h/.cpp # Sticky single-target engagement policy
+│   │   └── processing_step.h/.cpp # One processing-thread iteration (testable, §7)
 │   └── control/
 │       ├── coordinate_mapper.h/.cpp  # 3D→DAC conversion with bounds checking
 │       ├── firing_controller.h/.cpp  # Laser fire sequencing with all safety gates
@@ -396,6 +400,7 @@ mosquito-laser-killer/
 │   ├── mocks/
 │   │   ├── mock_gpio.h
 │   │   ├── mock_spi.h
+│   │   ├── mock_camera.h
 │   │   ├── mock_dac.h
 │   │   ├── mock_galvo_driver.h
 │   │   └── mock_laser.h
@@ -417,6 +422,8 @@ mosquito-laser-killer/
 │   │   ├── test_differential_galvo_driver.cpp
 │   │   ├── test_mcp4922.cpp
 │   │   ├── test_camera_impl.cpp       # exposure-unit conversion (V4L2 100 µs units)
+│   │   ├── test_capture_step.cpp      # capture-thread iteration over MockCamera
+│   │   ├── test_processing_step.cpp   # detect→match→track→select, end to end
 │   │   ├── test_config_loader.cpp     # fail-closed YAML loading
 │   │   ├── test_config_validator.cpp
 │   │   ├── test_print.cpp             # non-blocking logger (§4.11)

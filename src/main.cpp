@@ -11,6 +11,7 @@
 #include "hal/gpio_impl.h"
 #include "hal/spi_impl.h"
 #include "hal/camera_impl.h"
+#include "hal/capture_step.h"
 #include "hal/mcp4922.h"
 #include "hal/differential_galvo_driver.h"
 #include "hal/laser.h"
@@ -27,6 +28,7 @@
 #include "vision/stereo_matcher.h"
 #include "vision/multi_tracker.h"
 #include "vision/target_selector.h"
+#include "vision/processing_step.h"
 
 #include "control/coordinate_mapper.h"
 #include "control/firing_controller.h"
@@ -186,6 +188,8 @@ auto main(int argc, char* argv[]) -> int {
     StereoMatcher stereo_matcher(config.stereo, config.detection, config.bounding_box);
     MultiTracker multi_tracker(config.tracking);
     TargetSelector target_selector;
+    ProcessingDeps processing_deps{detector_left, detector_right, stereo_matcher,
+                                   multi_tracker, target_selector};
 
     ThreadSafeQueue<StereoFrame> frame_queue;
     ThreadSafeQueue<TargetCommand> target_queue;
@@ -261,41 +265,24 @@ auto main(int argc, char* argv[]) -> int {
         }
 
         auto cycle_period = std::chrono::microseconds(1'000'000 / config.target_fps);
-        const size_t frame_bytes =
-            static_cast<size_t>(config.frame_width) * config.frame_height;
 
         while (!stoken.stop_requested() &&
                !g_shutdown_requested.load(std::memory_order_acquire) &&
                !signal_handler.is_shutdown_requested()) {
             auto cycle_start = std::chrono::steady_clock::now();
 
-            StereoFrame frame;
-            frame.frame_id = frame_id++;
-            frame.timestamp = cycle_start;
-            frame.left_frame.resize(frame_bytes);
-            frame.right_frame.resize(frame_bytes);
-
-            auto left_result = left_cam.capture(frame.left_frame.data(),
-                                                 frame.left_frame.size());
-            if (!left_result.has_value()) {
-                println(stderr, "[CAPTURE] Left camera capture failed: {}",
-                             to_string(left_result.error()));
-                request_system_halt("left camera capture failed");
+            auto frame = capture_step(left_cam, right_cam, frame_id++,
+                                      config.frame_width, config.frame_height,
+                                      cycle_start);
+            if (!frame.has_value()) {
+                // capture_step logged the failing side; this thread may only
+                // set atomics, so the halt is a flag the control thread and
+                // main act on.
+                request_system_halt("camera capture failed");
                 break;
             }
-            frame.left_timestamp = left_cam.last_frame_timestamp();
 
-            auto right_result = right_cam.capture(frame.right_frame.data(),
-                                                    frame.right_frame.size());
-            if (!right_result.has_value()) {
-                println(stderr, "[CAPTURE] Right camera capture failed: {}",
-                             to_string(right_result.error()));
-                request_system_halt("right camera capture failed");
-                break;
-            }
-            frame.right_timestamp = right_cam.last_frame_timestamp();
-
-            frame_queue.push(std::move(frame));
+            frame_queue.push(std::move(frame.value()));
 
             auto cycle_end = std::chrono::steady_clock::now();
             auto elapsed = cycle_end - cycle_start;
@@ -359,38 +346,11 @@ auto main(int argc, char* argv[]) -> int {
                 max_skew = std::chrono::steady_clock::duration::zero();
             }
 
-            auto left_blobs = detector_left.detect_blobs(frame.left_frame.data(),
-                                                         frame.left_frame.size());
-            auto right_blobs = detector_right.detect_blobs(frame.right_frame.data(),
-                                                           frame.right_frame.size());
-
-            TargetCommand cmd;
-            cmd.frame_id = frame.frame_id;
-            cmd.timestamp = frame.timestamp;
-
-            // Correspondence is established per blob and validated against the
-            // epipolar constraint; an ambiguous cluster yields no target from
-            // that cluster, while clean pairs elsewhere in the frame survive.
-            auto targets_3d = stereo_matcher.match_all(left_blobs, right_blobs);
-
-            // Tracks coast through brief detection gaps on their Kalman
-            // predictions (bounded by k_max_predict_horizon_s) instead of
-            // throwing the velocity estimates away; a track past the horizon
-            // is deleted — fail closed. Only confirmed, plausibly-flying
-            // tracks are engageable.
-            auto tracks = multi_tracker.update(targets_3d, frame.timestamp);
-
-            // One laser, one galvo: pick the sticky/nearest engageable target.
-            // The control thread and firing path below are unchanged — they
-            // still see exactly one TargetCommand per frame.
-            auto chosen = target_selector.select(tracks);
-
-            cmd.target_valid = chosen.has_value();
-            if (chosen.has_value()) {
-                cmd.target_position = chosen->position;
-            }
-
-            target_queue.push(std::move(cmd));
+            // detect → match → track → select, one TargetCommand per frame
+            // (target_valid == false when nothing engageable survived). The
+            // pipeline lives in processing_step() so it is testable; only the
+            // queue/heartbeat/telemetry plumbing stays here.
+            target_queue.push(processing_step(processing_deps, frame));
         }
 
         println("[PROCESSING] Thread exiting");

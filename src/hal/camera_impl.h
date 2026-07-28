@@ -46,11 +46,11 @@ public:
     // Driver-reported exposure timestamp of the most recent successful
     // capture() (uvcvideo stamps CLOCK_MONOTONIC, the clock steady_clock reads
     // on Linux), falling back to steady_clock::now() when the driver provides
-    // none. The two cameras free-run without hardware sync, so the capture
-    // thread records both sides' stamps to make the stereo pair's temporal
-    // skew measurable — see AGENTS.md §4.12.
+    // none. The two cameras free-run without hardware sync, so capture_step()
+    // records both sides' stamps to make the stereo pair's temporal skew
+    // measurable — see AGENTS.md §4.12.
     [[nodiscard]] auto last_frame_timestamp() const
-        -> std::chrono::steady_clock::time_point {
+        -> std::chrono::steady_clock::time_point override {
         return last_frame_timestamp_;
     }
 
