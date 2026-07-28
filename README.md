@@ -88,11 +88,11 @@ Abnormal exits are distinguishable, so a supervisor (`systemd` with `Restart=on-
 | CMake | 3.25+ | Build system |
 | GCC/Clang | 14+ (C++23) | Compiler |
 | libgpiod | 2.x | GPIO control |
-| OpenCV | 4.8+ | Image processing, stereo |
+| OpenCV | 4.5+ | Image processing, stereo (Raspberry Pi OS Bookworm ships 4.6) |
 | Eigen3 | 3.4+ | Linear algebra |
 | yaml-cpp | 0.7+ | Configuration file parsing |
-| Google Test | 1.14+ | Unit testing |
-| Google Mock | 1.14+ | Hardware mocking |
+| Google Test | 1.11+ | Unit testing |
+| Google Mock | 1.11+ | Hardware mocking |
 
 ## Architecture
 

@@ -439,7 +439,7 @@ mosquito-laser-killer/
 - Architecture-specific tuning: `-march=native` — automatically targets the host CPU's full instruction set (arm64 NEON/v8 on RPi 5) without hardcoding architecture names
 - Release build: `-O3 -DNDEBUG` — aggressive optimization, assertions stripped
 - Debug build: `-O0 -g3` — no optimization, full debug symbols
-- Dependencies: `libgpiod` + `libgpiodcxx` (gpiod character device API, C++ bindings), `OpenCV 4.8+` (stereo, Kalman), `Eigen3` (linear algebra), `yaml-cpp` (config parsing)
+- Dependencies: `libgpiod` + `libgpiodcxx` (gpiod character device API, C++ bindings), `OpenCV 4.5+` (stereo, Kalman; the Raspberry Pi OS Bookworm deployment target ships 4.6), `Eigen3` (linear algebra), `yaml-cpp` (config parsing)
 - Test dependencies: `GTest`, `GMock`
 
 ---

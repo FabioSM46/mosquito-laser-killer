@@ -14,9 +14,10 @@ if(NOT CMAKE_BUILD_TYPE)
     message(STATUS "CMAKE_BUILD_TYPE not set; defaulting to Release (-O3 -DNDEBUG)")
 endif()
 
-# 4.8+ is what README/AGENTS require; without the version argument any
-# OpenCV 4.x configured cleanly.
-find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc calib3d video)
+# Enforced minimum. 4.5 is the oldest version the code actually uses APIs
+# from, and the documented deployment target (Raspberry Pi OS Bookworm) ships
+# 4.6 — the "4.8+" once quoted in the docs was never satisfiable there.
+find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc calib3d video)
 
 if(TARGET opencv_core AND NOT TARGET OpenCV::core)
     add_library(OpenCV::core ALIAS opencv_core)
