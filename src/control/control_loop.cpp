@@ -13,7 +13,13 @@ auto control_step(ControlDeps& deps,
     if (!deps.watchdog.check(now)) {
         println(stderr, "[CONTROL] Watchdog triggered, halting");
         deps.firing_controller.emergency_stop();
-        (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        // trigger_safe_halt() has usually already driven the state machine to
+        // SAFE_HALT; transitioning again would stamp a spurious "Invalid
+        // transition rejected: SAFE_HALT -> SAFE_HALT" into the incident
+        // record at the worst possible moment.
+        if (deps.state_machine.current() != SystemState::SAFE_HALT) {
+            (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        }
         return ControlOutcome::Halt;
     }
 
@@ -21,7 +27,9 @@ auto control_step(ControlDeps& deps,
     if (deps.e_stop.is_pressed()) {
         println(stderr, "[CONTROL] E-STOP PRESSED, halting");
         deps.firing_controller.emergency_stop();
-        (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        if (deps.state_machine.current() != SystemState::SAFE_HALT) {
+            (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        }
         return ControlOutcome::Halt;
     }
 
@@ -99,7 +107,9 @@ auto control_step(ControlDeps& deps,
     if (deps.firing_controller.is_halted()) {
         println(stderr, "[CONTROL] Firing controller latched off by a hardware "
                 "fault, halting");
-        (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        if (deps.state_machine.current() != SystemState::SAFE_HALT) {
+            (void)deps.state_machine.transition(SystemState::SAFE_HALT);
+        }
         return ControlOutcome::Halt;
     }
 

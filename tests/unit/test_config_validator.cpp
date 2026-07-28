@@ -26,9 +26,13 @@ protected:
     void SetUp() override {
         config_.bounding_box = {-0.09, 0.09, -0.09, 0.09, 0.5, 1.0};
         config_.galvo_limits = {-15.0, 15.0, -15.0, 15.0};
-        config_.galvo_driver = {0.33, 5.0, 15.0};
+        config_.galvo_driver = {0.33, 5.0};
         config_.camera_optics = {3.0, 3.84, 2.4};
-        config_.stereo = {0.12, 500.0, 320.0, 240.0};
+        // cy = 200 is the shipped value (frame_height / 2). This fixture once
+        // said 240 — the exact drifted value main.cpp documents as a fixed
+        // 40 px principal-point bug — and passed only because the off-centre
+        // tolerance happened to be wider than the drift.
+        config_.stereo = {0.12, 500.0, 320.0, 200.0};
     }
 };
 
@@ -285,6 +289,10 @@ TEST_F(ConfigValidatorTest, WatchdogTimeoutBoundary) {
     for (const double v : {5.0, 500.0}) {
         auto config = config_;
         config.watchdog_timeout_ms = v;
+        // Decouple from the frame-period-vs-watchdog cross-check: at the 5 ms
+        // lower bound the default 120 fps frame period (8.3 ms) would trip it,
+        // which is that check's job, not this boundary's.
+        config.target_fps = 1000;
         EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
             << "watchdog_timeout_ms=" << v << " rejected";
     }
@@ -500,4 +508,163 @@ TEST_F(ConfigValidatorTest, TrackingMaxTracksBoundary) {
         EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
             << "max_tracks=" << v << " passed validation";
     }
+}
+
+TEST_F(ConfigValidatorTest, EpipolarToleranceUpperBoundIsCritical) {
+    // The epipolar gate is the correspondence proof; a huge tolerance from
+    // YAML accepts any vertical offset and the guard proves nothing.
+    for (const double v : {20.1, 1e9}) {
+        auto config = config_;
+        config.detection.epipolar_tolerance_px = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "epipolar_tolerance_px=" << v << " passed validation";
+    }
+    auto config = config_;
+    config.detection.epipolar_tolerance_px = 20.0;
+    EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)));
+}
+
+TEST_F(ConfigValidatorTest, FramePeriodMustFitInsideWatchdogTimeout) {
+    // The heartbeat advances once per processed frame; a frame period at or
+    // above the watchdog timeout can only ever ride out the grace and halt.
+    // At the default 25 ms timeout: 40 fps = 25 ms period must reject, 41 fps
+    // = 24.4 ms must pass.
+    {
+        auto config = config_;
+        config.target_fps = 40;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "frame period equal to the watchdog timeout passed validation";
+    }
+    {
+        auto config = config_;
+        config.target_fps = 41;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "frame period just inside the watchdog timeout rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, InvertedBoundingBoxIsCritical) {
+    // Each corner of an inverted box is individually reachable, so only an
+    // explicit ordering check catches it; without one the system boots with
+    // contains() == empty set and is silently unable to engage anything.
+    {
+        auto config = config_;
+        config.bounding_box.x_min = 0.09;
+        config.bounding_box.x_max = -0.09;
+        auto warnings = validate_engagement_volume(config);
+        EXPECT_TRUE(find_warning(warnings, "bounding-box"));
+        EXPECT_TRUE(has_critical_validation_errors(warnings));
+    }
+    {
+        auto config = config_;
+        config.bounding_box.z_min = 0.75;
+        config.bounding_box.z_max = 0.75;   // empty interval
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)));
+    }
+}
+
+TEST_F(ConfigValidatorTest, SpiSpeedBoundary) {
+    // Negative wraps through SpiImpl's uint32_t; above 20 MHz is out of
+    // MCP4922 spec and can corrupt codes the mapper already validated.
+    for (const int v : {0, -1, 20'000'001}) {
+        auto config = config_;
+        config.spi_speed_hz = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "spi_speed_hz=" << v << " passed validation";
+    }
+    for (const int v : {20'000'000, 1'000'000}) {
+        auto config = config_;
+        config.spi_speed_hz = v;
+        EXPECT_FALSE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "spi_speed_hz=" << v << " rejected";
+    }
+}
+
+TEST_F(ConfigValidatorTest, DuplicateSafetyPinsAreCritical) {
+    auto config = config_;
+    config.e_stop_pin = config.laser_pin;
+    auto warnings = validate_engagement_volume(config);
+    EXPECT_TRUE(find_warning(warnings, "gpio"));
+    EXPECT_TRUE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, NonPositiveFocalLengthIsCritical) {
+    for (const double v : {0.0, -500.0}) {
+        auto config = config_;
+        config.stereo.focal_length_px = v;
+        EXPECT_TRUE(has_critical_validation_errors(validate_engagement_volume(config)))
+            << "focal_length_px=" << v << " passed validation";
+    }
+}
+
+TEST_F(ConfigValidatorTest, BoxCornerAtOrBehindZeroZIsCritical) {
+    for (const double v : {0.0, -0.5}) {
+        auto config = config_;
+        config.bounding_box.z_min = v;
+        auto warnings = validate_engagement_volume(config);
+        EXPECT_TRUE(find_warning(warnings, "bounding-box")) << "z_min=" << v;
+        EXPECT_TRUE(has_critical_validation_errors(warnings)) << "z_min=" << v;
+    }
+}
+
+TEST_F(ConfigValidatorTest, NonFiniteCameraOpticsWarnsNonCritically) {
+    auto config = config_;
+    config.camera_optics.lens_focal_length_mm = std::nan("");
+    auto warnings = validate_engagement_volume(config);
+    // Without this warning a NaN silently suppresses both FOV cross-checks.
+    EXPECT_TRUE(find_warning(warnings, "camera-fov"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, VerticalFovNarrowerThanConeWarns) {
+    auto config = config_;
+    // vfov = 2·atan(1.0 / 6.0) ≈ 18.9°, half ≈ 9.5° < the 15° cone, while the
+    // horizontal FOV still comfortably covers it.
+    config.camera_optics.image_sensor_height_mm = 1.0;
+    auto warnings = validate_engagement_volume(config);
+    EXPECT_TRUE(find_warning(warnings, "camera-fov"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, NegativeOrNanTargetSizeWarnsGateDisabled) {
+    for (const double v : {-0.005, std::nan("")}) {
+        auto config = config_;
+        config.detection.target_size_m = v;
+        auto warnings = validate_engagement_volume(config);
+        EXPECT_TRUE(find_warning(warnings, "detection")) << "target_size_m=" << v;
+        EXPECT_FALSE(has_critical_validation_errors(warnings)) << "target_size_m=" << v;
+    }
+    // 0 disables the gate deliberately and must stay silent.
+    auto config = config_;
+    config.detection.target_size_m = 0.0;
+    EXPECT_FALSE(find_warning(validate_engagement_volume(config), "detection"));
+}
+
+TEST_F(ConfigValidatorTest, ExposureLongerThanFramePeriodWarns) {
+    auto config = config_;
+    // 15.6 ms — the pre-fix effective exposure — against an 8.3 ms frame
+    // period at the default 120 fps.
+    config.camera_controls.exposure_absolute_us = 15600;
+    auto warnings = validate_engagement_volume(config);
+    EXPECT_TRUE(find_warning(warnings, "camera"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, MinBlobAreaAboveProjectedTargetAreaWarns) {
+    // The original min_contour_area = 50 could not be met by a 5 mm mosquito
+    // anywhere in the engagement volume — it admitted only glints. The
+    // cross-check exists to catch exactly that; prove it fires.
+    auto config = config_;
+    config.detection.min_blob_area_px = 50;
+    auto warnings = validate_engagement_volume(config);
+    EXPECT_TRUE(find_warning(warnings, "detection"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
+}
+
+TEST_F(ConfigValidatorTest, PrincipalPointFarFromCentreWarns) {
+    auto config = config_;
+    config.stereo.cx = 100.0;   // inside the frame, 220 px off centre
+    auto warnings = validate_engagement_volume(config);
+    EXPECT_TRUE(find_warning(warnings, "stereo"));
+    EXPECT_FALSE(has_critical_validation_errors(warnings));
 }

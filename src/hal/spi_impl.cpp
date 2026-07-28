@@ -41,7 +41,7 @@ auto SpiImpl::cleanup() -> void {
 auto SpiImpl::transfer(std::span<const uint8_t> tx, std::span<uint8_t> rx)
     -> std::expected<void, HardwareError> {
     if (fd_ < 0) {
-        fd_ = open(device_.c_str(), O_RDWR);
+        fd_ = open(device_.c_str(), O_RDWR | O_CLOEXEC);
         if (fd_ < 0) {
             println(stderr, "[SPI] Failed to open {}: {}", device_, strerror(errno));
             return std::unexpected(HardwareError::SpiOpenFailed);

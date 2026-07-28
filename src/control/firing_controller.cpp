@@ -70,16 +70,9 @@ auto FiringController::set_target(const Point3D& position,
         abort_active_pulse("Target changed while pulse active, aborting pulse", now);
     }
 
-    bool position_changed = !current_target_.has_value() ||
-                            current_target_->x != position.x ||
-                            current_target_->y != position.y ||
-                            current_target_->z != position.z;
-
-    if (position_changed) {
-        galvo_settled_ = false;
-        target_just_set_ = true;
-    }
-
+    // Deliberately no settle reset here: whether this update is a real re-aim
+    // is decided in execute_cycle by comparing the mapped DAC codes against
+    // the deadband — position deltas below one mirror step are the same aim.
     current_target_ = position;
     target_valid_ = true;
 }
@@ -90,6 +83,7 @@ auto FiringController::clear_target(std::chrono::steady_clock::time_point now) -
     current_target_.reset();
     target_valid_ = false;
     galvo_settled_ = false;
+    last_commanded_dac_.reset();
 }
 
 auto FiringController::disarm(std::chrono::steady_clock::time_point now) -> void {
@@ -101,6 +95,7 @@ auto FiringController::disarm(std::chrono::steady_clock::time_point now) -> void
     current_target_.reset();
     target_valid_ = false;
     galvo_settled_ = false;
+    last_commanded_dac_.reset();
 
     println("[FIRING] Disarmed, ready for re-arm");
 }
@@ -133,6 +128,7 @@ auto FiringController::abort_active_pulse(const char* reason,
     galvo_settled_ = false;
     target_valid_ = false;
     current_target_.reset();
+    last_commanded_dac_.reset();
 
     start_cooldown(now);
     println("[FIRING] Cooldown started after pulse abort ({}s)", cooldown_s_);
@@ -146,6 +142,7 @@ auto FiringController::force_laser_off_and_halt(const char* reason) -> void {
     galvo_settled_ = false;
     armed_ = false;
     current_target_.reset();
+    last_commanded_dac_.reset();
     (void)laser_.emergency_shutdown();
 }
 
@@ -166,6 +163,7 @@ auto FiringController::end_pulse(std::chrono::steady_clock::time_point now) -> b
     galvo_settled_ = false;
     target_valid_ = false;
     current_target_.reset();
+    last_commanded_dac_.reset();
 
     return true;
 }
@@ -202,19 +200,29 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
         auto dac_result = mapper_.map_to_dac(current_target_.value());
 
         if (dac_result.has_value()) {
-            auto values = dac_result.value();
-            auto write_result = galvo_.set_position(values.channel_a, values.channel_b);
-            if (!write_result.has_value()) {
-                println(stderr, "[FIRING] Galvo set_position failed: {}",
-                             to_string(write_result.error()));
-                force_laser_off_and_halt("Galvo set_position failed");
-                return false;
-            }
+            const auto values = dac_result.value();
+            // Deadband on actual mirror motion: codes within
+            // k_settle_deadband_codes of the last command are the same aim, so
+            // there is nothing to write and the settle timer keeps running. A
+            // genuine re-aim writes the DAC, restamps the settle deadline, and
+            // waits for the mirrors again.
+            const bool re_aim =
+                !last_commanded_dac_.has_value() ||
+                dac_delta_exceeds_deadband(last_commanded_dac_.value(), values);
 
-            if (target_just_set_) {
+            if (re_aim) {
+                auto write_result =
+                    galvo_.set_position(values.channel_a, values.channel_b);
+                if (!write_result.has_value()) {
+                    println(stderr, "[FIRING] Galvo set_position failed: {}",
+                                 to_string(write_result.error()));
+                    force_laser_off_and_halt("Galvo set_position failed");
+                    return false;
+                }
+
+                last_commanded_dac_ = values;
                 galvo_command_time_ = now;
                 galvo_settled_ = false;
-                target_just_set_ = false;
             }
         } else {
             galvo_settled_ = false;
@@ -253,6 +261,15 @@ auto FiringController::execute_cycle(std::chrono::steady_clock::time_point now) 
     }
 
     return false;
+}
+
+auto FiringController::dac_delta_exceeds_deadband(const DacValues& a,
+                                                  const DacValues& b) -> bool {
+    const auto delta = [](uint16_t x, uint16_t y) -> uint16_t {
+        return x > y ? x - y : y - x;
+    };
+    return delta(a.channel_a, b.channel_a) > k_settle_deadband_codes ||
+           delta(a.channel_b, b.channel_b) > k_settle_deadband_codes;
 }
 
 auto FiringController::enforce_timing_limits(std::chrono::steady_clock::time_point now)

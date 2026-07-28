@@ -29,6 +29,13 @@ struct Pixel2D {
 struct StereoFrame {
     uint64_t frame_id{0};
     std::chrono::steady_clock::time_point timestamp{};
+    // Per-camera exposure timestamps (driver-reported where available). The
+    // cameras free-run without hardware sync and are grabbed sequentially, so
+    // the pair can be up to one frame period apart; for a laterally moving
+    // target that skew biases disparity and therefore z. Recorded so the skew
+    // is measurable at runtime — see AGENTS.md §4.12.
+    std::chrono::steady_clock::time_point left_timestamp{};
+    std::chrono::steady_clock::time_point right_timestamp{};
     std::vector<uint8_t> left_frame{};
     std::vector<uint8_t> right_frame{};
 };
@@ -87,7 +94,6 @@ struct SystemConfig {
     struct GalvoDriver {
         double input_scale_v_per_deg{0.33};
         double dac_max_diff_voltage{5.0};
-        double driver_input_voltage{15.0};
     } galvo_driver;
 
     struct CameraOptics {

@@ -32,11 +32,25 @@ auto GpioImpl::operator=(GpioImpl&& other) noexcept -> GpioImpl& {
 }
 
 auto GpioImpl::release() -> void {
+    // Runs from the destructor: libgpiodcxx reports failure by THROWING, and
+    // an exception escaping a noexcept destructor is std::terminate — mid
+    // safety teardown, skipping every destructor still pending (the galvo
+    // re-centre among them). §12 forbids exceptions for hardware errors, so
+    // this is best-effort: log, and always null the handles out.
     if (line_) {
         if (output_direction_) {
-            line_->set_value(0);
+            try {
+                line_->set_value(0);
+            } catch (const std::exception& e) {
+                println(stderr, "[GPIO {}] Failed to force LOW on release: {}",
+                        pin_, e.what());
+            }
         }
-        line_->release();
+        try {
+            line_->release();
+        } catch (const std::exception& e) {
+            println(stderr, "[GPIO {}] Failed to release line: {}", pin_, e.what());
+        }
         line_.reset();
     }
     chip_.reset();
@@ -52,15 +66,21 @@ auto GpioImpl::set_direction_output() -> std::expected<void, HardwareError> {
         line_->request({"mosquito-laser-killer",
                         gpiod::line_request::DIRECTION_OUTPUT,
                         0}, 0);
+
+        output_direction_ = true;
+
+        // The request already drove the line LOW via its default value; this
+        // explicit write is belt-and-braces. It must stay INSIDE the try: it
+        // previously sat after the catch, where a throw escaped this
+        // std::expected-returning API — no caller catches, so the process
+        // terminated instead of failing closed (§12).
+        line_->set_value(0);
     } catch (const std::exception& e) {
         println(stderr, "[GPIO {}] Failed to configure as output: {}", pin_, e.what());
+        output_direction_ = false;
         release();
         return std::unexpected(HardwareError::GpioOpenFailed);
     }
-
-    output_direction_ = true;
-
-    line_->set_value(0);
 
     println("[GPIO {}] Initialized as output via gpiod, forced LOW", pin_);
     return {};

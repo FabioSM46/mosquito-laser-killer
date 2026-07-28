@@ -15,11 +15,11 @@ The following software and hardware-abstraction components are present and pass 
 | Thread architecture | Implemented | Three decoupled threads: capture, processing, control. |
 | Frame dropping | Implemented | `ThreadSafeQueue::drain_all()` keeps only the freshest frame. |
 | Safety state machine | Implemented | `INIT → IDLE → ARMED → TRACKING → FIRING → COOLDOWN` plus `SAFE_HALT`. |
-| Max pulse limit | Implemented | Hard-limited to 100 ms by `FiringController` / `Laser`. |
+| Max pulse limit | Implemented | `FiringController` / `Laser` enforce the 100 ms config limit; the true software bound is ~105 ms (limit + one fixed 5 ms control cycle + jitter), and the 74HC123 one-shot caps the TTL at ~99 ms independently of software. |
 | Cooldown | Implemented | 10-second non-bypassable cooldown after each pulse. |
 | Motion blanking | Implemented | No galvo writes while the laser is ON. |
 | Arm switch gating | Implemented | `FiringController` rejects targets/fire when disarmed. |
-| Watchdog | Implemented | 3 missed heartbeats → `SAFE_HALT` and laser OFF. |
+| Watchdog | Implemented | Absolute 25 ms heartbeat timeout (deliberately independent of `target_fps`) with a bounded startup grace → `SAFE_HALT` and laser OFF. |
 | E-Stop | Implemented | Active-low GPIO 25 + physical mains disconnect via DPST. |
 | Coordinate bounds | Implemented | 3D box + galvo cone + DAC voltage scale; out-of-range commands are rejected, not clamped. |
 | RAII shutdown | Implemented | Laser forced LOW, galvos centered on destruction or error. |
@@ -47,7 +47,9 @@ Do not plug in the 230 V AC until every item below is complete.
 - [ ] Mushroom DPST E-Stop is wired: one pole breaks mains Live, the second pole drives GPIO 25.
 - [ ] Arm switch is wired: switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
 - [ ] E-Stop and arm switch have been tested with a multimeter:
-  - E-Stop released → GPIO 25 HIGH.
+  - E-Stop released → GPIO 25 ≈ 2.5 V (HIGH). If you measure ~0.8 V here, the
+    sense network was built from the old drawing with a 10 kΩ series resistor
+    from 3.3 V — replace it with 1 kΩ per `docs/HARDWARE_WIRING.md` §6.
   - E-Stop pressed → GPIO 25 LOW.
   - Arm switch OFF → GPIO 24 LOW.
   - Arm switch ON → GPIO 24 ~2.98 V (HIGH).

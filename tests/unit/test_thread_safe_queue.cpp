@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -108,9 +109,8 @@ TEST(ThreadSafeQueueTest, ConcurrentProducerConsumer) {
     EXPECT_EQ(sum.load(), 5050);
 }
 
-TEST(ThreadSafeQueueTest, DrainAllUnderContentionPreservesItems) {
+TEST(ThreadSafeQueueTest, DrainAllUnderContentionPreservesEveryItem) {
     ThreadSafeQueue<int> q;
-    std::atomic<int> drained_sum{0};
 
     std::jthread producer([&] {
         for (int i = 1; i <= 50; ++i) {
@@ -119,15 +119,25 @@ TEST(ThreadSafeQueueTest, DrainAllUnderContentionPreservesItems) {
         }
     });
 
+    // Drain concurrently with production, then drain the remainder after the
+    // producer finishes. Full accounting: everything drained, across both
+    // drains, must be exactly {1..50} with no loss and no duplication — "at
+    // least one item came back" would pass a queue that drops or repeats
+    // items under contention.
+    std::vector<int> seen;
     std::this_thread::sleep_for(25ms);
-
-    auto drained = q.drain_all();
-    for (int val : drained) {
-        drained_sum.fetch_add(val);
+    for (const int v : q.drain_all()) {
+        seen.push_back(v);
+    }
+    producer.join();
+    for (const int v : q.drain_all()) {
+        seen.push_back(v);
     }
 
-    producer.join();
-
-    EXPECT_GT(drained.size(), 0);
-    EXPECT_GT(drained_sum.load(), 0);
+    ASSERT_EQ(seen.size(), 50u);
+    std::sort(seen.begin(), seen.end());
+    for (int i = 1; i <= 50; ++i) {
+        EXPECT_EQ(seen[static_cast<size_t>(i) - 1], i);
+    }
+    EXPECT_TRUE(q.empty());
 }

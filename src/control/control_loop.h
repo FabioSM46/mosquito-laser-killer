@@ -28,6 +28,15 @@ enum class ControlOutcome {
     Halt,
 };
 
+// Fixed control-thread period, deliberately NOT derived from target_fps. The
+// control cycle bounds the max-pulse overshoot (§4.1's "+ one control cycle"),
+// the e-stop/arm debounce wall time (debounce cycles × period), and the
+// watchdog poll cadence — and a performance knob must never retune a safety
+// interlock (§4.4; the watchdog timeout was decoupled for the same reason).
+// 5 ms keeps the real pulse bound at ~105 ms and the e-stop debounce at
+// 3 × 5 = 15 ms regardless of the configured camera rate.
+inline constexpr auto k_control_period = std::chrono::microseconds(5000);
+
 // Runs the guards in their required order:
 //   enforce_max_pulse -> watchdog -> e-stop -> arm -> target -> execute -> halt check
 //

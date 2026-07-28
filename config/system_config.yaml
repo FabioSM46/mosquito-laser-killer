@@ -73,9 +73,10 @@ bounding_box:
   z_max: 1.0     # Maximum engagement distance (m)
 
 # --- Galvanometer Mechanical Limits ---
-# ±15 deg optical = the full +/-5V DAC range at 0.33V/deg driver input scale.
-# Max galvo head capability is ±30 deg optical but that needs ±10V (unreachable
-# from the ±5V differential DAC), so the usable half-cone is ±15 deg.
+# ±15 deg optical needs 15 * 0.33 = 4.95V of the ±5V DAC swing (the full swing
+# commands ±15.15 deg). Max galvo head capability is ±30 deg optical but that
+# needs ±10V (unreachable from the ±5V differential DAC), so the usable
+# half-cone is ±15 deg.
 galvo_limits:
   angle_x_min_deg: -15.0
   angle_x_max_deg: 15.0
@@ -86,7 +87,8 @@ galvo_limits:
 galvo_driver:
   input_scale_v_per_deg: 0.33   # Driver input coefficient (V per optical degree)
   dac_max_diff_voltage: 5.0     # Max MCP4922 differential output (V)
-  driver_input_voltage: 15.0    # Driver supply (±VDC)
+  # (The galvo driver supply is ±15 VDC — wiring information only; the
+  # software reads no such key.)
 
 # --- Camera Optics (OV9281, 1/4" sensor) ---
 # 3mm distortion-free lens: H-FOV ~65 deg, comfortably covers the ±15 deg cone.
@@ -101,7 +103,11 @@ camera_optics:
 # bright mosquito target pops against it. Tune per illumination.
 camera_controls:
   exposure_auto: 1              # 1 = V4L2_EXPOSURE_MANUAL, 3 = AUTO
-  exposure_absolute_us: 156     # Manual exposure in microseconds
+  # Manual exposure in MICROSECONDS. V4L2's EXPOSURE_ABSOLUTE unit is 100 us,
+  # so the driver boundary converts (nearest 100 us, minimum one unit): 156 us
+  # requests 2 units = 200 us effective. Keep this well under the frame period
+  # (4762 us at 210 fps) or the driver will clamp the frame rate.
+  exposure_absolute_us: 156
   brightness: 0
   gamma: 100
   sharpness: 0

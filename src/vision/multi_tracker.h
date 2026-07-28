@@ -48,8 +48,15 @@ private:
     struct Track {
         uint32_t id{0};
         KalmanTracker kf{};
+        // Lifetime totals, reported outward.
         int hits{0};
         int misses{0};
+        // Confirmation counts CONSECUTIVE matched frames only: a phantom that
+        // flickers in and out inside the coast horizon must never accumulate
+        // its way to confirmation. Once earned, confirmation is latched so a
+        // confirmed track survives coasting without demotion.
+        int consecutive_hits{0};
+        bool confirmed{false};
     };
 
     int confirm_hits_{3};

@@ -1,19 +1,8 @@
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #include <csignal>
 #include <atomic>
-#include <memory>
 
-#include "mocks/mock_gpio.h"
-#include "hal/laser.h"
 #include "safety/signal_handler.h"
-#include "core/error.h"
-
-using namespace testing;
-
-namespace {
-constexpr auto kOk = std::expected<void, HardwareError>{};
-}
 
 TEST(SignalHandlerTest, SigIntSetsShutdownFlag) {
     SignalHandler sh;
@@ -74,35 +63,11 @@ TEST(SignalHandlerTest, SignalDoesNotInvokeCallbackButSetsFlag) {
     EXPECT_FALSE(callback_fired.load());
 }
 
-TEST(SignalHandlerTest, SignalThenLaserEmergencyShutdownForcesPinLow) {
-    auto mock_gpio = std::make_unique<StrictMock<MockGpio>>();
-
-    EXPECT_CALL(*mock_gpio, set_direction_output()).WillOnce(Return(kOk));
-    EXPECT_CALL(*mock_gpio, write(false))
-        .Times(AtLeast(2))
-        .WillRepeatedly(Return(kOk));
-
-    auto laser = std::make_unique<Laser>(std::move(mock_gpio), 18);
-
-    SignalHandler sh;
-    sh.install();
-    sh.reset();
-
-    std::raise(SIGINT);
-    ASSERT_TRUE(sh.is_shutdown_requested());
-
-    auto result = laser->emergency_shutdown();
-    EXPECT_TRUE(result.has_value());
-}
-
-TEST(SignalHandlerTest, LaserDestructorForcesPinLow) {
-    auto mock_gpio = std::make_unique<StrictMock<MockGpio>>();
-
-    EXPECT_CALL(*mock_gpio, set_direction_output()).WillOnce(Return(kOk));
-    EXPECT_CALL(*mock_gpio, write(false))
-        .Times(AtLeast(2))
-        .WillRepeatedly(Return(kOk));
-
-    auto laser = std::make_unique<Laser>(std::move(mock_gpio), 18);
-    laser.reset();
-}
+// The former SignalThenLaserEmergencyShutdownForcesPinLow and
+// LaserDestructorForcesPinLow cases lived here. Both were removed: the first
+// raised a signal and then called emergency_shutdown() BY HAND — no causal
+// link between the two, so it proved nothing about shutdown-on-signal — and
+// the second only echoed the mock expectations it had just installed. The
+// real properties are covered end-to-end, on an observed pin, by
+// tests/stress/test_concurrent_shutdown.cpp (signal → loop exit → pin LOW,
+// and destructor → pin LOW).

@@ -26,10 +26,10 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | AND gate | SN74HC08N (DIP-14) quad 2-input AND | Gates laser TTL = GPIO18 ∧ one-shot-Q (§4.1) |
 | Arm switch | Lever SPST | System arm input (active HIGH on GPIO 24) |
 | E-stop | Mushroom DPST push-button | Emergency stop (active LOW on GPIO 25) |
-| Zener diode | BZX55C3V3 1/2 W | E-stop input overvoltage protection |
-| Resistor | 1/2 W 3.3 kΩ | E-stop pull-up/pull-down |
-| Resistors | 2× 1/2 W 10 kΩ | E-stop series/input protection |
-| Capacitor | 100 nF ceramic | E-stop debounce / input filtering |
+| Zener diodes | 2× BZX55C3V3 1/2 W | Arm-switch / E-stop input overvoltage clamps |
+| Resistors | 2× 1/2 W 3.3 kΩ | Arm-switch / E-stop sense pull-downs |
+| Resistors | 1× 10 kΩ, 1× 1 kΩ (1/2 W) | Arm-switch series (from 12 V), E-stop series (from 3.3 V) — see `HARDWARE_WIRING.md` §5/§6 |
+| Capacitors | 2× 100 nF ceramic | Arm-switch / E-stop debounce / input filtering |
 
 **Power and signal wiring:**
 - RPi 5 GPIO 18 → level shifter → **74HC123 monostable + AND gate** → laser TTL input (configurable via `laser_pin`). The monostable is the independent hardware pulse-duration backstop; see §4.1.
@@ -38,7 +38,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 - RPi 5 SPI0 CE0 (pin 24) → MCP4922 #1 `/CS` (X-axis); SPI0 CE1 (pin 26) → MCP4922 #2 `/CS` (Y-axis).
 - Both MCP4922 Vref pins tied to 5 V, producing a 0–5 V unipolar output per channel and a ±5 V differential swing per axis.
 - Galvo scanner powered by 15 V; laser driver powered by 12 V from the Mean Well supply.
-- The OV9281 cameras are capable of 1280×720; the default configuration runs them at **640×400 @ 120 FPS** (a validated OV9281 binned mode; 640×480 is not supported by this sensor). The `StereoFrame` buffers are dynamically sized so any supported mode works without code changes.
+- The OV9281 cameras are capable of 1280×720; the system runs them at **640×400** (a validated OV9281 binned mode; 640×480 is not supported by this sensor). The built-in default is 120 FPS; the shipped `config/system_config.yaml` selects the validated 210 FPS mode. The `StereoFrame` buffers are dynamically sized so any supported mode works without code changes.
 
 ---
 
@@ -112,7 +112,7 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 **Enforced by:** `FiringController::execute_cycle()` checks `(now - pulse_start_) >= max_pulse_ms_` before anything else and forces `laser.fire(false)`. `Laser::enforce_max_pulse()` repeats the check at the HAL level, independently of the sequencer, and `control_step()` calls it first thing every cycle. `Laser::fire()` additionally re-checks on re-entry.
 
-**The real bound is ~105ms, not 100ms.** The check only runs when the control thread runs, so the true limit is `max_pulse_duration_ms` plus one control cycle (~4.8ms at 210fps) plus scheduling jitter. Quoting a flat 100ms would be a claim the software cannot make.
+**The real bound is ~105ms, not 100ms.** The check only runs when the control thread runs, so the true limit is `max_pulse_duration_ms` plus one control cycle (a fixed 5ms — `k_control_period` in `control_loop.h`, deliberately **not** derived from `target_fps` for the same reason the watchdog timeout is not, §4.4) plus scheduling jitter. Quoting a flat 100ms would be a claim the software cannot make.
 
 **Every *software* mechanism that can end a pulse runs on the control thread itself.** `enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, and the E-stop poll are all on the *control thread*. If that thread stalls with the pin HIGH, none of them fires. This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall — and it is why the pulse bound needs an enforcer that is *not* on that thread.
 
@@ -133,9 +133,11 @@ The guarantee is real **only if three conditions hold, and each must be scope-ve
 
 **Enforced by:** `FiringController::execute_cycle()`:
 1. If a pulse is active, only enforce max pulse duration — **no galvo writes** while the laser is ON
-2. When not firing: write DAC for the target, stamp `galvo_command_time_`, and set `galvo_settled_` only once `now - galvo_command_time_` **strictly exceeds** `settle_delay_ms_`
+2. When not firing: map the target and compare the codes against the last commanded pair. A delta beyond `k_settle_deadband_codes` is a **real re-aim**: write the DAC, stamp `galvo_command_time_`, clear settle. A delta within the deadband is the same aim — the mirrors are not moving — so nothing is written and the settle timer keeps running. `galvo_settled_` is set only once `now - galvo_command_time_` **strictly exceeds** `settle_delay_ms_`
 3. Fire only when `armed_ && target_valid_ && galvo_settled_ && may_fire(now)`
-4. After a pulse ends — by max duration **or** abort — clear settle/target before the next DAC command
+4. After a pulse ends — by max duration **or** abort — clear settle/target **and `last_commanded_dac_`** before the next DAC command; dropping the cache means the next engagement always re-writes, so a deadband skip can never trust an aim an external path (watchdog zero, shutdown) may have moved
+
+The deadband (12 codes ≈ 0.088° ≈ 1.2 mm at 0.75 m) exists because tracker output jitters at the sub-millimeter level every frame. Without it, each update reset the settle timer, and the fire gate could only pass on a control cycle that happened to receive *no* fresh command — the system fired only on scheduling beats, aimed at stale data by construction. With it, a hovering/slow target (position delta under the deadband per frame, ≲0.15 m/s) fires deterministically one settle delay after the aim stabilises; a faster target is chased continuously, which is the physically honest behaviour for a settle-gated single-shot system (lead-prediction aiming is possible future work).
 
 The galvo command path is dead code while `pulse_active_ == true`.
 
@@ -177,10 +179,10 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 
 **Enforced by:**
 - `Laser` constructor: `gpio_.set_direction(output)` then `gpio_.write(LOW)` — pin LOW before any other initialization
-- `SystemController` destructor order (C++ guarantees reverse declaration order):
-  1. `laser_` destructor writes GPIO LOW (via RAII)
-  2. `dac_` destructor commands mid-scale (2048) center
-  3. `spi_` handle closed
+- `main()`'s local declaration order (C++ guarantees reverse-order destruction; the laser is deliberately declared *after* the galvo chain so `~Laser` runs first — the comment at the declarations in `src/main.cpp` marks this as load-bearing):
+  1. `~Laser` writes GPIO LOW (via RAII)
+  2. `~DifferentialGalvoDriver` / `~MCP4922` command mid-scale (2048) center
+  3. `~SpiImpl` closes the bus handle
 - `sigaction` handlers set `shutdown_requested` atomic flag; threads exit gracefully; destructors fire
 
 ### 4.7 Hardware Error Propagation
@@ -238,11 +240,13 @@ The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**
 
 **Fail-closed at the boundary.** `triangulate` rejects non-finite pixels itself rather than delegating validity to a distant consumer.
 
-**Multi-track confirmation (`MultiTracker`).** Measurements are associated to tracks by mutual nearest neighbour within `association_gate_m`; a measurement that sits between two tracks binds only to its genuine nearest, and the other coasts. A track becomes *confirmed* only after `confirm_hits` consecutive matched frames — a one-frame detection is a phantom candidate and never reaches the control thread — and *engageable* only while its estimated speed stays inside `[min_speed_mps, max_speed_mps]` (~0 m/s is a glint or fixture; beyond max is a correspondence artefact). Tracks are capped at `max_tracks`: beyond it, new tracks are refused and live ones are never evicted (fail closed).
+**Multi-track confirmation (`MultiTracker`).** Measurements are associated to tracks by mutual nearest neighbour within `association_gate_m`; a measurement that sits between two tracks binds only to its genuine nearest, and the other coasts. A track becomes *confirmed* only after `confirm_hits` **consecutive** matched frames — a coasted frame resets the consecutive count, so a phantom that flickers in and out inside the coast horizon can never accumulate its way to confirmation; once earned, confirmation is latched and survives coasting — and *engageable* only while its estimated speed stays inside `[min_speed_mps, max_speed_mps]` (~0 m/s is a glint or fixture; beyond max is a correspondence artefact). Tracks are capped at `max_tracks`: beyond it, new tracks are refused and live ones are never evicted (fail closed).
 
 **Coasting through brief detection gaps.** A frame without a match does not drop a track: it coasts on `KalmanTracker::predict()` — a pure extrapolation from the last verified measurement, bounded by `k_max_predict_horizon_s` (100 ms). The coasted point still passes through every downstream gate (bounding box, galvo cone, DAC range), so the beam can never leave the verified safe volume on a prediction. Past the horizon the track is deleted — fail closed.
 
 **Sticky engagement (`TargetSelector`).** One laser, one galvo, one mandatory cooldown: engagement is sequential no matter how many tracks exist. The selector holds the engaged target while it stays engageable and falls back to the nearest (smallest z) only when it is lost — re-picking every frame would ping-pong the galvo across the swarm and never settle long enough to fire. The control thread still receives exactly one `TargetCommand` per frame; the firing path is untouched by the multi-target machinery.
+
+**Residual: stereo temporal skew.** The two cameras free-run without hardware sync and are grabbed sequentially, so a pair can be up to one frame period apart. For a laterally moving target the skew biases disparity and therefore z — Δz ≈ z·v·Δt/b, ≈4 cm at z = 1 m, v = 1 m/s, Δt = 4.8 ms, b = 0.12 m — and the epipolar gate only catches the *vertical* component of the motion. Per-camera driver timestamps are recorded in `StereoFrame` (`left_timestamp`/`right_timestamp`, from V4L2 `buf.timestamp` when the driver stamps CLOCK_MONOTONIC) and the processing thread logs a skew watermark every 512 frames, so a degrading rig is visible in the record. The bounding-box z margins must absorb the residual. A hard skew gate was considered and deliberately not enabled: with equal free-running frame periods it would reject roughly half of all pairs.
 
 ---
 
@@ -254,8 +258,6 @@ The aim angle is `atan2(x, z)` with `x = (u_left − cx)·z/f`, so **z cancels**
 | `std::expected<T, E>` | All hardware operations return expected; no exceptions for hardware |
 | `std::optional` + monadic ops | Target detection pipeline: `.and_then()`, `.transform()`, `.or_else()` |
 | `std::jthread` | All three worker threads; auto-join on destruction |
-| `std::atomic_ref` | Safe access to shared state without full mutex |
-| `std::move_only_function` | Callback registration for safety hooks |
 
 ---
 
@@ -274,7 +276,7 @@ Every hardware component has a pure virtual interface (`IGpio`, `ISpi`, `ICamera
 |-----------|------|--------------|
 | `IGpio` | `MockGpio` | Laser pin enforced LOW on init/shutdown/error; **drives a real `Laser` so the pin state is observed, not asserted about a mock** |
 | `ISpi` | `MockSpi` | Wire format via a real `MCP4922`; SPI errors → controller latches → SAFE_HALT |
-| `ICamera` | `MockCamera` | Frame timestamps; capture failure → halt |
+| `ICamera` | *(none — the dead `MockCamera` was removed)* | `CameraImpl` has no seam below real V4L2; the exposure-unit conversion is unit-tested (`test_camera_impl.cpp`) and capture-failure→halt runs only against hardware. Extracting the capture loop into a testable step function is the tracked §7 follow-up |
 | `IDac` | `MockDac` | DAC values validated in 0–4095 range |
 | `IGalvoDriver` | `MockGalvoDriver` | Motion blanking ordering — DAC write before laser fire |
 | `ILaser` | `MockLaser` | Arm/cooldown/max-pulse gating; `enforce_max_pulse` called every cycle; emergency shutdown |
@@ -293,6 +295,8 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 
 `tests/CMakeLists.txt` must never relax `-Werror=unused-result`.
 
+**Known gap (deliberate, tracked):** the capture and processing thread bodies are still inline lambdas in `main.cpp` and therefore untestable — the same hand-copy hazard that motivated extracting `control_step()`. Extracting `capture_step`/`processing_step` is deferred follow-up work; until then, thread-topology behaviour is exercised only by the stress tests, which re-create the topology by hand.
+
 ### 7.1 Unit Tests (Google Test + Google Mock)
 
 | Test Suite | Coverage |
@@ -302,19 +306,22 @@ Specifically, do not write: tests that assert on a mock the test itself called; 
 | `ArmSwitchTest` | Debounce HIGH→armed, LOW→disarmed, glitch rejection, read failure → **disarmed** |
 | `EStopTest` | Active-low debounce, press/release, read failure and uninitialised → **pressed** |
 | `CoordinateMapperTest` | Bounds, galvo cone, voltage-scale DAC **rejection** (no clamp), **non-finite → `Invalid3DPoint`** (asserting the specific error, not merely that something rejected) |
-| `FiringControllerTest` | Startup blanking, arm gate, max pulse (incl. late cycles), cooldown on **every** pulse-end path, motion blanking, settle, DAC-before-fire ordering, faults latch `is_halted()` |
-| `ControlLoopTest` | The real `control_step()`: guard **ordering**, e-stop/watchdog halts, arm gating, fire sequence, target-loss glue (TRACKING→ARMED+clear, FIRING→COOLDOWN+abort), cooldown exit → re-arm, fault → SAFE_HALT, fail-safe GPIO reads |
+| `FiringControllerTest` | Startup blanking, arm gate, max pulse (incl. late cycles), cooldown on **every** pulse-end path, motion blanking, settle + **deadband** (jitter fires, real re-aim restarts, cache dropped on pulse end), DAC-before-fire ordering, faults latch `is_halted()`, **fire-OFF failure latches on all three end paths** |
+| `ControlLoopTest` | The real `control_step()`: guard **ordering** (`InSequence`-pinned enforce-before-halt, e-stop blocks a ready fire in the same cycle), e-stop/watchdog halts, arm gating, fire sequence, target-loss glue (TRACKING→ARMED+clear, FIRING→COOLDOWN+abort), cooldown exit → re-arm, fault → SAFE_HALT, fail-safe GPIO reads |
 | `SystemStateMachineTest` | Valid transitions, invalid transitions rejected, SAFE_HALT irreversibility |
 | `ThreadSafeQueueTest` | Concurrent push/pop, drain_all correctness |
 | `DetectorTest` | **Per-blob centroids (no frame-wide phantom)**, area gates, short frame and >max_blobs → fail closed, threshold boundary |
 | `MotionDetectorTest` | **Motion gate**: first frame seeds (perched target invisible), static blob fades into background, moving blob detected indefinitely, invalid rate → gate disabled |
 | `StereoMatcherTest` | Triangulation, **epipolar rejection**, disparity window, **ambiguous scene → fail closed**, non-finite rejection |
 | `StereoMatcherTest (match_all)` | **Two clean pairs → two targets**, ambiguous cluster void while clean pair survives, **depth-size gate** rejects over/undersized, NaN tolerance → strictest band |
-| `MultiTrackerTest` | Confirmation gating (3 hits), **static point confirmed but never engageable**, ID stability, coasting through gaps, horizon death, mutual-NN association, max_tracks cap, non-finite rejection |
+| `MultiTrackerTest` | Confirmation gating (3 **consecutive** hits — a flickering phantom never confirms; the latch survives coasting), **static point confirmed but never engageable**, ID stability, coasting through gaps, horizon death, mutual-NN association, max_tracks cap, non-finite rejection, NaN-config sanitization |
 | `TargetSelectorTest` | Sticky engagement vs nearer challengers, nearest-first fallback, release on non-engageable, reset |
 | `KalmanTrackerTest` | **`predict()` is pure** (repeat calls identical), convergence under **noise**, covariance shrinks, prediction leads the last measurement, stale/negative dt rejected |
 | `ConfigValidatorTest` | Each critical bound, incl. the ones that disable a guard from YAML |
-| `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, `log_init`/`log_shutdown` flag save-restore (incl. shared stdout/stderr open file description) |
+| `ConfigLoaderTest` | Fail-closed loading (`test_config_loader.cpp`): missing file / malformed value / explicit null → error, **no partial config escapes**; absent keys keep the types.h defaults |
+| `SignalHandlerTest` | SIGINT/SIGTERM set the flag, reset clears it, programmatic callback fires, **the signal context never invokes the callback**. The end-to-end signal→pin-LOW property lives in the concurrent-shutdown stress test, on a real observed pin |
+| `ExposureConversionTest` | µs → V4L2 100 µs-unit conversion boundaries and the floor of 1 unit (`test_camera_impl.cpp`) |
+| `PrintTest` | Non-blocking logger: full-pipe drop + counting, partial-write resync, **per-descriptor resync independence**, `log_init`/`log_shutdown` flag save-restore (incl. a forced shared stdout/stderr open file description), shutdown-time dropped-line report |
 | `MCP4922Test` | Command-bit format, range rejection, **destructor re-centres both channels** (§4.6 RAII shutdown) |
 | `DifferentialGalvoDriverTest` | Complementary A/B channel writes for the differential pair, init centres both axes (and fails closed on a null/uninitialised/failing DAC), out-of-range rejection, DAC-failure propagation, `zero()` centres at midpoint |
 
@@ -340,11 +347,17 @@ mosquito-laser-killer/
 ├── CMakeLists.txt               # Top-level build
 ├── config/
 │   └── system_config.yaml       # Runtime configuration (bounding box, settle ms, etc.)
+├── docs/
+│   ├── HARDWARE_PARAMETERS.md   # Component specs + derived engagement envelope
+│   ├── HARDWARE_WIRING.md       # Physical wiring incl. the 74HC123 backstop (§11a)
+│   ├── CALIBRATION.md           # Stereo + galvo calibration procedure
+│   └── PRE_FLIGHT_CHECKLIST.md  # Build/validation steps and go/no-go criteria
 ├── src/
-│   ├── main.cpp                 # Entry point, config load, thread orchestration
+│   ├── main.cpp                 # Entry point, thread orchestration
 │   ├── core/
 │   │   ├── types.h              # Common types: Point3D, StereoFrame, TargetCommand
 │   │   ├── error.h              # HardwareError enum, MappingError enum
+│   │   ├── config_loader.h/.cpp # Fail-closed YAML loading (any parse error aborts)
 │   │   ├── thread_safe_queue.h  # Lock-protected SPSC/MPSC queue with drain_all
 │   │   └── print.h              # Non-blocking, best-effort logging (see 4.11)
 │   ├── hal/
@@ -361,11 +374,13 @@ mosquito-laser-killer/
 │   │   ├── differential_galvo_driver.h/.cpp  # ±5V differential galvo drive over the DAC pair
 │   │   └── laser.h/.cpp         # Laser TTL control with safety timers
 │   ├── safety/
-│   │   ├── system_state.h       # SystemState enum + SystemStateMachine
-│   │   ├── watchdog.h           # Heartbeat watchdog
-│   │   ├── bounding_box.h       # 3D geometric safety zone
+│   │   ├── system_state.h/.cpp  # SystemState enum + SystemStateMachine
+│   │   ├── watchdog.h/.cpp      # Heartbeat watchdog
+│   │   ├── bounding_box.h/.cpp  # 3D geometric safety zone
 │   │   ├── arm_switch.h/.cpp    # Arm switch input with debounce
-│   │   └── e_stop.h/.cpp        # Mushroom E-stop input with debounce
+│   │   ├── e_stop.h/.cpp        # Mushroom E-stop input with debounce
+│   │   ├── signal_handler.h/.cpp # Async-signal-safe SIGINT/SIGTERM flag (§4.9)
+│   │   └── config_validator.h/.cpp # Startup engagement validation (§4.10)
 │   ├── vision/
 │   │   ├── detector.h/.cpp      # Per-blob connected-component detection with motion gate
 │   │   ├── stereo_matcher.h/.cpp # Epipolar-gated multi-target correspondence + triangulation
@@ -381,7 +396,6 @@ mosquito-laser-killer/
 │   ├── mocks/
 │   │   ├── mock_gpio.h
 │   │   ├── mock_spi.h
-│   │   ├── mock_camera.h
 │   │   ├── mock_dac.h
 │   │   ├── mock_galvo_driver.h
 │   │   └── mock_laser.h
@@ -402,6 +416,8 @@ mosquito-laser-killer/
 │   │   ├── test_kalman_tracker.cpp
 │   │   ├── test_differential_galvo_driver.cpp
 │   │   ├── test_mcp4922.cpp
+│   │   ├── test_camera_impl.cpp       # exposure-unit conversion (V4L2 100 µs units)
+│   │   ├── test_config_loader.cpp     # fail-closed YAML loading
 │   │   ├── test_config_validator.cpp
 │   │   ├── test_print.cpp             # non-blocking logger (§4.11)
 │   │   └── test_signal_handling.cpp
@@ -418,7 +434,7 @@ mosquito-laser-killer/
 ## 9. Build System
 
 - **CMake 3.25+** with `CXX_STANDARD 23`
-- Compile flags: `-Wall -Wextra -Werror -Werror=unused-result -Wpedantic` — **including the tests** (`tests/CMakeLists.txt` must not relax `-Werror=unused-result`; see §4.7)
+- Compile flags: `-Wall -Wextra -Wpedantic -Werror -Werror=unused-result -Wno-unused-parameter` — **including the tests** (`tests/CMakeLists.txt` must not relax `-Werror=unused-result`; see §4.7). `-Wno-unused-parameter` is the one deliberate `-Wextra` carve-out: interface stubs and gmock overrides leave parameters unused by design, and `-Werror` would otherwise reject them
 - Libraries: `mosquito_hal` → `mosquito_safety` → `mosquito_control`, plus `mosquito_vision`. Tests link these libraries rather than re-listing `src/*.cpp`, so a test can never link a different build of a safety component than the binary ships.
 - Architecture-specific tuning: `-march=native` — automatically targets the host CPU's full instruction set (arm64 NEON/v8 on RPi 5) without hardcoding architecture names
 - Release build: `-O3 -DNDEBUG` — aggressive optimization, assertions stripped
@@ -438,7 +454,7 @@ mosquito-laser-killer/
 6. **Fixed camera baseline** — stereo calibration is loaded at startup; no online recalibration
 7. **No persistence to disk** — state is ephemeral; no recovery on restart except config reload
 8. **Camera identification via stable by-path symlinks** — `/dev/v4l/by-path/` symlinks are tied to physical USB port topology, not enumeration order. This is critical: swapping left/right cameras corrupts stereo disparity and would aim the laser at incorrect 3D positions
-9. **Default camera mode 640×400@120fps** — the OV9281 hardware supports 1280×720; the default 640×400 mode is a validated OV9281 binned mode (640×480 is not supported). The `StereoFrame` buffers are dynamically sized (`std::vector`) so any supported mode works without code changes. Higher rates (up to 210 FPS at 640×400) are configurable via `target_fps`.
+9. **Camera mode 640×400** — the OV9281 hardware supports 1280×720; 640×400 is a validated OV9281 binned mode (640×480 is not supported). The built-in default is 120 FPS; the shipped `config/system_config.yaml` selects the validated 210 FPS mode. The `StereoFrame` buffers are dynamically sized (`std::vector`) so any supported mode works without code changes. `target_fps` is a performance knob only: the watchdog timeout and the fixed 5 ms control period are independent of it, and the validator requires the frame period to fit inside the watchdog timeout.
 
 ---
 

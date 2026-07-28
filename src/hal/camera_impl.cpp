@@ -98,7 +98,8 @@ CameraImpl::CameraImpl(CameraImpl&& other) noexcept
     , fd_(other.fd_)
     , frame_size_bytes_(other.frame_size_bytes_)
     , buffers_(std::move(other.buffers_))
-    , streaming_(other.streaming_) {
+    , streaming_(other.streaming_)
+    , last_frame_timestamp_(other.last_frame_timestamp_) {
     other.fd_ = -1;
     other.streaming_ = false;
     other.frame_size_bytes_ = 0;
@@ -117,6 +118,7 @@ auto CameraImpl::operator=(CameraImpl&& other) noexcept -> CameraImpl& {
         frame_size_bytes_ = other.frame_size_bytes_;
         buffers_ = std::move(other.buffers_);
         streaming_ = other.streaming_;
+        last_frame_timestamp_ = other.last_frame_timestamp_;
         other.fd_ = -1;
         other.streaming_ = false;
         other.frame_size_bytes_ = 0;
@@ -331,7 +333,10 @@ auto CameraImpl::apply_controls() -> void {
     };
 
     set_ctrl(V4L2_CID_EXPOSURE_AUTO, controls_.exposure_auto, "exposure_auto");
-    set_ctrl(V4L2_CID_EXPOSURE_ABSOLUTE, controls_.exposure_absolute_us, "exposure_absolute");
+    // The V4L2 control's unit is 100 µs; the config value is in µs.
+    set_ctrl(V4L2_CID_EXPOSURE_ABSOLUTE,
+             exposure_us_to_v4l2_units(controls_.exposure_absolute_us),
+             "exposure_absolute");
     set_ctrl(V4L2_CID_BRIGHTNESS, controls_.brightness, "brightness");
     set_ctrl(V4L2_CID_GAMMA, controls_.gamma, "gamma");
     set_ctrl(V4L2_CID_SHARPNESS, controls_.sharpness, "sharpness");
@@ -386,6 +391,30 @@ auto CameraImpl::capture(uint8_t* buffer, size_t size) -> std::expected<void, Ha
                 device_, buf.bytesused, size);
         (void)requeue();
         return std::unexpected(HardwareError::CameraCaptureFailed);
+    }
+
+    // Explicit bound for the memcpy below. Transitively guaranteed by the
+    // sizeimage/bytesperline checks in negotiate_format(), but a copy out of a
+    // driver-mapped buffer does not get to rely on a distant invariant.
+    if (size > buffers_[buf.index].length) {
+        println(stderr, "[Camera] Mapped buffer on {} is {} bytes, need {}",
+                device_, buffers_[buf.index].length, size);
+        (void)requeue();
+        return std::unexpected(HardwareError::CameraCaptureFailed);
+    }
+
+    // uvcvideo stamps buffers with CLOCK_MONOTONIC (the clock steady_clock
+    // reads on Linux). Fall back to now() for any other timestamp source so
+    // the stereo-skew measurement always has a usable, if coarser, value.
+    if ((buf.flags & V4L2_BUF_FLAG_TIMESTAMP_MASK) ==
+            V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC &&
+        (buf.timestamp.tv_sec != 0 || buf.timestamp.tv_usec != 0)) {
+        last_frame_timestamp_ = std::chrono::steady_clock::time_point(
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::seconds(buf.timestamp.tv_sec) +
+                std::chrono::microseconds(buf.timestamp.tv_usec)));
+    } else {
+        last_frame_timestamp_ = std::chrono::steady_clock::now();
     }
 
     std::memcpy(buffer, buffers_[buf.index].start, size);

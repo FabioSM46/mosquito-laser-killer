@@ -56,13 +56,18 @@ sudo apt install cmake build-essential libgpiod-dev libopencv-dev libeigen3-dev 
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
+cd ..
 
 # Configure
-cp ../config/system_config.yaml ./
-# Edit system_config.yaml for your hardware (bounding box, stereo calibration, galvo limits)
+# Edit config/system_config.yaml in the repo root for your hardware
+# (bounding box, stereo calibration, camera by-path symlinks, galvo limits)
 
-# Run (requires sudo for GPIO/SPI access)
-sudo ./mosquito_laser_killer
+# Run from the repo root (requires sudo for GPIO/SPI access). The binary loads
+# config/system_config.yaml relative to the working directory, or takes the
+# config path as its first argument. A config that is missing or fails to
+# parse aborts startup — the system never runs on defaults.
+sudo ./build/mosquito_laser_killer
+# or: sudo ./build/mosquito_laser_killer /path/to/system_config.yaml
 ```
 
 ### Exit codes
@@ -72,7 +77,7 @@ Abnormal exits are distinguishable, so a supervisor (`systemd` with `Restart=on-
 | Code | Meaning |
 |------|---------|
 | 0 | Clean shutdown (SIGINT/SIGTERM) |
-| 1 | Config validation failed — a parameter is outside its safety bound |
+| 1 | Config load or validation failed — file missing/unreadable/malformed, or a parameter outside its safety bound |
 | 2 | Hardware init or capture failure (GPIO, SPI, camera) |
 | 3 | SAFE_HALT — a safety interlock fired (watchdog, E-stop, hardware fault while armed) |
 
@@ -115,7 +120,7 @@ Every fire-control and timing parameter is range-checked at startup by `validate
 | `e_stop_pin` | 25 | — | GPIO pin for mushroom E-stop (active LOW when pressed) |
 | `frame_width` | 640 | > 0 | Capture frame width |
 | `frame_height` | 400 | > 0 | Capture frame height (OV9281 binned mode) |
-| `target_fps` | 120 | > 0 | Camera frame rate. A performance knob only — it does not affect the watchdog |
+| `target_fps` | 120 | > 0, frame period < watchdog timeout | Camera frame rate. A performance knob only — the watchdog timeout and the fixed 5 ms control-loop period are both independent of it |
 | `spi_device_x` | `/dev/spidev0.0` | — | X-axis DAC SPI device |
 | `spi_device_y` | `/dev/spidev0.1` | — | Y-axis DAC SPI device |
 | `spi_speed_hz` | 20'000'000 | — | SPI clock (20 MHz, MCP4922 max) |
@@ -146,13 +151,13 @@ To determine which symlink belongs to which physical camera:
 2. Physically label that camera "LEFT" or "RIGHT"
 3. Copy its full by-path symlink into `config/system_config.yaml`
 
-If `left_camera_device` or `right_camera_device` is left empty, the system falls back to `/dev/video0` and `/dev/video2` respectively.
+If either `left_camera_device` or `right_camera_device` is empty — or the two are identical — the capture thread reports the misconfiguration and the process exits with a hardware fault. There is no fallback device: guessing at `/dev/videoN` risks a swapped pair, which corrupts stereo disparity and aims the laser at wrong 3D positions.
 
 ## Safety Architecture
 
 The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real bound is ~105ms (limit + one control cycle), not a flat 100ms
+1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot caps the TTL at ~99 ms independently of software
 2. **10-second firing cooldown** — `may_fire(now)` gate, applied on *every* pulse-end path (clean, aborted, and fault)
 3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
 4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
@@ -167,34 +172,33 @@ The system implements structurally-enforced safety guards (see `AGENTS.md` for f
 
 ### Known residual risk
 
-Every path that can end a pulse runs on the **control thread**. There is no hardware one-shot behind the laser TTL line, so if that thread stalls with the pin HIGH, no software path turns the laser off — recovery is the operator opening the arm switch, which is a true hardware interlock. The E-stop is not a substitute: its GPIO is polled by the same thread. **A retriggerable monostable on the TTL line is the recommended hardware mitigation.**
+Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): a stuck-HIGH GPIO 18 is force-cut at ~99 ms with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the arm switch cuts 12 V to the driver, the E-stop cuts mains — both real hardware, both requiring a human hand.
 
 ## Building and Running Tests
 
 ```bash
 mkdir build && cd build
-cmake .. -DBUILD_TESTS=ON
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
 make -j$(nproc)
 
 # Run all tests
 ctest --output-on-failure
 
-# Run specific test suite
+# Or run a specific suite from build/tests/, e.g.:
 ./tests/test_safety_guards
-./tests/test_watchdog
-./tests/test_arm_switch
-./tests/test_e_stop
-./tests/test_coordinate_mapper
 ./tests/test_firing_controller
 ./tests/test_control_loop
-./tests/test_system_state
-./tests/test_thread_safe_queue
-./tests/test_detector
-./tests/test_stereo_matcher
-./tests/test_kalman_tracker
-./tests/test_config_validator
-./tests/test_signal_handling
 ```
+
+The full set of suites is registered in `tests/CMakeLists.txt`: unit —
+`test_safety_guards`, `test_watchdog`, `test_arm_switch`, `test_e_stop`,
+`test_coordinate_mapper`, `test_firing_controller`, `test_system_state`,
+`test_thread_safe_queue`, `test_stereo_matcher`, `test_kalman_tracker`,
+`test_differential_galvo_driver`, `test_mcp4922`, `test_camera_impl`,
+`test_detector`, `test_multi_tracker`, `test_target_selector`,
+`test_signal_handling`, `test_config_loader`, `test_config_validator`,
+`test_print`, `test_control_loop`; stress — `test_frame_flooding`,
+`test_watchdog_jitter`, `test_concurrent_shutdown`, `test_spi_backpressure`.
 
 ## Project Structure
 
@@ -204,17 +208,20 @@ ctest --output-on-failure
 ├── CMakeLists.txt               # Top-level build
 ├── config/
 │   └── system_config.yaml       # Runtime configuration
+├── docs/                        # Hardware parameters, wiring, calibration, pre-flight
 ├── src/
 │   ├── main.cpp                 # Entry point, thread orchestration
-│   ├── core/                    # Types, errors, thread-safe queue
+│   ├── core/                    # Types, errors, config loader, thread-safe queue, logger
 │   ├── hal/                     # Hardware abstraction layer
-│   ├── safety/                  # State machine, watchdog, bounding box, arm switch, E-stop
-│   ├── vision/                  # Detection, stereo matching, tracking
-│   └── control/                 # Coordinate mapping, firing controller
+│   ├── safety/                  # State machine, watchdog, bounding box, arm switch,
+│   │                            #   E-stop, signal handler, config validator
+│   ├── vision/                  # Detection, stereo matching, multi-target tracking
+│   └── control/                 # Coordinate mapping, firing controller, control_step()
 └── tests/
     ├── CMakeLists.txt
     ├── mocks/                   # Google Mock interfaces
-    └── unit/                    # Unit test suites
+    ├── unit/                    # Unit test suites
+    └── stress/                  # Real-thread stress tests (shutdown, jitter, flooding)
 ```
 
 ## Tuning Guidance

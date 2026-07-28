@@ -55,6 +55,9 @@ auto validate_engagement_volume(const SystemConfig& config)
     -> std::vector<ValidationWarning> {
     std::vector<ValidationWarning> warnings;
 
+    // Deliberately collapses asymmetric limits to the TIGHTEST arm: the box is
+    // then checked against a smaller cone than the galvo can reach, which is
+    // the conservative direction.
     const double galvo_half_cone_deg =
         std::min({config.galvo_limits.angle_x_max_deg, config.galvo_limits.angle_y_max_deg,
                   -config.galvo_limits.angle_x_min_deg, -config.galvo_limits.angle_y_min_deg});
@@ -98,6 +101,25 @@ auto validate_engagement_volume(const SystemConfig& config)
         });
     }
 
+    // A NaN or non-positive optics value silently suppresses both FOV
+    // cross-checks (every comparison involving NaN is false), so say so
+    // explicitly. Non-critical: the optics feed no runtime path, only these
+    // checks.
+    const auto& optics = config.camera_optics;
+    if (!(std::isfinite(optics.lens_focal_length_mm) &&
+          optics.lens_focal_length_mm > 0.0) ||
+        !(std::isfinite(optics.image_sensor_width_mm) &&
+          optics.image_sensor_width_mm > 0.0) ||
+        !(std::isfinite(optics.image_sensor_height_mm) &&
+          optics.image_sensor_height_mm > 0.0)) {
+        warnings.push_back({
+            "camera-fov",
+            "camera_optics values must be finite and positive for the FOV "
+            "cross-checks to run; they are being skipped.",
+            false
+        });
+    }
+
     const double hfov = horizontal_fov_deg(config.camera_optics);
     const double half_hfov = hfov / 2.0;
     if (half_hfov < galvo_half_cone_deg) {
@@ -109,6 +131,31 @@ auto validate_engagement_volume(const SystemConfig& config)
                 std::to_string(galvo_half_cone_deg) +
                 " deg). Targets reachable by the galvo may be outside the camera view.",
             false
+        });
+    }
+
+    const double half_vfov = vertical_fov_deg(config.camera_optics) / 2.0;
+    if (half_vfov < galvo_half_cone_deg) {
+        warnings.push_back({
+            "camera-fov",
+            "Camera vertical half-FOV (" + std::to_string(half_vfov) +
+                " deg) is narrower than the galvo half-cone (" +
+                std::to_string(galvo_half_cone_deg) +
+                " deg). Targets reachable by the galvo may be outside the camera view.",
+            false
+        });
+    }
+
+    // An inverted box passes the per-corner checks (each corner is
+    // individually reachable) but makes contains() the empty set: every
+    // target rejected, the system silently dead with no diagnostic. Negated
+    // so a NaN bound rejects here as well as in the corner loop.
+    const auto& bb = config.bounding_box;
+    if (!(bb.x_min < bb.x_max && bb.y_min < bb.y_max && bb.z_min < bb.z_max)) {
+        warnings.push_back({
+            "bounding-box",
+            "Bounding box must satisfy min < max on x, y and z.",
+            true
         });
     }
 
@@ -217,9 +264,27 @@ auto validate_engagement_volume(const SystemConfig& config)
         });
     }
 
-    // main derives cycle periods as 1'000'000 / target_fps; zero is a SIGFPE.
+    // The capture thread derives its pacing as 1'000'000 / target_fps; zero is
+    // a SIGFPE. (The CONTROL thread's period is a fixed constant and does not
+    // depend on this — see control_loop.h.)
     if (config.target_fps <= 0) {
         warnings.push_back({"camera", "target_fps must be positive.", true});
+    } else if (!(1000.0 / config.target_fps < config.watchdog_timeout_ms)) {
+        // The heartbeat advances once per processed frame, so the frame period
+        // must fit inside the watchdog tolerance. A target_fps low enough to
+        // violate this can only ever ride out the startup grace and then
+        // SAFE_HALT with a baffling "heartbeat stale" message — make it a
+        // config error with a config-shaped message instead. Negated so a NaN
+        // watchdog_timeout_ms lands in the reject branch.
+        warnings.push_back({
+            "watchdog",
+            "Frame period (1000/target_fps = " +
+                std::to_string(1000.0 / config.target_fps) +
+                " ms) must be shorter than watchdog_timeout_ms (" +
+                std::to_string(config.watchdog_timeout_ms) +
+                " ms), or the watchdog trips between consecutive frames.",
+            true
+        });
     }
 
     if (config.frame_width <= 0 || config.frame_height <= 0) {
@@ -274,9 +339,14 @@ auto validate_engagement_volume(const SystemConfig& config)
         warnings.push_back({"detection", "detection.max_blobs must be positive.", true});
     }
 
-    if (!(config.detection.epipolar_tolerance_px > 0.0)) {
+    // Bounded above as well: the epipolar gate is the correspondence PROOF,
+    // and a huge tolerance from YAML (1e9) accepts any vertical offset — the
+    // guard is then formally present but proves nothing. 20 px is far beyond
+    // any sane rectification error at 640x400.
+    if (!(config.detection.epipolar_tolerance_px > 0.0 &&
+          config.detection.epipolar_tolerance_px <= 20.0)) {
         warnings.push_back({
-            "detection", "detection.epipolar_tolerance_px must be positive.", true});
+            "detection", "detection.epipolar_tolerance_px must be in (0, 20].", true});
     }
 
     // 0 disables the motion gate deliberately; above 0.5 the model chases the
@@ -334,6 +404,54 @@ auto validate_engagement_volume(const SystemConfig& config)
     if (config.tracking.max_tracks < 1 || config.tracking.max_tracks > 256) {
         warnings.push_back({
             "tracking", "tracking.max_tracks must be in [1, 256].", true});
+    }
+
+    // spi_speed_hz is signed in the config but unsigned in SpiImpl, so a
+    // negative YAML value wraps to a huge uint32_t; and beyond 20 MHz is out
+    // of MCP4922 spec — marginal transfers can corrupt DAC codes AFTER the
+    // mapper validated them.
+    if (config.spi_speed_hz <= 0 || config.spi_speed_hz > 20'000'000) {
+        warnings.push_back({
+            "spi", "spi_speed_hz must be in (0, 20000000] (MCP4922 maximum).", true});
+    }
+
+    // Three interlocks on one pin is a wiring error the software cannot make
+    // safe: e.g. the e-stop sense doubling as the laser TTL.
+    if (config.laser_pin == config.arm_switch_pin ||
+        config.laser_pin == config.e_stop_pin ||
+        config.arm_switch_pin == config.e_stop_pin) {
+        warnings.push_back({
+            "gpio",
+            "laser_pin, arm_switch_pin and e_stop_pin must be three distinct GPIOs.",
+            true});
+    }
+
+    // The matcher sanitizes a non-finite or negative target_size_m to "size
+    // gate off" (0 disables it deliberately); that silent degradation
+    // deserves a line in the startup record.
+    if (!(config.detection.target_size_m >= 0.0) ||
+        !std::isfinite(config.detection.target_size_m)) {
+        warnings.push_back({
+            "detection",
+            "detection.target_size_m is not a finite non-negative value; the "
+            "depth-consistent size gate is disabled.",
+            false});
+    }
+
+    // An exposure longer than the frame period cannot be honoured: the driver
+    // clamps the frame rate instead, silently violating the target_fps the
+    // rest of the timing budget assumes.
+    if (config.target_fps > 0 &&
+        static_cast<double>(config.camera_controls.exposure_absolute_us) >
+            1'000'000.0 / config.target_fps) {
+        warnings.push_back({
+            "camera",
+            "camera_controls.exposure_absolute_us (" +
+                std::to_string(config.camera_controls.exposure_absolute_us) +
+                " us) exceeds the frame period at target_fps (" +
+                std::to_string(1'000'000.0 / config.target_fps) +
+                " us); the driver will clamp the frame rate.",
+            false});
     }
 
     // Cross-check the blob-area floor against the geometry: a target of

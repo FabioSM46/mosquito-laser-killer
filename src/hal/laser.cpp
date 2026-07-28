@@ -96,12 +96,21 @@ auto Laser::fire(bool enable) -> std::expected<void, HardwareError> {
         pulse_start_ = std::chrono::steady_clock::now();
     }
 
+    const bool state_changed = (firing_ != enable);
     firing_ = enable;
 
-    if (enable) {
-        println("[LASER] FIRING");
-    } else {
-        println("[LASER] OFF");
+    // Log transitions only. The GPIO write above stays unconditional — the
+    // firing controller re-forces fire(false) every control cycle through
+    // cooldown and startup blanking as a deliberate defensive write — but
+    // logging each one buried the incident record under ~2000 duplicate
+    // "[LASER] OFF" lines per 10s cooldown and inflated the §4.11
+    // dropped-line counter.
+    if (state_changed) {
+        if (enable) {
+            println("[LASER] FIRING");
+        } else {
+            println("[LASER] OFF");
+        }
     }
 
     return {};

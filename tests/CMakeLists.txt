@@ -1,10 +1,15 @@
-find_package(GTest REQUIRED)
+# find_package(GTest) already ran in the parent scope (root CMakeLists, inside
+# the BUILD_TESTS block). GoogleTest.cmake provides gtest_discover_tests; in
+# module mode FindGTest happens to include it, but a config-mode GTest does
+# not, so the include must be explicit.
+include(GoogleTest)
 
-# NOTE: -Werror=unused-result is deliberately NOT relaxed here. It was previously
-# disabled, which let 16 discarded [[nodiscard]] safety results through — including
-# two tests whose only call was a dropped execute_cycle() result, so they asserted
-# nothing at all. If a test discards a safety return, that is the bug.
-add_compile_options(-Wno-unused-parameter)
+# NOTE: -Werror=unused-result is deliberately NOT relaxed here — tests inherit
+# the full root flag set (-Wall -Wextra -Wpedantic -Werror -Werror=unused-result).
+# It was previously disabled, which let 16 discarded [[nodiscard]] safety results
+# through — including two tests whose only call was a dropped execute_cycle()
+# result, so they asserted nothing at all. If a test discards a safety return,
+# that is the bug.
 
 # add_unit_test(<name> [EXTRA_LIBS...]) — every test gets the mocks, the src tree,
 # and gtest/gmock. Production code comes from the real libraries rather than
@@ -17,6 +22,7 @@ function(add_unit_test name)
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
     target_link_libraries(${name} PRIVATE
+        mosquito_core
         mosquito_hal
         mosquito_safety
         mosquito_vision
@@ -46,10 +52,12 @@ add_unit_test(test_stereo_matcher unit/test_stereo_matcher.cpp)
 add_unit_test(test_kalman_tracker unit/test_kalman_tracker.cpp)
 add_unit_test(test_differential_galvo_driver unit/test_differential_galvo_driver.cpp)
 add_unit_test(test_mcp4922 unit/test_mcp4922.cpp)
+add_unit_test(test_camera_impl unit/test_camera_impl.cpp)
 add_unit_test(test_detector unit/test_detector.cpp)
 add_unit_test(test_multi_tracker unit/test_multi_tracker.cpp)
 add_unit_test(test_target_selector unit/test_target_selector.cpp)
 add_unit_test(test_signal_handling unit/test_signal_handling.cpp)
+add_unit_test(test_config_loader unit/test_config_loader.cpp)
 add_unit_test(test_config_validator unit/test_config_validator.cpp)
 add_unit_test(test_print unit/test_print.cpp)
 

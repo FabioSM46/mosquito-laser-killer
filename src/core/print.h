@@ -13,14 +13,15 @@
 
 // Non-blocking, best-effort logging.
 //
-// The control thread logs while the laser pin is HIGH, and every path that can
-// end a pulse — enforce_max_pulse, execute_cycle's duration check, Laser::fire's
-// re-entry check, the watchdog, the E-stop — runs on that same thread. There is
-// no hardware one-shot behind the GPIO. So if a write to a stalled consumer
-// blocks (stdout piped to a `tee` that is paged out, a full pipe buffer, a slow
-// serial console), the thread stops, and nothing turns the laser off: SIGPIPE is
-// ignored and the signal handlers use SA_RESTART, so no signal breaks it out
-// either.
+// The control thread logs while the laser pin is HIGH, and every SOFTWARE path
+// that can end a pulse — enforce_max_pulse, execute_cycle's duration check,
+// Laser::fire's re-entry check, the watchdog, the E-stop poll — runs on that
+// same thread. The 74HC123 one-shot caps a stuck-HIGH pulse at ~99 ms in
+// hardware (AGENTS.md §4.1), but a wedged control thread is still a dead
+// system: no watchdog watches it. So if a write to a stalled consumer blocks
+// (stdout piped to a `tee` that is paged out, a full pipe buffer, a slow
+// serial console), the thread stops for good: SIGPIPE is ignored and the
+// signal handlers use SA_RESTART, so no signal breaks it out either.
 //
 // A dropped log line is always preferable to a wedged control thread, so
 // log_init() marks the descriptors O_NONBLOCK and writes that would block are

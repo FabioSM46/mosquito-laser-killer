@@ -26,7 +26,6 @@ enum class MappingError : uint8_t {
     GalvoAngleLimitExceeded,
     DacRangeInvalid,
     Invalid3DPoint,
-    TargetBehindBaseline,
     ConversionError,
 };
 
@@ -57,7 +56,6 @@ enum class MappingError : uint8_t {
     case MappingError::GalvoAngleLimitExceeded: return "GalvoAngleLimitExceeded";
     case MappingError::DacRangeInvalid: return "DacRangeInvalid";
     case MappingError::Invalid3DPoint: return "Invalid3DPoint";
-    case MappingError::TargetBehindBaseline: return "TargetBehindBaseline";
     case MappingError::ConversionError: return "ConversionError";
     }
     return "InvalidError";

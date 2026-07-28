@@ -7,7 +7,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d video)
+# An unset build type silently fell into the else() branch below and got
+# -O3 -DNDEBUG with no trace of the decision. Same flags, said out loud.
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+    message(STATUS "CMAKE_BUILD_TYPE not set; defaulting to Release (-O3 -DNDEBUG)")
+endif()
+
+# 4.8+ is what README/AGENTS require; without the version argument any
+# OpenCV 4.x configured cleanly.
+find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc calib3d video)
 
 if(TARGET opencv_core AND NOT TARGET OpenCV::core)
     add_library(OpenCV::core ALIAS opencv_core)
@@ -33,6 +42,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
     add_compile_options(-O3 -DNDEBUG)
 endif()
+
+set(CORE_SOURCES
+    src/core/config_loader.cpp
+)
 
 set(HAL_SOURCES
     src/hal/gpio_impl.cpp
@@ -65,6 +78,15 @@ set(CONTROL_SOURCES
     src/control/coordinate_mapper.cpp
     src/control/firing_controller.cpp
     src/control/control_loop.cpp
+)
+
+add_library(mosquito_core STATIC ${CORE_SOURCES})
+target_include_directories(mosquito_core PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(mosquito_core PUBLIC
+    yaml-cpp
+    Eigen3::Eigen
 )
 
 add_library(mosquito_hal STATIC ${HAL_SOURCES})
@@ -112,11 +134,11 @@ target_link_libraries(mosquito_control PUBLIC
 
 add_executable(mosquito_laser_killer src/main.cpp)
 target_link_libraries(mosquito_laser_killer PRIVATE
+    mosquito_core
     mosquito_hal
     mosquito_safety
     mosquito_vision
     mosquito_control
-    yaml-cpp
     pthread
 )
 

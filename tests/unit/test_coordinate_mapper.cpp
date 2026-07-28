@@ -11,38 +11,30 @@
 
 using namespace testing;
 
+// The main fixture runs the PRODUCTION geometry from core/types.h — box
+// x,y ∈ ±0.09 m, z ∈ [0.5, 1.0] m, cone ±15°, 0.33 V/°. This fixture once
+// used a ±1 m box with z down to 0.3 m, values the project's own
+// config_validator rejects as critical (§7 forbids fixtures more permissive
+// than production). A handful of tests below construct deliberately
+// validator-INVALID configs, each labelled: they exercise the mapper's own
+// inner guards, which a fully validated config makes unreachable by design —
+// defense in depth per §4.5.
 class CoordinateMapperTest : public Test {
 protected:
     void SetUp() override {
-        SystemConfig::BoundingBox bb;
-        bb.x_min = -1.0;
-        bb.x_max = 1.0;
-        bb.y_min = -1.0;
-        bb.y_max = 1.0;
-        bb.z_min = 0.3;
-        bb.z_max = 5.0;
-
-        SystemConfig::GalvoLimits gl;
-        gl.angle_x_min_deg = -15.0;
-        gl.angle_x_max_deg = 15.0;
-        gl.angle_y_min_deg = -15.0;
-        gl.angle_y_max_deg = 15.0;
-
-        SystemConfig::GalvoDriver gd;
-        gd.input_scale_v_per_deg = 0.33;
-        gd.dac_max_diff_voltage = 5.0;
-        gd.driver_input_voltage = 15.0;
-
-        bbox_ = std::make_unique<BoundingBox3D>(bb);
-        mapper_ = std::make_unique<CoordinateMapper>(*bbox_, gl, 5.0, gd);
+        bbox_ = std::make_unique<BoundingBox3D>(config_.bounding_box);
+        mapper_ = std::make_unique<CoordinateMapper>(
+            *bbox_, config_.galvo_limits, config_.dac_ref_voltage,
+            config_.galvo_driver);
     }
 
+    SystemConfig config_{};
     std::unique_ptr<BoundingBox3D> bbox_;
     std::unique_ptr<CoordinateMapper> mapper_;
 };
 
 TEST_F(CoordinateMapperTest, ValidTargetInCenterReturnsMidScaleDac) {
-    auto result = mapper_->map_to_dac({0.0, 0.0, 1.0});
+    auto result = mapper_->map_to_dac({0.0, 0.0, 0.7});
     ASSERT_TRUE(result.has_value());
 
     auto dac = result.value();
@@ -51,7 +43,7 @@ TEST_F(CoordinateMapperTest, ValidTargetInCenterReturnsMidScaleDac) {
 }
 
 TEST_F(CoordinateMapperTest, TargetOutsideBoundingBoxRejected) {
-    auto result = mapper_->map_to_dac({10.0, 0.0, 1.0});
+    auto result = mapper_->map_to_dac({10.0, 0.0, 0.7});
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::OutOfBounds);
 }
@@ -75,21 +67,31 @@ TEST_F(CoordinateMapperTest, NegativeZRejectedAsOutOfBounds) {
 }
 
 TEST_F(CoordinateMapperTest, TargetInBoxButBeyondGalvoConeRejected) {
-    // atan2(1.0, 0.3) ≈ 73° ≫ 15°
-    auto result = mapper_->map_to_dac({1.0, 0.0, 0.3});
+    // Deliberately validator-INVALID box (±0.2 m at z_min = 0.5 needs ~29.5°):
+    // in a validated config no in-box point can exceed the cone — that is what
+    // validation proves — so reaching the mapper's own cone guard requires a
+    // box the validator would abort on. Defense in depth, not a template for
+    // behaviour tests.
+    SystemConfig::BoundingBox bb{-0.2, 0.2, -0.2, 0.2, 0.5, 1.0};
+    BoundingBox3D box(bb);
+    CoordinateMapper mapper(box, config_.galvo_limits, config_.dac_ref_voltage,
+                            config_.galvo_driver);
+
+    // atan2(0.2, 0.5) ≈ 21.8° > 15°
+    auto result = mapper.map_to_dac({0.2, 0.0, 0.5});
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::GalvoAngleLimitExceeded);
 }
 
 TEST_F(CoordinateMapperTest, DacValuesWithin12BitRange) {
-    // Sweep off-axis targets across the cone: on-axis points all map to 2048,
-    // so an on-axis sweep cannot fail even with the 0-4095 range check deleted.
-    // tan(15 deg) = 0.268, so x in [-0.25, 0.25] at z = 1 stays inside the
-    // +/-15 deg limits and the 5 V budget.
+    // Sweep off-axis targets across the production box: on-axis points all map
+    // to 2048, so an on-axis sweep cannot fail even with the 0-4095 range
+    // check deleted. ±0.08 m at z = 0.75 is ±6.1° → ±2.0 V, well inside the
+    // ±15° / 5 V budget.
     bool saw_above_center = false;
     bool saw_below_center = false;
-    for (double x = -0.25; x <= 0.25; x += 0.05) {
-        auto result = mapper_->map_to_dac({x, x / 2.0, 1.0});
+    for (double x = -0.08; x <= 0.08; x += 0.02) {
+        auto result = mapper_->map_to_dac({x, x / 2.0, 0.75});
         ASSERT_TRUE(result.has_value()) << "x=" << x;
         auto dac = result.value();
         EXPECT_GE(dac.channel_a, 0u);
@@ -106,14 +108,14 @@ TEST_F(CoordinateMapperTest, DacValuesWithin12BitRange) {
 }
 
 TEST_F(CoordinateMapperTest, SymmetricXMapping) {
-    // ±0.1 m at z=1 m ≈ ±5.7° — within ±15° and voltage budget
-    auto left = mapper_->map_to_dac({-0.1, 0.0, 1.0});
-    auto right = mapper_->map_to_dac({0.1, 0.0, 1.0});
+    // ±0.08 m at z = 0.75 m ≈ ±6.1° — inside the production box and budget.
+    auto left = mapper_->map_to_dac({-0.08, 0.0, 0.75});
+    auto right = mapper_->map_to_dac({0.08, 0.0, 0.75});
 
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
 
-    auto center = mapper_->map_to_dac({0.0, 0.0, 1.0});
+    auto center = mapper_->map_to_dac({0.0, 0.0, 0.75});
     ASSERT_TRUE(center.has_value());
 
     EXPECT_LT(left->channel_a, center->channel_a);
@@ -121,43 +123,29 @@ TEST_F(CoordinateMapperTest, SymmetricXMapping) {
 }
 
 TEST_F(CoordinateMapperTest, VoltageScaleRejectsBeyondMaxDiff) {
-    SystemConfig::BoundingBox bb;
-    bb.x_min = -2.0;
-    bb.x_max = 2.0;
-    bb.y_min = -2.0;
-    bb.y_max = 2.0;
-    bb.z_min = 0.1;
-    bb.z_max = 10.0;
+    // Production geometry with ONE deliberately validator-invalid knob: a
+    // 0.5 V/° scale makes the DAC budget run out at 10°, below the ±15° cone
+    // (the validator flags exactly that mismatch as critical). It is the only
+    // way to reach the voltage guard from inside the box: a validated config
+    // proves the guard unreachable. Defense in depth per §4.5.
+    SystemConfig::GalvoDriver gd{0.5, 5.0};
+    CoordinateMapper mapper(*bbox_, config_.galvo_limits,
+                            config_.dac_ref_voltage, gd);
 
-    SystemConfig::GalvoLimits gl;
-    gl.angle_x_min_deg = -30.0;
-    gl.angle_x_max_deg = 30.0;
-    gl.angle_y_min_deg = -30.0;
-    gl.angle_y_max_deg = 30.0;
-
-    SystemConfig::GalvoDriver gd;
-    gd.input_scale_v_per_deg = 0.33;
-    gd.dac_max_diff_voltage = 5.0;
-
-    BoundingBox3D box(bb);
-    CoordinateMapper mapper(box, gl, 5.0, gd);
-
-    // ~26.6° → V_diff ≈ 8.8 V > 5 V
-    auto result = mapper.map_to_dac({0.5, 0.0, 1.0});
+    // Corner-ish target: atan2(0.09, 0.5) ≈ 10.2° → 5.1 V > 5 V.
+    auto result = mapper.map_to_dac({0.09, 0.0, 0.5});
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::DacRangeInvalid);
 }
 
 TEST_F(CoordinateMapperTest, DoesNotClampOutOfRangeCodes) {
-    // Angle within mechanical limits (±40°) but beyond voltage budget (~15.15°).
-    // tan(20°) ≈ 0.364 → V_diff = 20·0.33 = 6.6 V > 5 V → reject, no clamp.
-    SystemConfig::BoundingBox bb{-2, 2, -2, 2, 0.1, 10};
-    SystemConfig::GalvoLimits gl{-40, 40, -40, 40};
-    SystemConfig::GalvoDriver gd{0.33, 5.0, 15.0};
-    BoundingBox3D box(bb);
-    CoordinateMapper mapper(box, gl, 5.0, gd);
+    // Same deliberately-invalid 0.5 V/° knob as above: the over-budget voltage
+    // must come back as an ERROR, never as a silently clamped 0/4095 code.
+    SystemConfig::GalvoDriver gd{0.5, 5.0};
+    CoordinateMapper mapper(*bbox_, config_.galvo_limits,
+                            config_.dac_ref_voltage, gd);
 
-    auto result = mapper.map_to_dac({0.364, 0.0, 1.0});
+    auto result = mapper.map_to_dac({0.09, 0.09, 0.5});
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::DacRangeInvalid);
 }
@@ -217,39 +205,32 @@ TEST_F(CoordinateMapperTest, InfiniteCoordinatesAreRejectedAsInvalidPoint) {
 // tests fail if either guard is weakened back to a plain `<= 0.0` comparison
 // or moved after the rounding.
 TEST_F(CoordinateMapperTest, NanDacRefVoltageRejectsAsConversionError) {
-    SystemConfig::BoundingBox bb{-1, 1, -1, 1, 0.3, 5.0};
-    SystemConfig::GalvoLimits gl{-15, 15, -15, 15};
-    SystemConfig::GalvoDriver gd{0.33, 5.0, 15.0};
-    BoundingBox3D box(bb);
-    CoordinateMapper mapper(box, gl, std::nan(""), gd);
+    // Production geometry; only vref is (deliberately) invalid — the value
+    // under test.
+    CoordinateMapper mapper(*bbox_, config_.galvo_limits, std::nan(""),
+                            config_.galvo_driver);
 
-    auto result = mapper.map_to_dac({0.0, 0.0, 1.0});
+    auto result = mapper.map_to_dac({0.0, 0.0, 0.7});
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::ConversionError);
 }
 
 TEST_F(CoordinateMapperTest, NonPositiveDacRefVoltageRejectsAsConversionError) {
-    SystemConfig::BoundingBox bb{-1, 1, -1, 1, 0.3, 5.0};
-    SystemConfig::GalvoLimits gl{-15, 15, -15, 15};
-    SystemConfig::GalvoDriver gd{0.33, 5.0, 15.0};
-    BoundingBox3D box(bb);
-
     for (const double vref : {0.0, -5.0}) {
-        CoordinateMapper mapper(box, gl, vref, gd);
-        auto result = mapper.map_to_dac({0.0, 0.0, 1.0});
+        CoordinateMapper mapper(*bbox_, config_.galvo_limits, vref,
+                                config_.galvo_driver);
+        auto result = mapper.map_to_dac({0.0, 0.0, 0.7});
         ASSERT_FALSE(result.has_value()) << "vref=" << vref;
         EXPECT_EQ(result.error(), MappingError::ConversionError) << "vref=" << vref;
     }
 }
 
 TEST_F(CoordinateMapperTest, NanInputScaleRejectsAsConversionError) {
-    SystemConfig::BoundingBox bb{-1, 1, -1, 1, 0.3, 5.0};
-    SystemConfig::GalvoLimits gl{-15, 15, -15, 15};
-    SystemConfig::GalvoDriver gd{std::nan(""), 5.0, 15.0};
-    BoundingBox3D box(bb);
-    CoordinateMapper mapper(box, gl, 5.0, gd);
+    SystemConfig::GalvoDriver gd{std::nan(""), 5.0};
+    CoordinateMapper mapper(*bbox_, config_.galvo_limits,
+                            config_.dac_ref_voltage, gd);
 
-    auto result = mapper.map_to_dac({0.0, 0.0, 1.0});
+    auto result = mapper.map_to_dac({0.0, 0.0, 0.7});
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MappingError::ConversionError);
 }

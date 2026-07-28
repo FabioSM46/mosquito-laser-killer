@@ -198,6 +198,49 @@ TEST_F(MultiTrackerTest, MaxTracksRefusesNewTracksButKeepsLiveOnes) {
     }
 }
 
+// Confirmation requires CONSECUTIVE matched frames (AGENTS.md §4.12). Before
+// this was pinned, hits accumulated across coasted frames, so a phantom that
+// flickered every other frame inside the 100 ms horizon reached confirm_hits
+// and became engageable.
+TEST_F(MultiTrackerTest, FlickeringPhantomNeverConfirms) {
+    ASSERT_EQ(config_.tracking.confirm_hits, 3);
+
+    // Present on even frames, absent on odd ones: 5 cumulative hits by k = 8,
+    // but never more than one consecutive. The 8.33 ms gaps are far inside the
+    // coast horizon, so the track itself survives throughout.
+    std::vector<TrackedTarget> out;
+    for (int k = 0; k <= 8; ++k) {
+        if (k % 2 == 0) {
+            out = tracker_.update({Point3D{0.02, 0.0, 0.75}}, tick(k));
+            ASSERT_EQ(out.size(), 1u);
+            EXPECT_FALSE(out[0].confirmed)
+                << "flickering detection accumulated to confirmation at k=" << k;
+            EXPECT_FALSE(out[0].engageable);
+        } else {
+            out = tracker_.update({}, tick(k));
+        }
+    }
+    EXPECT_GE(out[0].hits, 5);   // the cumulative count did grow — that is the trap
+}
+
+// Once earned, confirmation is latched: a confirmed track that coasts one
+// frame must not be demoted to tentative, or every brief detection gap would
+// restart the confirmation clock and the sticky selector would thrash.
+TEST_F(MultiTrackerTest, ConfirmedTrackStaysConfirmedThroughACoast) {
+    const auto tracked = fly_frames(30);
+    ASSERT_TRUE(tracked[0].confirmed);
+    ASSERT_TRUE(tracked[0].engageable);
+
+    const auto coasted = tracker_.update({}, tick(30));
+    ASSERT_EQ(coasted.size(), 1u);
+    EXPECT_TRUE(coasted[0].confirmed);
+
+    const auto recovered = tracker_.update({flying_point(31)}, tick(31));
+    ASSERT_EQ(recovered.size(), 1u);
+    EXPECT_TRUE(recovered[0].confirmed);
+    EXPECT_TRUE(recovered[0].engageable);
+}
+
 TEST_F(MultiTrackerTest, NonFiniteMeasurementCreatesNoTrack) {
     constexpr double k_nan = std::numeric_limits<double>::quiet_NaN();
 
@@ -208,6 +251,36 @@ TEST_F(MultiTrackerTest, NonFiniteMeasurementCreatesNoTrack) {
     const auto out = tracker_.update({Point3D{k_nan, 0.0, 0.75}, flying_point(0)},
                                      tick(1));
     EXPECT_EQ(out.size(), 1u);
+}
+
+// The constructor sanitizes garbage tracking config; nothing pinned those
+// bounds before (unlike Detector's and StereoMatcher's equivalents). A NaN
+// association gate makes every distance comparison false — silently blind —
+// so the sanitized tracker must still associate, and the sanitized caps must
+// still bind.
+TEST_F(MultiTrackerTest, NanOrNonPositiveConfigSanitizesToWorkingBounds) {
+    constexpr double k_nan = std::numeric_limits<double>::quiet_NaN();
+
+    SystemConfig bad;
+    bad.tracking.confirm_hits = 0;               // → 1
+    bad.tracking.association_gate_m = k_nan;     // → 0.15
+    bad.tracking.min_speed_mps = k_nan;          // → 0.0
+    bad.tracking.max_speed_mps = k_nan;          // → 3.0
+    bad.tracking.max_tracks = 0;                 // → 1
+    MultiTracker sanitized(bad.tracking);
+
+    auto out = sanitized.update({Point3D{0.0, 0.0, 0.75}}, tick(0));
+    ASSERT_EQ(out.size(), 1u);
+    out = sanitized.update({Point3D{0.001, 0.0, 0.75}}, tick(1));
+    ASSERT_EQ(out.size(), 1u);
+    EXPECT_EQ(out[0].hits, 2)
+        << "measurement failed to associate under the sanitized gate";
+
+    // max_tracks sanitized to 1: a second target is refused, never evicts.
+    out = sanitized.update(
+        {Point3D{0.002, 0.0, 0.75}, Point3D{0.0, 0.08, 0.6}}, tick(2));
+    EXPECT_EQ(out.size(), 1u);
+    EXPECT_EQ(sanitized.track_count(), 1u);
 }
 
 TEST_F(MultiTrackerTest, ResetClearsAllTracks) {

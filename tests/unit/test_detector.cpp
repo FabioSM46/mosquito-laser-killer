@@ -370,6 +370,35 @@ TEST_F(MotionDetectorTest, ShortFrameStillFailsClosed) {
     EXPECT_THAT(detector_->detect_blobs(frame.data(), frame.size() - 1), IsEmpty());
 }
 
+// Pins the diff-BEFORE-update ordering inside the motion gate. At the shipped
+// alpha = 0.05 an inverted order (fold the frame into the model, THEN diff)
+// shifts the model only 5% per frame — the diff stays huge and every other
+// motion test still passes. At alpha = 1.0 the inverted model IS the current
+// frame, the diff is identically zero, and a moving target vanishes. The
+// constructor accepts (0, 1] deliberately; the validator caps the SHIPPED
+// range at 0.5, but the gate must stay correct for any rate it accepts.
+TEST_F(MotionDetectorTest, DiffRunsBeforeTheModelAbsorbsTheFrame) {
+    SystemConfig config;
+    config.detection.background_learning_rate = 1.0;
+    Detector detector(k_width, k_height, config.detection);
+
+    auto dark = make_dark_frame();
+    ASSERT_THAT(detector.detect_blobs(dark.data(), dark.size()), IsEmpty());  // seed
+
+    // A blob that never revisits a pixel: with the correct ordering the diff
+    // against the PREVIOUS model (dark at each new position) sees it every
+    // frame; with the inverted ordering it is invisible every frame.
+    int detections = 0;
+    for (int i = 0; i < 5; ++i) {
+        auto frame = make_dark_frame();
+        paint_rect(frame, 40 + i * 30, 180, 6, 6);
+        if (!detector.detect_blobs(frame.data(), frame.size()).empty()) {
+            ++detections;
+        }
+    }
+    EXPECT_EQ(detections, 5);
+}
+
 TEST_F(MotionDetectorTest, OutOfRangeLearningRateDisablesTheGate) {
     // A NaN rate would poison accumulateWeighted forever; negative or >1 is a
     // config error. Both sanitize to gate-disabled, the legacy behaviour the

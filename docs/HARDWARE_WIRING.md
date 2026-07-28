@@ -67,7 +67,8 @@ This document is the single source of truth for wiring the stereoscopic laser-ta
 | Capacitor | 1 µF | 1 | 74HC123 timing (C_ext); 0.1 µF for VCC decoupling |
 | Arm switch | Lever SPST toggle, rated ≥3 A @ 12 VDC | 1 | Laser power + GPIO arm sense |
 | E-Stop | Mushroom DPST push-button, NC contacts | 1 | Physical power kill + GPIO sense |
-| Resistor | 10 kΩ, 1/2 W | 3 | Arm switch series, E-stop series (×2) |
+| Resistor | 10 kΩ, 1/2 W | 1 | Arm switch series (from 12 V, §5) |
+| Resistor | 1 kΩ, 1/2 W | 1 | E-stop series (from 3.3 V, §6) |
 | Resistor | 3.3 kΩ, 1/2 W | 2 | Arm switch / E-stop pull-downs |
 | Zener diode | BZX55C3V3, 1/2 W | 2 | GPIO input overvoltage clamp |
 | Capacitor | 100 nF ceramic | 2 | Arm switch / E-stop debounce |
@@ -140,17 +141,31 @@ The arm switch performs **two functions**: it switches 12 V to the laser driver 
 The DPST mushroom button also provides a software-monitored E-Stop on GPIO 25. The control thread polls this pin every cycle; if it goes LOW, the system transitions to `SAFE_HALT`, forces the laser LOW, and centers the galvos.
 
 ```
-3.3 V (RPi) ──► [E-Stop pole 2 NC] ──► 10 kΩ ──►┬──► GPIO 25 (RPi)
-                                                    ├── 3.3 kΩ ──► GND
-                                                    ├── 100 nF ──► GND
-                                                    └── BZX55C3V3 cathode ──► GND
+3.3 V (RPi) ──► [E-Stop pole 2 NC] ──► 1 kΩ ──►┬──► GPIO 25 (RPi)
+                                                   ├── 3.3 kΩ ──► GND
+                                                   ├── 100 nF ──► GND
+                                                   └── BZX55C3V3 cathode ──► GND
 ```
+
+### Component notes
+
+- **1 kΩ** series (NOT 10 kΩ): the source here is the Pi's own 3.3 V rail, not
+  the 12 V of the arm-switch circuit, so the divider must be recomputed.
+  Released-state node voltage: `3.3 V × 3.3 kΩ / (1 kΩ + 3.3 kΩ) ≈ 2.53 V` — a
+  solid 3.3 V-logic HIGH. An earlier revision of this drawing copied the arm
+  circuit's 10 kΩ, which from 3.3 V yields only ~0.82 V — below V_IH, so the
+  input would read "pressed" permanently and the system could never leave the
+  E-stop state. If your bench was built from that revision, replace the series
+  resistor.
+- **3.3 kΩ**: pull-down that forces LOW when the contact opens or a wire breaks.
+- **100 nF** + **BZX55C3V3** (cathode to the junction): debounce and transient
+  clamp, as in the arm circuit.
 
 ### Operation
 
 | State | Pole 2 contact | GPIO 25 | Software interpretation |
 |-------|----------------|---------|-------------------------|
-| Released (normal) | Closed | HIGH (3.3 V) | System OK |
+| Released (normal) | Closed | ≈ 2.5 V (HIGH) | System OK |
 | Pressed | Open | LOW (pulled down) | Emergency stop → SAFE_HALT |
 | Wire broken | Open | LOW (pulled down) | Emergency stop → SAFE_HALT |
 
@@ -164,7 +179,7 @@ This is fail-safe: a broken wire or pressed button produces the same safe state.
 |----------|------|-----|-----------|---------|-------------|
 | Laser TTL | GPIO 18 | 12 | Output | 3.3 V → level shifter → 5 V | Laser driver TTL input |
 | Arm switch sense | GPIO 24 | 18 | Input | 2.98 V HIGH | Arm switch voltage divider |
-| E-Stop sense | GPIO 25 | 22 | Input | 3.3 V HIGH | E-Stop NC + pull-down |
+| E-Stop sense | GPIO 25 | 22 | Input | ≈2.5 V HIGH | E-Stop NC + pull-down |
 | SPI0 MOSI | GPIO 10 | 19 | Output | 3.3 V → level shifter → 5 V | Both MCP4922 SDI |
 | SPI0 MISO | GPIO 9 | 21 | Input | 3.3 V | Not used by MCP4922 (write-only) |
 | SPI0 SCLK | GPIO 11 | 23 | Output | 3.3 V → level shifter → 5 V | Both MCP4922 SCK |

@@ -21,7 +21,7 @@ startup.
 | Maximum scan angle | ±30° optical (default ±15°) |
 | Mirror | 11 × 7 × 0.7 mm, dielectric film, >99% reflectivity @ 45° AoI |
 | Wavelength coverage | 400–700 nm |
-| Operating voltage | ±12 V |
+| Operating voltage | ±12 V (vendor rating for the head; it is driven by the ±15 VDC driver of §1.2, which supplies the rails and the coil drive) |
 | Operating temperature | 0 °C to +45 °C |
 | Storage temperature | −10 °C to +60 °C |
 | Operating noise | ≤ 30 dB |
@@ -99,7 +99,7 @@ At DAC code `c` (0…4095), the differential voltage is
 | Sensor | OV9281, 1/4", global-shutter monochrome |
 | Native array | 1280 × 800, 3 µm pixels |
 | Sensor width / height | 3.84 mm × 2.4 mm |
-| Interface | USB3 UVC, 120 FPS |
+| Interface | USB3 UVC, up to 210 FPS at 640×400 |
 | High-rate modes | MJPG 1280×720@120, 640×400@210, 640×360@210 |
 | Low-rate mode | YUV 1280×720@10 |
 | Adjustable V4L2 controls | Brightness, Contrast, Saturation, White balance, Gamma, Sharpness, Exposure, Gain |
@@ -155,7 +155,13 @@ without code changes.
 **FPS guidance:** higher FPS reduces tracking latency (4.8 ms at 210 FPS vs
 8.3 ms at 120 FPS). USB 3.0 bandwidth (~400 MB/s usable) and RPi 5 CPU are not
 bottlenecks even at 210 FPS — the detector's 256K-pixel scan is <1 % of NEON
-throughput. The watchdog's heartbeat period auto-derives from `target_fps`.
+throughput. `target_fps` is a performance knob only: the watchdog timeout is an
+**absolute** duration (default 25 ms, deliberately *not* derived from the frame
+rate — see AGENTS.md §4.4), and the control loop runs at a fixed 5 ms period.
+The startup validator rejects any config whose frame period (`1000/target_fps`)
+does not fit inside the watchdog timeout, since the heartbeat advances once per
+processed frame. The shipped `config/system_config.yaml` selects the validated
+210 FPS mode; the conservative built-in default is 120 FPS.
 
 ### 2.4 Image controls (dark-field detection)
 
@@ -181,15 +187,33 @@ tunable in `camera_controls`.
 
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
-| Max pulse ≤ 100 ms | per-cycle duration check + `Laser::enforce_max_pulse` | `FiringController`, `Laser` |
-| Cooldown ≥ 10 s | `cooldown_until_` gates `may_fire()` | `FiringController` |
+| Max pulse | per-cycle duration check + `Laser::enforce_max_pulse`; real software bound ≈ 100 ms config limit + one fixed 5 ms control cycle + jitter (~105 ms — a flat "≤ 100 ms" is a claim the software cannot make, AGENTS.md §4.1) | `FiringController`, `Laser` |
+| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at ≈ 99 ms with no software or operator involvement — see §3.1 below | wiring, §11a of `HARDWARE_WIRING.md` |
+| Cooldown | `cooldown_until_` gates `may_fire()` (configured 10 s; validator floor 1 s) | `FiringController` |
 | Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
 | Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
-| Watchdog | 3 missed heartbeats → `emergency_shutdown()` + `SAFE_HALT` | `Watchdog` |
+| Watchdog | absolute 25 ms heartbeat timeout (independent of `target_fps`) + bounded startup grace → `emergency_shutdown()` + `SAFE_HALT` | `Watchdog` |
 | Coordinate bounds | safe box + galvo cone + voltage-scale DAC (reject, no clamp) | `CoordinateMapper`, `BoundingBox3D` |
 | E-stop | active-low mushroom → `SAFE_HALT`; GPIO fault → pressed | `EStop` |
 | Config validation | critical engagement mismatches abort startup | `validate_engagement_volume` |
 | RAII shutdown | laser GPIO forced LOW on init, on error, and on destruction | `Laser`, `~GpioImpl` |
+
+### 3.1 Hardware pulse-duration backstop (74HC123)
+
+Every *software* mechanism that can end a pulse runs on the control thread; if
+that thread stalls with GPIO 18 HIGH, none of them fires. The backstop is an
+SN74HC123N retriggerable monostable plus an SN74HC08N AND gate between the
+level shifter and the laser driver: laser TTL = `GPIO18 ∧ one-shot Q`, one-shot
+triggered by GPIO 18's rising edge. A normal short pulse passes through
+unchanged; a stuck-HIGH GPIO 18 is force-cut when Q times out — with no
+software path and no operator action. Period ≈ `0.45 · 220 kΩ · 1 µF ≈ 99 ms`
+(R/C tolerance can swing this ±20 %; measure it on a scope). The guarantee
+holds only if the AND gating is present, firing stays a single sustained level
+(never a PWM burst), and the measured period is what you intend — the
+scope-verification procedure is in `PRE_FLIGHT_CHECKLIST.md` §2 and the wiring
+in `HARDWARE_WIRING.md` §11a. The '123 and the AND gate are single components:
+their failure belongs in any FMEA, with the arm switch (cuts 12 V) and E-stop
+(cuts mains) as the outer, operator-driven layers.
 
 ---
 
@@ -205,10 +229,27 @@ half-width, and `D = √(x²+y²)` lateral corner radius.
 | Galvo cone (corner) | `atan2(D, z) ≤ θ_g` ⇒ `z ≥ D / tan(15°) = 3.73·D` | `D=0.127` (±0.09) → z ≥ 0.47 m |
 | Galvo voltage | `θ_g · 0.33 ≤ 5 V` ⇒ `θ_g ≤ 15.15°` | satisfied at ±15° |
 | Stereo matchable | `z ≥ f·B / d_max` (d_max ≈ 300 px) | f=500 → z ≥ 0.20 m |
-| Detection upper bound (5 mm, ≥3 px) | `z ≤ f·0.005/3` | f=500 → z ≤ 0.83 m |
+| Detection upper bound (5 mm target, blob area ≥ `min_blob_area_px`) | `(π/4)·(f·s/z)² ≥ A_min` ⇒ `z ≤ f·s·√(π/(4·A_min))` | f=500, s=5 mm, A_min=4 px² → z ≤ 1.11 m |
 | Safety/hazard floor | operator | 0.5 m |
 
 **Configured envelope:** `x,y ∈ [−0.09, 0.09] m`, `z ∈ [0.5, 1.0] m`.
+
+The detection bound is the criterion the software actually enforces: the
+startup validator cross-checks `min_blob_area_px` against the area a
+`target_size_m` object projects to at `z_max` (a ~2.5 px-diameter, ~4.9 px²
+blob at z = 1.0 m with the shipped values, clearing the 4 px² floor). The
+stricter "≥ 3 px across" rule of thumb quoted in earlier revisions of this
+table gives z ≤ 0.83 m and was never what the code checked; detection at the
+far end of the envelope is correspondingly marginal — see the small-target
+row of `PRE_FLIGHT_CHECKLIST.md` §6.
+
+**Stereo temporal skew (residual):** the two cameras free-run without hardware
+sync and are grabbed sequentially, so a pair can be up to one frame period
+apart. For a laterally moving target the skew biases disparity and therefore
+z by `Δz ≈ z·v·Δt/B` — ≈ 4 cm at z = 1 m, v = 1 m/s, Δt = 4.8 ms, B = 0.12 m.
+The runtime records per-camera driver timestamps in each `StereoFrame` and
+logs a skew watermark every 512 frames; the z margins of the bounding box must
+absorb the residual (AGENTS.md §4.12).
 
 The bounding box is an axis-aligned cuboid, while the reachable volume is a cone
 (frustum). To keep the cuboid fully inside the cone, the near-face corner radius

@@ -5,6 +5,7 @@
 #include "hal/igalvo_driver.h"
 #include "control/coordinate_mapper.h"
 #include <chrono>
+#include <optional>
 #include "core/print.h"
 
 // Sequences the laser fire path behind every timing and state gate.
@@ -18,6 +19,17 @@ public:
     // Blanking applied at construction so the system cannot fire the instant it
     // boots, before the operator has control of the arm switch.
     static constexpr auto k_startup_blanking = std::chrono::seconds(1);
+
+    // Galvo codes within this of the last commanded pair are the SAME aim:
+    // writing them would not move the mirrors, so they must not restart the
+    // settle timer. 12 codes × 30°/4096 ≈ 0.088° ≈ 1.2 mm at z = 0.75 m —
+    // above the tracker's typical sub-millimeter estimate jitter and well
+    // under the 5 mm target. Without this deadband, every tracker update's
+    // jitter restarted settle, and the controller could only fire on a cycle
+    // that happened to receive no fresh command — aimed at stale data by
+    // construction. Anything beyond the deadband is a real re-aim: write,
+    // restamp, settle again.
+    static constexpr uint16_t k_settle_deadband_codes = 12;
 
     FiringController(ILaser& laser,
                      IGalvoDriver& galvo,
@@ -68,10 +80,19 @@ private:
     std::chrono::steady_clock::time_point pulse_start_{};
     std::chrono::steady_clock::time_point galvo_command_time_{};
 
+    // The codes last written to the galvo, i.e. where the mirrors actually
+    // are. Cleared on every engagement-end path so the next engagement always
+    // re-writes: the cache must never outlive a window in which an external
+    // path (watchdog zero, shutdown) could have moved the mirrors, or a
+    // deadband skip would fire at an aim the galvo no longer holds.
+    std::optional<DacValues> last_commanded_dac_{};
+
     bool galvo_settled_{false};
     bool pulse_active_{false};
     bool emergency_stop_{false};
-    bool target_just_set_{false};
+
+    [[nodiscard]] static auto dac_delta_exceeds_deadband(const DacValues& a,
+                                                         const DacValues& b) -> bool;
 
     [[nodiscard]] auto enforce_timing_limits(std::chrono::steady_clock::time_point now)
         -> bool;

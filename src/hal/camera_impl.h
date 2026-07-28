@@ -1,8 +1,20 @@
 #pragma once
 
 #include "hal/icamera.h"
+#include <chrono>
 #include <string>
 #include <vector>
+
+// V4L2_CID_EXPOSURE_ABSOLUTE is denominated in units of 100 µs, not µs. The
+// config keeps the honest microsecond unit its key name promises; this
+// converts at the V4L2 boundary (nearest unit, floor of 1 — a request of 0 is
+// driver-defined). Passing the µs value straight through, as the code once
+// did, requested a 100× longer exposure than configured: 156 µs became
+// 15.6 ms, longer than a whole frame at 120/210 fps.
+[[nodiscard]] constexpr auto exposure_us_to_v4l2_units(int exposure_us) -> int {
+    const int units = (exposure_us + 50) / 100;
+    return units < 1 ? 1 : units;
+}
 
 // V4L2 capture using memory-mapped streaming I/O.
 //
@@ -31,6 +43,17 @@ public:
     // Frame size the driver actually negotiated. Valid once open() succeeds.
     [[nodiscard]] auto frame_size_bytes() const -> size_t { return frame_size_bytes_; }
 
+    // Driver-reported exposure timestamp of the most recent successful
+    // capture() (uvcvideo stamps CLOCK_MONOTONIC, the clock steady_clock reads
+    // on Linux), falling back to steady_clock::now() when the driver provides
+    // none. The two cameras free-run without hardware sync, so the capture
+    // thread records both sides' stamps to make the stereo pair's temporal
+    // skew measurable — see AGENTS.md §4.12.
+    [[nodiscard]] auto last_frame_timestamp() const
+        -> std::chrono::steady_clock::time_point {
+        return last_frame_timestamp_;
+    }
+
 private:
     struct MappedBuffer {
         void* start{nullptr};
@@ -53,4 +76,5 @@ private:
     size_t frame_size_bytes_{0};
     std::vector<MappedBuffer> buffers_{};
     bool streaming_{false};
+    std::chrono::steady_clock::time_point last_frame_timestamp_{};
 };

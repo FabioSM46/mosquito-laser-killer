@@ -296,9 +296,9 @@ TEST_F(FiringControllerTest, GalvoIsCommandedBeforeTheLaserFires) {
     EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
 
     {
-        // The galvo is re-commanded every cycle while the target holds, so the
-        // property under test is the ordering, not the count: every DAC write
-        // must precede the pin going HIGH.
+        // The galvo is written on engagement and on every genuine re-aim, so
+        // the property under test is the ordering, not the count: every DAC
+        // write must precede the pin going HIGH.
         InSequence seq;
         EXPECT_CALL(*mock_galvo_, set_position(_, _))
             .Times(AtLeast(1))
@@ -311,6 +311,68 @@ TEST_F(FiringControllerTest, GalvoIsCommandedBeforeTheLaserFires) {
     (void)controller_->execute_cycle(now);
     (void)controller_->execute_cycle(now + 4ms);
     EXPECT_TRUE(controller_->is_firing());
+}
+
+//
+// Settle deadband
+//
+
+// Sub-millimeter tracker jitter arrives as a fresh position every cycle. An
+// aim-identical update (mapped DAC codes within k_settle_deadband_codes) must
+// not restart the settle timer — before the deadband existed, every jittering
+// update reset settle, and the controller could only fire on a cycle that
+// happened to receive NO fresh command, aimed at stale data by construction.
+TEST_F(FiringControllerTest, JitteringTargetWithinDeadbandStillFires) {
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(1).WillOnce(Return(kOk));
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    for (int i = 0; i < 10 && !controller_->is_firing(); ++i) {
+        // ±0.01 mm of jitter at z = 0.7 m — a fraction of one DAC code.
+        const double jitter = 1e-5 * ((i % 2 == 0) ? 1.0 : -1.0);
+        controller_->set_target({jitter, 0.0, 0.7}, now);
+        (void)controller_->execute_cycle(now);
+        now += 5ms;
+    }
+    EXPECT_TRUE(controller_->is_firing());
+}
+
+TEST_F(FiringControllerTest, RealReAimBeyondDeadbandRestartsSettle) {
+    // fire(false) is routine; naming fire(true) at all makes non-matching calls
+    // "unexpected" rather than "uninteresting", even under NiceMock.
+    EXPECT_CALL(*mock_laser_, fire(false)).Times(AnyNumber());
+    EXPECT_CALL(*mock_laser_, fire(true)).Times(0);
+
+    auto now = after_blanking();
+    controller_->set_armed(true, now);
+    controller_->set_target(kValidTarget, now);
+    (void)controller_->execute_cycle(now);        // first write, stamps settle
+
+    // 2ms later the target genuinely moves ~7mm (~77 DAC codes): a real re-aim.
+    controller_->set_target({0.007, 0.0, 0.7}, now + 2ms);
+    (void)controller_->execute_cycle(now + 2ms);  // re-write, re-stamps settle
+
+    // 4ms after the ORIGINAL stamp the settle delay (3ms) would have elapsed,
+    // but the clock restarted at the re-aim 2ms ago: still slewing, no fire.
+    (void)controller_->execute_cycle(now + 4ms);
+    EXPECT_FALSE(controller_->is_firing());
+}
+
+// After any pulse end the last-commanded cache must be dropped: an external
+// path (watchdog zero, shutdown) may have moved the mirrors, so the next
+// engagement must re-write the DAC even for an aim-identical target rather
+// than trust a stale cache.
+TEST_F(FiringControllerTest, PulseEndForcesAFreshGalvoWriteForTheNextEngagement) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->execute_cycle(fire_time + 100ms));  // clean end
+
+    EXPECT_CALL(*mock_galvo_, set_position(_, _))
+        .Times(AtLeast(1))
+        .WillRepeatedly(Return(kOk));
+
+    auto now = fire_time + 100ms + 10s + 5ms;   // cooldown over
+    controller_->set_target(kValidTarget, now);
+    (void)controller_->execute_cycle(now);
 }
 
 //
@@ -423,6 +485,55 @@ TEST_F(FiringControllerTest, EmergencyStopDuringPulseForcesLaserOffAndLatches) {
     EXPECT_FALSE(controller_->is_firing());
     EXPECT_TRUE(controller_->is_halted());
     EXPECT_FALSE(controller_->is_armed());
+}
+
+//
+// fire(false)-failure injection. These are the only three paths that can reach
+// force_laser_off_and_halt from a failed OFF write — an OFF that does not land
+// means the pin may still be HIGH — and none of them had any coverage:
+// deleting the force_laser_off_and_halt calls failed no test.
+//
+
+TEST_F(FiringControllerTest, LaserOffFailureAtMaxPulseEndLatchesHalt) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    ON_CALL(*mock_laser_, fire(false))
+        .WillByDefault(Return(std::unexpected(HardwareError::GpioWriteFailed)));
+    EXPECT_CALL(*mock_laser_, emergency_shutdown()).Times(AtLeast(1));
+
+    EXPECT_FALSE(controller_->execute_cycle(fire_time + 100ms));
+    EXPECT_TRUE(controller_->is_halted());
+    EXPECT_FALSE(controller_->may_fire(fire_time + 1h));
+}
+
+TEST_F(FiringControllerTest, LaserOffFailureDuringAbortLatchesHalt) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->is_firing());
+
+    ON_CALL(*mock_laser_, fire(false))
+        .WillByDefault(Return(std::unexpected(HardwareError::GpioWriteFailed)));
+    EXPECT_CALL(*mock_laser_, emergency_shutdown()).Times(AtLeast(1));
+
+    controller_->clear_target(fire_time + 10ms);
+
+    EXPECT_TRUE(controller_->is_halted());
+    EXPECT_FALSE(controller_->may_fire(fire_time + 1h));
+}
+
+TEST_F(FiringControllerTest, LaserOffFailureDuringCooldownLatchesHalt) {
+    auto fire_time = fire_once(*controller_);
+    ASSERT_TRUE(controller_->execute_cycle(fire_time + 100ms));   // clean end
+    ASSERT_FALSE(controller_->is_halted());
+
+    // The cooldown-time defensive OFF write fails: the controller must latch
+    // rather than keep cycling with a pin it cannot prove is LOW.
+    ON_CALL(*mock_laser_, fire(false))
+        .WillByDefault(Return(std::unexpected(HardwareError::GpioWriteFailed)));
+    EXPECT_CALL(*mock_laser_, emergency_shutdown()).Times(AtLeast(1));
+
+    EXPECT_FALSE(controller_->execute_cycle(fire_time + 200ms));
+    EXPECT_TRUE(controller_->is_halted());
 }
 
 TEST_F(FiringControllerTest, EmergencyStopIsIrreversible) {

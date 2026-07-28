@@ -110,7 +110,11 @@ auto MultiTracker::update(const std::vector<Point3D>& measurements,
             const auto& m = measurements[static_cast<size_t>(track_assignment[t])];
             if (track.kf.update(m, timestamp).has_value()) {
                 ++track.hits;
+                ++track.consecutive_hits;
                 track.misses = 0;
+                if (track.consecutive_hits >= confirm_hits_) {
+                    track.confirmed = true;
+                }
                 survivors.push_back(std::move(track));
             }
             // A rejected update (non-finite measurement) leaves the track
@@ -119,6 +123,11 @@ auto MultiTracker::update(const std::vector<Point3D>& measurements,
             // itself went bad; drop the track.
         } else {
             ++track.misses;
+            // A coasted frame breaks the consecutive run (the doc contract is
+            // confirm_hits CONSECUTIVE matched frames) but does not demote an
+            // already-confirmed track — coasting is how a confirmed track
+            // survives a brief detection gap.
+            track.consecutive_hits = 0;
             survivors.push_back(std::move(track));
         }
     }
@@ -138,7 +147,9 @@ auto MultiTracker::update(const std::vector<Point3D>& measurements,
         track.id = next_id_++;
         if (track.kf.update(measurements[m], timestamp).has_value()) {
             track.hits = 1;
+            track.consecutive_hits = 1;
             track.misses = 0;
+            track.confirmed = (track.consecutive_hits >= confirm_hits_);
             survivors.push_back(std::move(track));
         }
         // Non-finite measurement: no track is created at all.
@@ -157,15 +168,14 @@ auto MultiTracker::update(const std::vector<Point3D>& measurements,
         const double speed =
             std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y +
                       velocity.z * velocity.z);
-        const bool confirmed = track.hits >= confirm_hits_;
         out.push_back(TrackedTarget{
             track.id,
             position.value(),
             velocity,
             track.hits,
             track.misses,
-            confirmed,
-            confirmed && speed >= min_speed_mps_ && speed <= max_speed_mps_});
+            track.confirmed,
+            track.confirmed && speed >= min_speed_mps_ && speed <= max_speed_mps_});
     }
     return out;
 }

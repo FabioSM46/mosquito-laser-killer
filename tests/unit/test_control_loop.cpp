@@ -139,27 +139,54 @@ protected:
 // Guard ordering — nothing else pins this, and the order is the safety property.
 //
 
-TEST_F(ControlLoopTest, EnforceMaxPulseRunsEveryCycleBeforeAnythingCanReturnEarly) {
+TEST_F(ControlLoopTest, EnforceMaxPulseRunsEveryCycle) {
     // The HAL-level pulse limit is defense in depth against a wedged sequencer.
     // Deleting the call from the loop previously failed no test at all.
-    EXPECT_CALL(*laser_, enforce_max_pulse(_)).Times(AtLeast(5));
-    run_cycles(5);
+    EXPECT_CALL(*laser_, enforce_max_pulse(_)).Times(5);
+
+    EXPECT_EQ(run_cycles(5), ControlOutcome::Continue);
+    EXPECT_EQ(sm_.current(), SystemState::IDLE);
 }
 
-TEST_F(ControlLoopTest, EnforceMaxPulseStillRunsOnTheCycleTheEStopHalts) {
-    now_ += kCyclePeriod;
+TEST_F(ControlLoopTest, EnforceMaxPulseRunsBeforeTheEStopHaltPath) {
     set_estop_pressed(true);
 
-    // Ordering: the pulse limit must be applied before the e-stop check returns.
-    EXPECT_CALL(*laser_, enforce_max_pulse(_)).Times(AtLeast(1));
-    EXPECT_CALL(*laser_, emergency_shutdown()).Times(AtLeast(1));
-
-    ControlOutcome outcome = ControlOutcome::Continue;
-    for (int i = 0; i < 5 && outcome == ControlOutcome::Continue; ++i) {
-        now_ += kCyclePeriod;
-        outcome = control_step(*deps_, std::nullopt, now_, now_);
+    // The e-stop debounces over 3 cycles; the halt lands on the third. The
+    // InSequence pins the ORDER, not just the counts: enforce_max_pulse must
+    // have run on every cycle — including the halting one — before the e-stop
+    // path emits emergency_shutdown. Moving the enforce call below the e-stop
+    // check would skip it on the halting cycle (2 calls, sequence violated).
+    {
+        InSequence seq;
+        EXPECT_CALL(*laser_, enforce_max_pulse(_)).Times(3);
+        EXPECT_CALL(*laser_, emergency_shutdown())
+            .Times(AtLeast(1))
+            .WillRepeatedly(Return(kOk));
     }
-    EXPECT_EQ(outcome, ControlOutcome::Halt);
+
+    EXPECT_EQ(run_cycles(3), ControlOutcome::Halt);
+    EXPECT_EQ(sm_.current(), SystemState::SAFE_HALT);
+}
+
+TEST_F(ControlLoopTest, EStopBlocksTheFireOnTheVeryCycleItLands) {
+    set_arm_gpio(true);
+    settle_inputs();
+    now_ += FiringController::k_startup_blanking;
+
+    auto cmd = make_target(kValidTarget);
+    run_cycles(1, cmd);              // target set, galvo written, settling
+    ASSERT_FALSE(controller_->is_firing());
+
+    // The NEXT cycle would fire: settle (3ms) fits inside one 5ms cycle. The
+    // e-stop lands on that same cycle via the fail-safe read path, which needs
+    // no debounce — and §4.8 puts its check before any arm/fire logic, so the
+    // pulse must never start.
+    ON_CALL(*estop_gpio_, read())
+        .WillByDefault(Return(std::unexpected(HardwareError::GpioReadFailed)));
+    EXPECT_CALL(*laser_, fire(true)).Times(0);
+
+    EXPECT_EQ(run_cycles(1, cmd), ControlOutcome::Halt);
+    EXPECT_FALSE(controller_->is_firing());
     EXPECT_EQ(sm_.current(), SystemState::SAFE_HALT);
 }
 
@@ -335,6 +362,10 @@ TEST_F(ControlLoopTest, NoGalvoWritesWhileThePulseIsActive) {
     auto moved = make_target({0.02, 0.02, 0.7});
     now_ += kCyclePeriod;
     (void)control_step(*deps_, moved, now_, now_);
+
+    // The pulse must still be live, or the Times(0) above is vacuous — a pulse
+    // that already ended has no galvo writes to suppress.
+    EXPECT_TRUE(controller_->is_firing());
 }
 
 TEST_F(ControlLoopTest, CooldownBlocksRefireForTheConfiguredDuration) {
