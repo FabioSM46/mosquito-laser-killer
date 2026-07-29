@@ -26,7 +26,7 @@ the reported **2.5 W** module only.
 | Item on hand | Qty | Reported specification |
 |--------------|-----|------------------------|
 | DAC | 2 | MCP4922, DIP-14, dual-channel 12-bit DAC |
-| Logic-level module | 1 | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V converter module; IC, pull-up values, and maximum edge/data rate not recorded |
+| Logic-level module (reassigned) | 1 | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V converter module; IC, pull-up values, and maximum edge/data rate not recorded. **Excluded from this build** — retained for future open-drain I2C peripherals only. See the reconciliation row below and `HARDWARE_WIRING.md` §9.4 |
 | Monostable | 1 | 74HC123, DIP-16; manufacturer and full ordering code not recorded |
 | AND gate | 1 | SN74HC08N, DIP-14, quad 2-input AND gate |
 | Resistors | count not recorded | Carbon film, 1/2 W: 220 kΩ, 10 kΩ, and **3.3 Ω** values |
@@ -35,6 +35,30 @@ the reported **2.5 W** module only.
 | Arm control | 1 | Lever switch; contact arrangement and DC current rating not recorded |
 | Emergency control | 1 | Mushroom button; pole count, NC/NO contact arrangement, and mains rating not recorded |
 | Wiring connector | count not recorded | WAGO 221-413 lever connector, 3-conductor, max 4 mm² |
+
+## Selected, not yet received
+
+Parts whose specification is now **decided** but which are not physically on
+hand. A decided part is not an installed part: every entry here must still be
+received, marking-checked against its datasheet, and bench-verified before it
+counts for any go/no-go item.
+
+| Item | Qty needed | Selected part | Status |
+|------|-----------|---------------|--------|
+| SPI level translation | 1 package (4 of 4 channels) | SN74AHCT125N, PDIP-14 quad bus buffer with 3-state outputs | Selected 2026-07-29; on order |
+| Laser-path level translation | 1 package (1 of 4 channels) | SN74AHCT125N, PDIP-14 — a **second, physically separate** package | Selected 2026-07-29; on order |
+
+`AHCT` is load-bearing and is **not** interchangeable with `AHC` or `HC`. At
+V_CC = 5 V, `AHCT` has TTL input thresholds (V_IH = 2.0 V) and accepts a 3.3 V
+Raspberry Pi output with margin; `AHC` and `HC` require 0.7 × V_CC = 3.5 V and
+reproduce the exact problem the part exists to solve. All three families share
+the same pinout, so a wrong-family substitution is invisible on the assembled
+board — the same class of hazard as the 3.3 Ω / 3.3 kΩ confusion below. Order
+spares and check the marking on every fitted device.
+
+Wiring, pin assignment, the two mandatory laser-path pull-downs, and the
+verification steps are in `HARDWARE_WIRING.md` §9. Items that are still
+undecided or unpurchased remain in the reconciliation table below.
 
 ## Inventory-to-design reconciliation
 
@@ -45,7 +69,7 @@ safety circuit to make the on-hand parts fit.
 |-----|----------------|---------------------------------------------|
 | The stocked resistor is **3.3 Ω**, not 3.3 kΩ | It is 1000× too small for the GPIO sense dividers. With the documented 10 kΩ upper resistor, the arm input would be only about 4 mV rather than 2.98 V. | Obtain and meter-check **2 × 3.3 kΩ, 1/2 W** resistors. Keep 3.3 Ω parts physically segregated and clearly labelled. |
 | No 1 kΩ resistor was reported | The fail-safe E-stop sense circuit in `HARDWARE_WIRING.md` §6 requires one. A 10 kΩ substitution leaves the input below its guaranteed HIGH threshold. | Obtain and meter-check **1 × 1 kΩ, 1/2 W** resistor. |
-| Generic I2C level shifter is unspecified | Its topology and edge rate are not known to support 20 MHz push-pull SPI. Also, four channels cannot translate MOSI, SCLK, CE0, CE1, and the laser control path simultaneously. Direct 3.3 V chip-select drive is not guaranteed when an MCP4922 is powered at 5 V. | Use a translator/buffer design qualified for every signal’s voltage, direction, speed, and fail-safe idle state. Scope-test it at the configured SPI rate and verify that the laser-control output defaults LOW through power-up/down and broken-wire cases. |
+| Level translation for the SPI and laser paths | Direct 3.3 V drive is not guaranteed into either a 5 V MCP4922 (V_IH = 3.5 V) or the 5 V 74HC123/74HC08 backstop (V_IH = 3.5 V). The on-hand generic I2C module is open-drain with resistive pull-ups intended for bidirectional 100–400 kHz I2C: its RC-limited rise times are orders of magnitude too slow for a 50 ns bit period at 20 MHz, and four channels cannot cover five signals. | **Part decided 2026-07-29:** 2 × SN74AHCT125N (see “Selected, not yet received” above). Open until the devices are received, marking-verified as `AHCT`, fitted with both fail-LOW pull-downs, and scope-verified per `HARDWARE_WIRING.md` §9.4 and §11a. The generic I2C module is excluded from both paths. |
 | Mushroom-button contacts are unspecified | The intended design requires two independent normally-closed contacts, including a pole rated and approved for the mains disconnect. | Verify markings/datasheet for DPST/2×NC operation and applicable mains ratings, or obtain a compliant E-stop assembly. Have mains wiring performed and inspected by a qualified person. |
 | Lever-switch contacts are unspecified | The switch is intended to interrupt 12 V laser-driver power, not merely provide a logic input. | Verify its DC voltage/current rating and contact arrangement against measured laser-module current, or obtain a suitably rated switch. |
 | ±15 VDC galvo-driver supply was not reported | The galvo driver listing requires ±15 VDC; the 12 V Mean Well supply is for the laser and cannot replace a bipolar ±15 V supply. | Obtain/identify a correctly rated bipolar ±15 VDC supply before testing the galvo driver. |
@@ -64,6 +88,7 @@ These references support the interface checks above; they do not identify the
 manufacturer of an unmarked on-hand part.
 
 - [Microchip MCP4902/4912/4922 data sheet](https://ww1.microchip.com/downloads/en/devicedoc/22250a.pdf)
+- [TI SN74AHCT125 product information](https://www.ti.com/product/SN74AHCT125)
 - [TI CD74HC123 product information](https://www.ti.com/product/CD74HC123)
 - [TI SN74HC08 product information](https://www.ti.com/product/SN74HC08)
 - [WAGO 221-413 product information](https://www.wago.com/global/installation-terminal-blocks-and-connectors/splicing-connector-with-levers/p/221-413)

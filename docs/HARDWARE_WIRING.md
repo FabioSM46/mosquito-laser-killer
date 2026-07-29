@@ -11,10 +11,11 @@ tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 > **Inventory no-go:** the currently reported stock is not a complete, validated
 > build. In particular, 3.3 Ω resistors cannot replace the required 3.3 kΩ
 > resistors; the 1 kΩ E-stop resistor and bipolar ±15 V galvo supply were not
-> reported; switch contact ratings are unknown; and the generic four-channel
-> I2C level shifter is not qualified for the complete SPI/laser signal set. Do
-> not apply power until every reconciliation item in `HARDWARE_INVENTORY.md` is
-> closed.
+> reported; and switch contact ratings are unknown. Level translation is now
+> **specified** as 2 × SN74AHCT125N (§9) but the devices are on order, not on
+> hand; the generic four-channel I2C level shifter is excluded from both the SPI
+> and laser paths. Do not apply power until every reconciliation item in
+> `HARDWARE_INVENTORY.md` is closed.
 
 ---
 
@@ -74,16 +75,18 @@ tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 | Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | **Not reported; required** |
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
 | Y-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
-| SPI translation | Push-pull 3.3 V → 5 V translator/buffer qualified at the configured SPI rate for MOSI, SCLK, CE0, and CE1 | 4 channels | Generic 4-channel IIC/I2C module reported; **not yet qualified** |
-| Laser translation | Dedicated, non-inverting 3.3 V → logic-supply interface with a verified fail-LOW power-up/down/open-wire state | 1 channel | **No qualified channel reported**; do not share an already-full four-channel SPI module |
+| SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | **Specified (§9); on order.** Must be marked `AHCT` — not `AHC`, not `HC` |
+| Laser translation | SN74AHCT125N, a **second physically separate** package, 1 channel used, with the two fail-LOW pull-downs of §9.3 | 1 package (1 of 4 ch) | **Specified (§9); on order.** Package #1 is fully consumed by SPI, so this is a second device, not a spare channel |
 | Monostable | 74HC123, DIP-16 dual retriggerable one-shot | 1 | Reported on hand; manufacturer/order code unverified |
 | AND gate | SN74HC08N, DIP-14 quad 2-input AND | 1 | Reported on hand |
 | Timing resistor | 220 kΩ, 1/2 W | 1 | Reported on hand |
 | Timing capacitor | 1 µF, 50 V monolithic ceramic | 1 | Reported on hand; tolerance/effective capacitance unverified |
-| Logic/DAC decoupling | 100 nF ceramic at each MCP4922, 74HC123, and SN74HC08 supply | 4 minimum | Value reported; available count unverified |
+| Logic/DAC decoupling | 100 nF ceramic directly across the supply pins of each MCP4922, SN74AHCT125N, 74HC123, and SN74HC08 | 6 minimum | Value reported; available count unverified |
+| Rail bulk decoupling | 10 µF on the 5 V rail at the logic board | 1 | Not reported; required |
 | Arm switch | Lever switch with contacts rated for the measured 12 VDC laser-driver load | 1 | Reported on hand; topology/rating unverified |
 | E-stop | Mushroom actuator with 2 independent NC contacts; mains pole approved for the installation | 1 | Reported on hand; topology/rating unverified |
 | Arm series resistor | 10 kΩ, 1/2 W | 1 | Reported on hand |
+| Laser-path fail-LOW pull-downs | 10 kΩ, 1/2 W (§9.3: one at the translator input, one at its output) | 2 | Value reported on hand; **3 × 10 kΩ are needed in total** with the arm series resistor — verify the count |
 | E-stop series resistor | 1 kΩ, 1/2 W | 1 | **Not reported; required** |
 | Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | **Not reported; required. The stocked 3.3 Ω value is unusable here** |
 | Zener clamps | BZX55C3V3, DO-35, 0.5 W | 2 | Part type reported; count unverified |
@@ -96,6 +99,22 @@ The stocked **3.3 Ω** resistors are intentionally not assigned a circuit role.
 Meter every resistor before installation; colour-band confusion between 3.3 Ω
 and 3.3 kΩ would keep both sense inputs LOW and make the documented interlocks
 inoperable.
+
+The same hazard applies to the logic family: `AHCT`, `AHC`, and `HC` share the
+same pinout and differ by one letter in the marking, but only `AHCT` accepts a
+3.3 V input at a 5 V supply (§9.1). Read the marking on every fitted device.
+
+**Sockets and permanence.** DIP sockets add nothing on a breadboard — the
+breadboard is the socket — but on the soldered build they let you swap the
+74HC123 without desoldering, which matters because its timing coefficient is
+vendor-dependent and may need a different device or R/C. Note the trade: cheap
+stamped-pin sockets fail intermittently, and an intermittent contact on the
+74HC123 `1Q` output or the laser-path translator removes the pulse-duration
+backstop **silently**. Use machined/turned-pin sockets on the laser path or
+solder those devices directly. For the same reason the §11a backstop must not
+live permanently on a breadboard: its entire job is to work at the moment the
+control thread has hung with GPIO 18 HIGH, and a 95%-reliable contact makes that
+a coin flip. Budget a soldered board before either laser is connected.
 
 ---
 
@@ -223,16 +242,16 @@ This is fail-safe: a broken wire or pressed button produces the same safe state.
 
 | Function | GPIO | Pin | Direction | Voltage | Destination |
 |----------|------|-----|-----------|---------|-------------|
-| Laser TTL | GPIO 18 | 12 | Output | 3.3 V → dedicated qualified fail-LOW interface | 74HC123/74HC08 backstop, then verified laser TTL input |
+| Laser TTL | GPIO 18 | 12 | Output | 3.3 V → SN74AHCT125N **#2** ch1 (§9) | 74HC123/74HC08 backstop, then verified laser TTL input |
 | Arm switch sense | GPIO 24 | 18 | Input | 2.98 V HIGH | Arm switch voltage divider |
 | E-Stop sense | GPIO 25 | 22 | Input | ≈2.5 V HIGH | E-Stop NC + pull-down |
-| SPI0 MOSI | GPIO 10 | 19 | Output | 3.3 V → qualified push-pull translator → 5 V | Both MCP4922 SDI |
+| SPI0 MOSI | GPIO 10 | 19 | Output | 3.3 V → SN74AHCT125N **#1** ch1 → 5 V | Both MCP4922 SDI (pin 5) |
 | SPI0 MISO | GPIO 9 | 21 | Input | 3.3 V | Not used by MCP4922 (write-only) |
-| SPI0 SCLK | GPIO 11 | 23 | Output | 3.3 V → qualified push-pull translator → 5 V | Both MCP4922 SCK |
-| SPI0 CE0 | GPIO 8 | 24 | Output | 3.3 V → qualified push-pull translator → 5 V | MCP4922 #1 /CS (X-axis) |
-| SPI0 CE1 | GPIO 7 | 26 | Output | 3.3 V → qualified push-pull translator → 5 V | MCP4922 #2 /CS (Y-axis) |
+| SPI0 SCLK | GPIO 11 | 23 | Output | 3.3 V → SN74AHCT125N **#1** ch2 → 5 V | Both MCP4922 SCK (pin 4) |
+| SPI0 CE0 | GPIO 8 | 24 | Output | 3.3 V → SN74AHCT125N **#1** ch3 → 5 V | MCP4922 #1 /CS (X-axis) |
+| SPI0 CE1 | GPIO 7 | 26 | Output | 3.3 V → SN74AHCT125N **#1** ch4 → 5 V | MCP4922 #2 /CS (Y-axis) |
 | 3.3 V | 3V3 | 1 / 17 | Power | 3.3 V | Pull-up, E-stop sense |
-| 5 V | 5V | 2 / 4 | Power | 5 V | Qualified translator logic side, MCP4922 VDD, 74HC logic (subject to final interface design) |
+| 5 V | 5V | 2 / 4 | Power | 5 V | Both SN74AHCT125N, MCP4922 VDD/Vref, 74HC123, SN74HC08 |
 | GND | GND | 6, 9, 14, 20, 25, 30, 34, 39 | Power | 0 V | Common ground |
 
 ---
@@ -242,24 +261,69 @@ This is fail-safe: a broken wire or pressed button produces the same safe state.
 Two MCP4922 DACs share the SPI0 bus. The chip-select pins determine which axis receives the command.
 
 ```
-RPi GPIO 10 (MOSI) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #1 SDI
-RPi GPIO 10 (MOSI) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #2 SDI
+RPi pin 19  GPIO 10 (MOSI) ──► AHCT125 #1 ch1 ──┬──► MCP4922 #1 SDI (pin 5)
+                                                └──► MCP4922 #2 SDI (pin 5)
+RPi pin 23  GPIO 11 (SCLK) ──► AHCT125 #1 ch2 ──┬──► MCP4922 #1 SCK (pin 4)
+                                                └──► MCP4922 #2 SCK (pin 4)
+RPi pin 24  GPIO 8  (CE0)  ──► AHCT125 #1 ch3 ─────► MCP4922 #1 /CS (pin 3)   X-axis
+RPi pin 26  GPIO 7  (CE1)  ──► AHCT125 #1 ch4 ─────► MCP4922 #2 /CS (pin 3)   Y-axis
 
-RPi GPIO 11 (SCLK) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #1 SCK
-RPi GPIO 11 (SCLK) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #2 SCK
-
-RPi GPIO 8  (CE0) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #1 /CS
-RPi GPIO 7  (CE1) ──► qualified 3.3 V→5 V push-pull translator ──► MCP4922 #2 /CS
-
-RPi 5 V ────────────────────────────────► MCP4922 #1 VDD
-RPi 5 V ────────────────────────────────► MCP4922 #2 VDD
-
-5 V reference ──────────────────────────► MCP4922 #1 Vref
-5 V reference ──────────────────────────► MCP4922 #2 Vref
-
-GND (common) ───────────────────────────► MCP4922 #1 AGND/VSS
-GND (common) ───────────────────────────► MCP4922 #2 AGND/VSS
+RPi 5 V ───────────────────────────────────────────► both MCP4922 VDD + Vref
+GND (common) ──────────────────────────────────────► both MCP4922 AVSS
 ```
+
+### MCP4922 pin assignment (PDIP-14)
+
+Identical for both packages except `/CS`. Confirm against the
+[MCP4922 data sheet](https://ww1.microchip.com/downloads/en/devicedoc/22250a.pdf)
+before soldering.
+
+| Pin | Name | Connect to |
+|-----|------|------------|
+| 1 | VDD | +5 V |
+| 2 | NC | leave open |
+| 3 | /CS | translated CE0 (X-axis DAC) / CE1 (Y-axis DAC) |
+| 4 | SCK | translated SCLK |
+| 5 | SDI | translated MOSI |
+| 6, 7 | NC | leave open |
+| 8 | /LDAC | **GND** |
+| 9 | /SHDN | **+5 V** |
+| 10 | VOUTB | this axis' galvo driver IN− (§10) |
+| 11 | VREFB | +5 V |
+| 12 | AVSS | common GND |
+| 13 | VREFA | +5 V |
+| 14 | VOUTA | this axis' galvo driver IN+ (§10) |
+
+Plus 100 nF ceramic directly across pins 1↔12 on each package.
+
+### /LDAC and /SHDN are not optional
+
+Both are CMOS inputs with no internal pull; left floating their state is
+indeterminate and the resulting failure is **silent**. Earlier revisions of this
+document omitted them entirely.
+
+- **`/LDAC` (pin 8) → GND.** This transfers each channel's serial latch to the
+  output on the rising edge of `/CS`. Left HIGH or floating HIGH, writes never
+  reach the output latch: `MCP4922::write()` returns success, the SPI traffic
+  looks correct on a scope, and the outputs never move.
+  `src/hal/mcp4922.cpp` relies on the `/CS`-rising-edge update and issues no
+  separate `/LDAC` strobe.
+- **`/SHDN` (pin 9) → +5 V.** This keeps the output stage active. Pulled or
+  floating LOW, the outputs disconnect and the axis is dead.
+
+### Vref tied to the 5 V rail
+
+Tying `VREFA`/`VREFB` to VDD is valid **only because the driver writes BUF = 0**
+(unbuffered reference), whose input range is 0 V to VDD. The command words in
+`src/hal/mcp4922.h` set BUF = 0 and GA = 1 (unity gain). If BUF is ever set,
+Vref = VDD leaves the specified buffered-reference range and this wiring becomes
+invalid.
+
+Because Vref *is* the Pi's 5 V rail, `dac_reference_voltage` in
+`config/system_config.yaml` must hold the **measured** rail voltage at the DAC
+pin under load, not the nominal 5.0. `CoordinateMapper` divides by that number,
+so a 2 % error is 2 % of commanded angle — about 0.3° at full scale, ≈4 mm at
+0.75 m, against a 5 mm target.
 
 ### MCP4922 channel assignment
 
@@ -276,32 +340,110 @@ side. With a 5 V reference and unity gain, full-scale code `4095` is nominally
 
 ## 9. Logic-Level Translation
 
-The Raspberry Pi GPIO outputs 3.3 V logic. The MCP4922, when powered from 5 V,
-specifies a minimum logic HIGH of `0.7 × VDD = 3.5 V`, so MOSI, SCLK, CE0, and
-CE1 all require a guaranteed interface. Direct 3.3 V chip-select wiring is not
-valid merely because it may appear to work on one bench unit.
+The Raspberry Pi GPIO outputs 3.3 V logic. Two families of 5 V device sit
+downstream and **neither** is guaranteed to accept it:
 
-The reported converter is a generic four-channel bidirectional **IIC/I2C**
-module. Its IC/MOSFET topology, pull-up values, propagation delay, rise time,
-and safe power-off behaviour are unknown. I2C modules are normally intended for
-open-drain buses; do not claim 20 MHz push-pull SPI compatibility without a
-schematic/datasheet and scope verification. Its four channels would already be
-fully consumed by MOSI, SCLK, CE0, and CE1, leaving no channel for GPIO 18.
+| Downstream input | Supply | Minimum guaranteed logic HIGH |
+|------------------|--------|-------------------------------|
+| MCP4922 SDI, SCK, /CS | 5 V | `0.7 × VDD` = **3.5 V** |
+| 74HC123, SN74HC08N | 5 V | `0.7 × VCC` = **3.5 V** |
 
-The final interface must therefore provide:
+3.3 V does not meet 3.5 V. Direct wiring — including direct 3.3 V chip-select
+drive — is not valid merely because it may appear to work on one bench unit.
 
-- four non-inverting, push-pull 3.3 V → 5 V channels qualified at
-  `spi_speed_hz` for MOSI, SCLK, CE0, and CE1;
-- a separate laser-control interface whose output is demonstrably LOW during
-  Pi boot, power-up/down sequencing, an unpowered input side, and an open wire;
-- common logic grounds and supply decoupling according to the selected devices'
-  datasheets;
-- scope captures showing valid HIGH/LOW levels and timing at each MCP4922, plus
-  the laser-path tests in §11a.
+### 9.1 Selected translator: 2 × SN74AHCT125N
 
-Until a concrete translator/buffer and schematic satisfy those requirements,
-Sections 8 and 11 describe required signal behaviour, not an assembly-ready
-connection for the on-hand I2C module.
+`AHCT` logic has **TTL** input thresholds (`V_IH` = 2.0 V at `VCC` = 5 V), so a
+3.3 V Pi output drives it with margin, and its outputs are 5 V push-pull rated
+far beyond the configured `spi_speed_hz`.
+
+> **`AHCT` is load-bearing.** `AHC` and `HC` share the identical pinout but use
+> CMOS thresholds (`0.7 × VCC` = 3.5 V) and reproduce the exact problem this part
+> exists to solve. A wrong-family substitution is invisible on the assembled
+> board. Read the marking on every fitted device.
+
+Two **physically separate** packages are used:
+
+| Package | Channels used | Carries |
+|---------|---------------|---------|
+| #1 | 4 of 4 | SPI0 MOSI, SCLK, CE0, CE1 |
+| #2 | 1 of 4 | GPIO 18 laser TTL |
+
+Package #2 is required, not a precaution: #1's four channels are fully consumed
+by SPI, leaving no channel for GPIO 18. The separation additionally means a die
+fault or ESD damage in the SPI package cannot take the laser path with it, and a
+miswire in the SPI harness cannot physically land on the laser channel. Both
+packages share the 5 V rail, so this is **not** supply isolation — do not record
+it as such in the FMEA.
+
+### 9.2 SN74AHCT125N pin assignment (PDIP-14)
+
+Confirm against the manufacturer's datasheet before soldering.
+
+| Pin | Name | Package #1 (SPI) | Package #2 (laser) |
+|-----|------|------------------|--------------------|
+| 14 | VCC | +5 V | +5 V |
+| 7 | GND | common GND | common GND |
+| 1, 4, 10, 13 | 1–4 /OE | all → GND | all → GND |
+| 2 / 3 | 1A / 1Y | Pi pin 19 MOSI → both MCP4922 SDI | GPIO 18 → §11a backstop |
+| 5 / 6 | 2A / 2Y | Pi pin 23 SCLK → both MCP4922 SCK | unused |
+| 9 / 8 | 3A / 3Y | Pi pin 24 CE0 → X-axis MCP4922 /CS | unused |
+| 12 / 11 | 4A / 4Y | Pi pin 26 CE1 → Y-axis MCP4922 /CS | unused |
+
+- 100 nF ceramic directly across pins 14↔7 on **each** package.
+- Tie every unused `A` input to GND. Never leave a CMOS input floating.
+- `/OE` is tied LOW permanently and deliberately. It is **not** a laser enable —
+  see §9.3 for why the Hi-Z state must be handled passively instead.
+
+### 9.3 The laser path must fail LOW in three distinct cases
+
+The laser control output must be demonstrably LOW during Pi boot, power-up/down
+sequencing, an unpowered input side, and an open wire. That requires **two**
+pull-downs, on opposite sides of package #2:
+
+```
+Pi pin 12 (GPIO 18) ──┬──► AHCT125 #2 1A (pin 2)
+                      └── 10 kΩ ──► GND                          (a)
+
+AHCT125 #2 1Y (pin 3) ┬──► 74HC123 1B + 1CLR/1RD, 74HC08 1A  (§11a)
+                      └── 10 kΩ ──► GND                          (b)
+```
+
+| Failure case | Covered by |
+|--------------|-----------|
+| Broken wire between the Pi header and the translator input | (a) |
+| Pi not yet booted, or GPIO 18 released back to an input | (a), plus GPIO 18's internal pull-down |
+| Translator output Hi-Z: package unpowered, `/OE` high, or **IC removed from its socket** | **(b) only** |
+
+(a) alone does not cover the Hi-Z case. A floating `1Y` leaves the 74HC123's
+trigger and reset inputs and the AND-gate input undefined — precisely the state
+this section exists to exclude. 10 kΩ costs the push-pull output 0.5 mA.
+
+With (b) fitted, pulling package #2 from its socket becomes a **verifiable**
+physical laser lockout — TTL held LOW by a resistor, not by trust — for work on
+the wiring. Without it, a removed IC leaves the TTL line undefined.
+
+### 9.4 Verification before either laser is connected
+
+- [ ] Every fitted device is marked `AHCT`, not `AHC` or `HC`.
+- [ ] Scope MOSI, SCLK, CE0, CE1 **at the MCP4922 pins** at the configured
+      `spi_speed_hz`: valid HIGH/LOW levels, setup/hold met against the MCP4922
+      timing spec. For breadboard bring-up, lower `spi_speed_hz` (e.g. 1 MHz) —
+      one control cycle is four 16-bit transfers, so the clock is never the
+      bottleneck, and 20 MHz edges on jumper wire will ring.
+- [ ] GPIO 18 held LOW → 74HC08 input measures LOW.
+- [ ] Pull package #2 from its socket (or unpower it) → 74HC08 input stays LOW.
+      **This tests pull-down (b), and nothing else does.**
+- [ ] Disconnect the GPIO 18 wire at the translator input → same result. This
+      tests pull-down (a).
+- [ ] Complete the §11a one-shot tests.
+
+The generic four-channel IIC/I2C module in `HARDWARE_INVENTORY.md` is
+**excluded** from both paths. Those modules are open-drain with resistive
+pull-ups intended for bidirectional 100–400 kHz I2C: RC-limited rise times are
+orders of magnitude too slow for a 50 ns bit period at 20 MHz, and four channels
+cannot cover five signals. It is retained for future I2C peripherals, not for
+this build.
 
 ---
 
@@ -345,7 +487,7 @@ numbers.
 12 V supply + ──► [verified DC-rated ARM switch] ──► Laser driver +VIN
 12 V supply − ────────────────────────► Laser driver GND
 
-GPIO18 ──► [dedicated qualified fail-LOW interface]
+GPIO18 ──► [10 kΩ pull-down] ──► [SN74AHCT125N #2, §9] ──► [10 kΩ pull-down]
        ──► [74HC123 + AND gate backstop, §11a] ──► verified Laser driver TTL-switch pin
 Laser driver GND ────────────────────► Common GND
 Laser cooling fan ───────────────────► powered whenever the module/driver is powered
@@ -370,7 +512,9 @@ Every *software* mechanism that ends a laser pulse (max-pulse enforcement,
 watchdog, E-stop poll) runs on the **control thread**. If that thread hangs with
 GPIO 18 stuck HIGH, no software turns the laser off. This one-shot is the
 **independent hardware duration backstop** — it is not on the control thread and
-needs neither software nor an operator to act. Its bound is the measured
+needs neither software nor an operator to act. Its input comes from
+SN74AHCT125N #2 (§9), which is what makes a 3.3 V GPIO able to drive these 5 V
+HC-family inputs at all. Its bound is the measured
 assembled pulse width, not the nominal R/C calculation. See AGENTS.md §4.1.
 
 ### Circuit
@@ -380,9 +524,10 @@ triggered by the translated GPIO 18 rising edge; when it times out, the AND gate
 force-drives the laser TTL LOW even if GPIO 18 is still HIGH.
 
 ```
-Qualified fail-LOW interface output ─┬───────────────► 74HC08 gate 1 input 1A (pin 1)
+SN74AHCT125N #2 1Y (pin 3, §9) ─────┬───────────────► 74HC08 gate 1 input 1A (pin 1)
                                      ├───────────────► 74HC123 1B (pin 2, +edge trigger)
-                                     └───────────────► 74HC123 1CLR/1RD (pin 3)
+                                     ├───────────────► 74HC123 1CLR/1RD (pin 3)
+                                     └── 10 kΩ ──────► GND  (fail-LOW on Hi-Z, §9.3 (b))
 74HC123 1A (pin 1) ─────────────────────────────────► GND (required for 1B rising trigger)
 74HC123 active-HIGH 1Q (pin 13) ────────────────────► 74HC08 gate 1 input 1B (pin 2)
 74HC08 gate 1 output 1Y (pin 3) ────────────────────► verified laser-driver TTL switch pin
@@ -431,6 +576,10 @@ the nominal marking alone.
 - [ ] **Stuck-HIGH is capped:** hold GPIO 18 HIGH indefinitely; the laser TTL must go LOW at the measured t_W and stay LOW.
 - [ ] **Trigger pins verified:** confirm 1A is LOW, translated GPIO 18 reaches
   1B and 1CLR/1RD, and pin 13 (not pin 4) supplies active-HIGH Q to the AND gate.
+- [ ] **Fail-LOW on a dead translator:** pull SN74AHCT125N #2 from its socket (or
+  unpower it) and confirm the laser TTL stays LOW. This proves pull-down (b) of
+  §9.3 — the AND gate does not cover this case, because a floating input can read
+  HIGH.
 - [ ] **Period measured** on a scope and recorded; matches intent (§ Timing above).
 - [ ] **No PWM firing:** confirm the firing path drives a single sustained level per pulse — a retriggering burst within t_W would hold the output HIGH and defeat the cap.
 
@@ -541,7 +690,10 @@ Press the mushroom E-Stop at any time. This removes AC power from both supplies 
 
 For initial bring-up, leave the laser **disconnected or switched off** and use a multimeter or oscilloscope on the DAC outputs.
 
-1. Build the Pi, DACs, qualified SPI translation, and galvo-driver electronics.
+1. Build the Pi, DACs, the SN74AHCT125N translation of §9, and the galvo-driver
+   electronics. Verify all four DAC outputs sit at ≈2.5 V before anything else:
+   the MCP4922 latches its last written value, so you can run the binary, let it
+   exit, and measure at leisure.
 2. Connect the galvo drivers **only** — do not connect the galvo motors yet if you want to test the electronics without mechanical motion.
 3. Power the Pi. Run `mosquito_laser_killer` with the arm switch OFF.
 4. Verify the DAC outputs are near 2.5 V on all four channels at startup.
