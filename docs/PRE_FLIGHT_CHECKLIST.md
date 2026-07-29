@@ -1,6 +1,13 @@
 # Pre-Flight Checklist — Mosquito Laser Killer
 
-**WARNING:** This project is designed around a **2.5 W Class 4 laser** (450 nm blue). For all real-world testing described in this document, the Class 4 laser module must be **disconnected** and replaced with a **low-power visible laser** (e.g., ≤5 mW red or green) or no laser at all. Even low-power lasers can cause eye injury; wear appropriate laser safety eyewear and never bypass the enclosure or E-stop.
+**WARNING:** This project is designed around the reported **2.5 W Class 4 laser**
+(450 nm blue, 33 × 70 mm). For all real-world testing described in this
+document, that module must be **disconnected** and replaced with a verified
+low-power visible laser or no laser at all. A 5 mW, 12 mm test module is on hand,
+but its wavelength, supply, pinout, TTL compatibility, and labelled class have
+not yet been recorded; “5 mW” alone does not make it a verified drop-in test
+source. Even low-power lasers can cause eye injury. Wear appropriate laser
+safety eyewear and never bypass the enclosure or E-stop.
 
 This checklist separates what is already implemented in software from what must be physically built, calibrated, and validated before the system can reliably detect and track a target. It is intended to be followed step by step; do not proceed to the next section until every item in the current section is checked.
 
@@ -15,12 +22,12 @@ The following software and hardware-abstraction components are present and pass 
 | Thread architecture | Implemented | Three decoupled threads: capture, processing, control. |
 | Frame dropping | Implemented | `ThreadSafeQueue::drain_all()` keeps only the freshest frame. |
 | Safety state machine | Implemented | `INIT → IDLE → ARMED → TRACKING → FIRING → COOLDOWN` plus `SAFE_HALT`. |
-| Max pulse limit | Implemented | `FiringController` / `Laser` enforce the 100 ms config limit; the true software bound is ~105 ms (limit + one fixed 5 ms control cycle + jitter), and the 74HC123 one-shot caps the TTL at ~99 ms independently of software. |
+| Max pulse limit | Implemented in software; hardware pending measurement | `FiringController` / `Laser` enforce the 100 ms config limit; the true software bound is ~105 ms (limit + one fixed 5 ms control cycle + jitter). The 74HC123 independently caps the TTL at its scope-measured period; ~99 ms is only the nominal calculation for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient. |
 | Cooldown | Implemented | 10-second non-bypassable cooldown after each pulse. |
 | Motion blanking | Implemented | No galvo writes while the laser is ON. |
 | Arm switch gating | Implemented | `FiringController` rejects targets/fire when disarmed. |
 | Watchdog | Implemented | Absolute 25 ms heartbeat timeout (deliberately independent of `target_fps`) with a bounded startup grace → `SAFE_HALT` and laser OFF. |
-| E-Stop | Implemented | Active-low GPIO 25 + physical mains disconnect via DPST. |
+| E-Stop | Implemented in software; hardware pending verification | Active-low GPIO 25. The intended physical circuit requires two independent NC contacts, including a mains-rated disconnect pole; the on-hand mushroom button's contacts/ratings are not yet recorded. |
 | Coordinate bounds | Implemented | 3D box + galvo cone + DAC voltage scale; out-of-range commands are rejected, not clamped. |
 | RAII shutdown | Implemented | Laser forced LOW, galvos centered on destruction or error. |
 | Signal shutdown | Implemented | SIGINT/SIGTERM poll flag in all threads. |
@@ -42,10 +49,24 @@ The following software and hardware-abstraction components are present and pass 
 
 Do not plug in the 230 V AC until every item below is complete.
 
+- [ ] Every no-go item in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md) is
+  closed and the actual fitted part numbers/quantities are recorded.
 - [ ] Enclosure is built and fully closed with no laser exit path except the intended beam aperture.
 - [ ] Beam dump or laser-absorbing backstop is installed inside the enclosure.
-- [ ] Mushroom DPST E-Stop is wired: one pole breaks mains Live, the second pole drives GPIO 25.
-- [ ] Arm switch is wired: switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
+- [ ] The mushroom assembly is verified to provide two independent NC contacts
+  with the necessary mains ratings; one pole breaks mains Live and the second
+  drives GPIO 25.
+- [ ] The lever switch's contact arrangement and DC rating are verified; it
+  switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
+- [ ] A correctly rated bipolar ±15 VDC supply is installed for the galvo
+  driver. The Mean Well LRS-50-12 remains dedicated to the 12 V laser branch.
+- [ ] The GPIO sense networks contain meter-verified **3.3 kΩ** (×2), 10 kΩ
+  (×1), and 1 kΩ (×1) resistors. The stocked 3.3 Ω parts are segregated and not
+  fitted.
+- [ ] The four SPI outputs use a push-pull translator verified at
+  `spi_speed_hz`; GPIO 18 uses a separate interface verified fail-LOW through
+  power-up/down and open-wire cases. The generic I2C module is not accepted by
+  part name alone.
 - [ ] E-Stop and arm switch have been tested with a multimeter:
   - E-Stop released → GPIO 25 ≈ 2.5 V (HIGH). If you measure ~0.8 V here, the
     sense network was built from the old drawing with a 10 kΩ series resistor
@@ -101,9 +122,14 @@ Before firing anything, confirm the vision pipeline can detect and track a movin
 
 ## 5. Low-Power Laser Testing Procedure
 
-Only proceed after Section 4 is fully validated. Replace the Class 4 laser with a low-power Class 2 or 3R laser module (e.g., ≤5 mW, red or green). Keep the same TTL/arm/E-stop wiring.
+Only proceed after Section 4 is fully validated. Replace the Class 4 laser with
+a verified low-power visible alignment module. The reported 5 mW, 12 mm module
+may be used only after its wavelength, labelled class, electrical supply,
+pinout, and modulation behaviour are recorded and shown compatible with the
+same TTL/arm/E-stop chain.
 
-- [ ] Class 4 laser is disconnected; low-power laser is installed with the same mounting and alignment as the eventual Class 4 laser.
+- [ ] Class 4 laser is disconnected; the verified low-power laser is installed
+  with the same mounting and alignment as the eventual Class 4 laser.
 - [ ] Low-power laser still requires the arm switch ON **and** GPIO 18 HIGH to emit.
 - [ ] With arm switch OFF, confirm no beam is emitted.
 - [ ] Swing the test target slowly through the center of the bounding box and arm the system (a confirmed track needs ~3 consecutive frames of motion).
@@ -141,7 +167,9 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 
 | Item | Required Result |
 |------|-----------------|
+| Inventory reconciliation | Every no-go item in `HARDWARE_INVENTORY.md` closed; fitted parts and ratings recorded |
 | Enclosure + E-Stop + arm switch | Physically installed and functionally tested |
+| Power and logic interfaces | Bipolar ±15 V galvo supply installed; SPI and laser level interfaces electrically and scope verified |
 | 74HC123 pulse-duration backstop | Wired with AND gating and scope-verified (short pulse passes, stuck-HIGH capped) |
 | Camera calibration | Real values entered, startup validation passes |
 | Camera by-path identification | Stable symlinks in `config/system_config.yaml` |

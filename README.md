@@ -6,45 +6,61 @@ A C++23 real-time embedded system for Raspberry Pi 5 that detects, tracks, and n
 
 **WARNING: This system controls a 2.5W Class 4 laser capable of causing instant, irreversible blindness and fire. Read `AGENTS.md` before modifying any code. All safety guards are structurally enforced in the source code.**
 
-## Hardware Bill of Materials
+## Hardware Inventory and Required Parts
 
-| Component | Specification | Purpose |
-|-----------|-------------|---------|
+The exact owner-reported inventory, including unresolved electrical and safety
+fit checks, is recorded in
+[`docs/HARDWARE_INVENTORY.md`](docs/HARDWARE_INVENTORY.md). “On hand” does not
+mean “approved to energize”; the wiring BOM identifies additional required
+parts.
+
+| Component | Reported hardware | Status / purpose |
+|-----------|-------------------|------------------|
 | Host | Raspberry Pi 5 | Real-time control and stereo vision processing |
-| Cameras | 2× OV9281 global-shutter monochrome 720P USB3 UVC (120 FPS) | Stereoscopic target detection |
-| Laser | 2.5W focusable TTL/PWM 450 nm blue Class 4 | Target neutralization |
-| Laser power supply | Mean Well LRS-50-12 12 VDC / 4.2 A / 50 W | Laser driver power |
-| Galvo scanner | 20 kpps 400–700 nm, powered by 15 V | Laser beam steering |
-| X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
-| Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
-| Level shifter | 4-channel I2C/IIC bidirectional 3.3 V → 5 V | 3.3 V → 5 V level translation for SPI and laser TTL |
-| Pulse-duration backstop | SN74HC123N monostable + SN74HC08N AND gate (220 kΩ / 1 µF) | Independent hardware ≤~99 ms cap on laser TTL (see AGENTS.md §4.1) |
-| Arm switch | Lever SPST | System arm input (active HIGH) |
-| E-stop | Mushroom DPST push-button | Emergency stop (active LOW) |
-| Zener diode | BZX55C3V3 1/2 W | E-stop and arm-switch input overvoltage protection |
-| Resistor | 1/2 W 3.3 kΩ | E-stop and arm-switch pull-down / pull-up |
-| Resistors | 3× 1/2 W 10 kΩ | E-stop series (×2) and arm-switch series (×1) input protection |
-| Capacitor | 100 nF ceramic | E-stop and arm-switch debounce / input filtering |
+| Cameras | 2× OV9281 global-shutter monochrome USB3 UVC | On hand; stereoscopic target detection |
+| Galvo scanner + driver | 20 kpps X-Y kit; 400–700 nm; head ±12 V; driver ±15 VDC, ±5 V analog input, 0.33 V/° | On hand; laser beam steering. A separate bipolar ±15 VDC supply was not reported |
+| Working laser | 2.5 W, 450 nm blue, 33 × 70 mm; 12 V external constant-current drive, forced-air cooling, 3-pin TTL/PWM | On hand; Class 4 target laser. Pinout and TTL levels must be verified |
+| Test laser | 5 mW, 12 mm module | On hand; wavelength, supply, class label, pinout, and TTL compatibility must be recorded before use |
+| Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
+| DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
+| Level shifter | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | On hand, but not yet qualified for 20 MHz push-pull SPI or fail-safe laser control |
+| Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified |
+| Switches | Lever switch + mushroom button | On hand; contact topology and power/mains ratings remain unverified |
+| Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
+| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | On hand. **3.3 Ω is not the required 3.3 kΩ** |
+| Wiring connectors | WAGO 221-413, 3-conductor | On hand; use separate enclosed connectors for each electrical net |
+
+The documented GPIO sense circuits still require **2× 3.3 kΩ** and **1× 1 kΩ**
+resistors; neither value was reported in the inventory. Do not substitute the
+stocked 3.3 Ω resistor. The four-channel I2C shifter also cannot be assumed to
+cover or meet the electrical requirements of the complete SPI and laser-control
+paths. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
 
 ### Wiring Notes
 
 A complete wiring guide is in [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md). Key points:
 
-- **RPi 5 GPIO 18** → level shifter → 74HC123 monostable + AND-gate pulse-duration backstop → laser TTL input (3.3 V logic shifted to 5 V). Configurable via `laser_pin`. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §11a.
-- **RPi 5 GPIO 24** → lever SPST arm switch sense circuit (active HIGH when armed). The same arm switch also switches 12 V power to the laser driver. Configurable via `arm_switch_pin`.
-- **RPi 5 GPIO 25** → mushroom DPST E-stop sense (active LOW when pressed). One E-stop pole breaks mains Live; the second pole drives the GPIO sense circuit. Configurable via `e_stop_pin`.
+- **RPi 5 GPIO 18** → qualified fail-LOW level translation → 74HC123 monostable + AND-gate pulse-duration backstop → verified working-laser TTL input. Configurable via `laser_pin`. The on-hand generic I2C shifter is not yet qualified for this safety path. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §11a.
+- **RPi 5 GPIO 24** → lever-switch sense circuit (active HIGH when armed). The same switch must also interrupt 12 V power to the laser driver; verify its contact arrangement and DC rating first. Configurable via `arm_switch_pin`.
+- **RPi 5 GPIO 25** → mushroom E-stop sense (active LOW when pressed). The intended hardware requires two NC contacts: a mains-rated pole breaks Live and the second pole drives the GPIO sense circuit. The on-hand button must be checked against those requirements. Configurable via `e_stop_pin`.
 - **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC).
 - **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC).
-- **RPi 5 SPI0 MOSI** (pin 19) and **SCLK** (pin 23) → level shifter → both MCP4922 SDI and SCK.
+- **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** require logic levels guaranteed for MCP4922 operation at 5 V. Do not treat the generic I2C shifter or direct 3.3 V chip-select wiring as validated; see the hardware inventory reconciliation and wiring guide.
 - Both MCP4922 Vref pins tied to **5 V** → 0–5 V per channel, combined as **±5 V differential** per axis. See the guide for the channel mapping and differential-drive explanation.
 - Galvo scanner powered by **±15 V**; driver accepts the ±5 V differential signal from the DAC pair.
-- Laser driver powered by **12 V** from the Mean Well supply through the arm switch.
+- Laser driver powered by **12 V** from the Mean Well supply through the arm switch; forced-air cooling must run whenever the module is powered.
 
 For the complete E-Stop, arm switch, GPIO input, and SPI wiring details, see [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md).
 
 ### Camera Resolution Note
 
-The OV9281 modules are capable of 1280×720. The default configuration runs them at **640×400 @ 120 FPS** for real-time dual-camera processing on the Raspberry Pi 5. (640×480 is not a supported OV9281 mode.) Adjust `frame_width`, `frame_height`, and `target_fps` in `config/system_config.yaml` if your UVC firmware supports a different mode, but do not exceed the real-time processing budget.
+The OV9281 modules are capable of 1280×720. The conservative built-in default is
+**640×400 @ 120 FPS**; the shipped `config/system_config.yaml` selects the
+previously validated **640×400 @ 210 FPS** mode. The exact on-hand module/firmware
+mode list and fitted lenses still need to be recorded with `v4l2-ctl` and camera
+calibration. (640×480 is not a supported OV9281 sensor mode.) Adjust
+`frame_width`, `frame_height`, and `target_fps` only to a mode exposed by both
+cameras and within the real-time processing budget.
 
 ## Quick Start
 
@@ -157,7 +173,7 @@ If either `left_camera_device` or `right_camera_device` is empty — or the two 
 
 The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot caps the TTL at ~99 ms independently of software
+1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot independently caps the TTL at its mandatory scope-measured period (nominally ~99 ms for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient)
 2. **10-second firing cooldown** — `may_fire(now)` gate, applied on *every* pulse-end path (clean, aborted, and fault)
 3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
 4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
@@ -172,7 +188,7 @@ The system implements structurally-enforced safety guards (see `AGENTS.md` for f
 
 ### Known residual risk
 
-Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): a stuck-HIGH GPIO 18 is force-cut at ~99 ms with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the arm switch cuts 12 V to the driver, the E-stop cuts mains — both real hardware, both requiring a human hand.
+Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is scope-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver and the verified E-stop cuts mains — both hardware mechanisms, both requiring a human hand. The current inventory does not yet establish the switch contact ratings/topology, so it is not ready for powered use.
 
 ## Building and Running Tests
 

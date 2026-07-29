@@ -2,8 +2,10 @@
 
 **WARNING:** Every step in this document is performed with the **2.5 W Class 4
 laser disconnected**. Intrinsic and stereo calibration use the cameras only. The
-extrinsic camera↔galvo step (§4) uses a **low-power Class 2 / 3R laser** (≤5 mW,
-red or green), never the Class 4 module. Wear laser safety eyewear and keep the
+extrinsic camera↔galvo step (§4) uses a **verified low-power visible alignment
+laser**, never the Class 4 module. A 5 mW, 12 mm test module is reported on hand,
+but its wavelength, supply, pinout, TTL compatibility, and labelled class must
+be recorded before it qualifies for this step. Wear laser safety eyewear and keep the
 E-stop within reach. See [`PRE_FLIGHT_CHECKLIST.md`](PRE_FLIGHT_CHECKLIST.md) for
 the surrounding go/no-go workflow — this document is the "how" behind that
 checklist's §3 (calibration) and §5 (low-power laser) sections.
@@ -245,9 +247,12 @@ aligned (see `PRE_FLIGHT_CHECKLIST.md` §6, "No camera/galvo extrinsic
 calibration"). This step measures and removes that residual offset manually. It
 is the practical calibration behind checklist §5.
 
-**Use a low-power Class 2 / 3R laser (≤5 mW), mounted exactly where the Class 4
-module will sit, with the same arm/E-stop/TTL wiring.** The Class 4 laser stays
-disconnected.
+**Use a verified low-power visible alignment laser, mounted exactly where the
+Class 4 module will sit, with the same arm/E-stop/TTL wiring.** The reported
+5 mW, 12 mm module is suitable only after its labelled class, wavelength,
+supply, pinout, and gating behaviour have been verified. If it cannot be
+controlled by the same safety chain, obtain a compatible TTL-controlled test
+module. The Class 4 laser stays disconnected.
 
 - [ ] Confirm the low-power laser still needs the arm switch ON **and** GPIO 18
       HIGH to emit; with the arm switch OFF, no beam.

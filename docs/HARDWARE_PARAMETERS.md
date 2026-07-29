@@ -1,8 +1,11 @@
 # Hardware Parameters — Mosquito Laser Killer
 
-This document records the measured/quoted parameters of the galvanometer, the
-cameras, and the laser, and derives the **engagement envelope** that the software
-enforces. For physical wiring and assembly instructions, see
+This document records the vendor-quoted parameters of the reported galvanometer,
+cameras, and laser, and derives the **engagement envelope** that the software
+enforces. The as-reported stock list and unresolved fit checks are in
+[`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md). Values in this file are not
+treated as measured until the pre-flight procedure records a bench result. For
+physical wiring and assembly instructions, see
 [`docs/HARDWARE_WIRING.md`](HARDWARE_WIRING.md). The runtime configuration lives
 in `config/system_config.yaml`; a startup validator
 (`src/safety/config_validator.cpp`, see `validate_engagement_volume`) checks that
@@ -12,12 +15,16 @@ startup.
 
 ---
 
-## 1. Galvanometer + Driver
+## 1. 20 kpps X-Y Galvanometer + Driver
+
+Reported product description: **“20Kpps Laser Galvo X-Y Scanning Galvanometer
+SLA 3D DIY Animation Stage Light.”**
 
 ### 1.1 Galvo head
 
 | Parameter | Value |
 |-----------|-------|
+| Rated scan speed | 20 kpps |
 | Maximum scan angle | ±30° optical (default ±15°) |
 | Mirror | 11 × 7 × 0.7 mm, dielectric film, >99% reflectivity @ 45° AoI |
 | Wavelength coverage | 400–700 nm |
@@ -26,7 +33,7 @@ startup.
 | Storage temperature | −10 °C to +60 °C |
 | Operating noise | ≤ 30 dB |
 | Average current | 0.5 A |
-| Peak current | 1.5 A (1 A) |
+| Peak current | Vendor listing says “1.5 A (1 A)”; the parenthetical value is ambiguous and must be resolved before sizing the supply |
 | Linearity | 99.9% |
 | Small-step response | ≤ 0.50 ms |
 | Long-term drift (8 h) | proportional < 50 PPM/°C, zero < 15 µrad/°C |
@@ -47,6 +54,7 @@ startup.
 | Output position scale | 0.33 V/° |
 | Thermal drift | max 40 PPM/°C |
 | Operating temperature | 0 °C to +45 °C |
+| Storage temperature | −10 °C to +60 °C |
 
 ### 1.3 Electrical chain (DAC → driver → galvo)
 
@@ -75,24 +83,36 @@ although the Raspberry Pi itself can only output positive logic levels. See
 
 | DAC code | ChA (V+) | ChB (V−) | V_diff = V+ − V− | Optical angle |
 |----------|----------|-----------|------------------|---------------|
-| 0 | 0.0 V | 5.0 V | −5.0 V | −15.15° |
-| 2048 | 2.5 V | 2.5 V | 0.0 V | 0° |
-| 4095 | 5.0 V | 0.0 V | +5.0 V | +15.15° |
+| 0 | 0 V | 4.9988 V | −4.9988 V | −15.148° |
+| 2048 | 2.5000 V | 2.4988 V (code 2047) | +1.22 mV | +0.0037° |
+| 4095 | 4.9988 V | 0 V | +4.9988 V | +15.148° |
 
-**Key consequence:** the ±5 V differential DAC range, combined with the
-**0.33 V/°** driver input scale, commands at most **±5 / 0.33 ≈ ±15.15°** optical.
+**Key consequence:** the nominal ±5 V differential DAC range (actual code
+endpoints ±4.9988 V), combined with the **0.33 V/°** driver input scale, commands
+at most approximately **±15.15°** optical.
 The galvo head can mechanically reach ±30° optical, but only ±10 V of drive would
 get there — unreachable from this DAC. Therefore the software hard-limits the
 galvo to **±15°** (`galvo_limits`), and the validator flags any configuration
 whose half-cone exceeds `dac_max_diff_voltage / input_scale_v_per_deg`.
 
-At DAC code `c` (0…4095), the differential voltage is
-`V_diff = (2·c/4095 − 1) · 5 V`, and the optical angle is
-`θ = V_diff / 0.33`. Center `c = 2048` → 0 V → 0°.
+The MCP4922 unity-gain transfer is `V(code) = code/4096 · Vref`, and the driver
+writes channel B as `4095 − c`. Therefore, at channel-A code `c` (0…4095):
+
+`V_diff = (2·c − 4095)/4096 · 5 V`, and `θ = V_diff / 0.33`.
+
+There is no pair of integer complementary codes with exactly equal voltage.
+The commanded centre `c = 2048` produces a one-LSB differential residual
+(~1.22 mV, ~0.0037°), negligible relative to the 12-code settle deadband but not
+literally 0 V. Direct DAC shutdown writes 2048 to both channels and is exactly
+0 V differential.
 
 ---
 
 ## 2. Cameras (OV9281, stereo pair)
+
+Two OV9281 modules are reported on hand. The table below records the sensor and
+previously selected UVC-mode assumptions; the exact module/firmware identifier,
+advertised V4L2 modes, and fitted lenses must still be read from the hardware.
 
 | Parameter | Value |
 |-----------|-------|
@@ -104,13 +124,13 @@ At DAC code `c` (0…4095), the differential voltage is
 | Low-rate mode | YUV 1280×720@10 |
 | Adjustable V4L2 controls | Brightness, Contrast, Saturation, White balance, Gamma, Sharpness, Exposure, Gain |
 
-### 2.1 Lens selection
+### 2.1 Lens design target (fitted lens unverified)
 
 | Lens | H-FOV (½-FOV) | Distortion | Verdict for ±15° galvo cone |
 |------|---------------|-----------|-----------------------------|
 | 1.3 mm | ~112° (56°) | yes | too wide; fisheye breaks the pinhole stereo model |
 | 2.4 mm | ~77° (39°) | yes | usable but requires an undistortion stage |
-| **3 mm** | **~65° (33°)** | **free** | **chosen — covers ±15° cone with margin, no undistortion** |
+| **3 mm** | **~65° (33°)** | **free** | **design target — covers ±15° cone with margin; confirm this is actually fitted and calibrate distortion** |
 | 6 mm | ~36° (18°) | free | too narrow for a ±15° cone — camera can't see galvo corners |
 
 Field of view is derived from the physical lens (resolution/binning independent):
@@ -120,13 +140,15 @@ H-FOV = 2 · atan(sensor_width_mm / (2 · focal_length_mm))
 V-FOV = 2 · atan(sensor_height_mm / (2 · focal_length_mm))
 ```
 
-For the selected 3 mm lens: H-FOV ≈ 65.2°, V-FOV ≈ 43.6°.
+For the nominal 3 mm design target: H-FOV ≈65.2°, V-FOV ≈43.6°. Do not use
+those values as as-built facts until the fitted lens and calibration results are
+recorded.
 
 ### 2.2 Focal length in pixels (calibration)
 
 `stereo.focal_length_px` is a **calibrated** quantity obtained from a chessboard
 stereo calibration — do not rely on the nominal lens focal length for
-triangulation accuracy. The default (`≈500 px` for the 3 mm lens at a 640-wide
+triangulation accuracy. The default (`≈500 px` for a nominal 3 mm lens at a 640-wide
 full-sensor mode) is only a placeholder; replace it with the calibrated value
 for your specific rig. `focal_length_px` affects depth (`z = f·B/disparity`),
 not the FOV-based coverage validation (which uses the physical lens). See
@@ -179,16 +201,42 @@ tunable in `camera_controls`.
 | Optical power | 2.5 W |
 | Class | **Class 4** — instantaneous irreversible eye/skin injury and fire hazard |
 | Wavelength | 450 nm (blue) |
-| Focus | Adjustable |
-| Control | TTL/PWM |
+| Module dimensions | 33 × 70 mm |
+| Drive mode | External “ACC constant-current” drive (seller wording) |
+| Cooling | Forced air; required whenever the module is powered |
+| Operating voltage | 12 VDC |
+| Control | 3-pin interface advertised for TTL switching and PWM power control; pinout, active polarity, and thresholds not yet verified |
+| Housing | Anodized aluminium |
+| Collimator | Coated optical glass |
 | Driver supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W |
+
+The same seller listing includes 3.5 W, 5.5 W, 10 W, and 15 W variants. Those
+are not installed hardware and must not be used when calculating or describing
+this system. The project is specified only for the reported **2.5 W, 33 × 70 mm**
+module.
+
+The seller's “TTL/PWM” wording does not establish an electrical interface. The
+driver pin order, logic thresholds, active polarity, input current, and
+power-up default must be obtained or measured before connection. This project
+uses one sustained TTL level per pulse; PWM firing is prohibited because edges
+can retrigger the 74HC123 and defeat the hardware duration cap.
+
+### 3.1 Alignment/test laser
+
+The on-hand alignment module is reported only as **5 mW, 12 mm**. Its wavelength,
+supply voltage/current, pinout, modulation interface, and labelled class have
+not been recorded. It is not automatically a drop-in electrical substitute for
+the working laser. Use it for the gated alignment procedure only after those
+details are verified and only if the real arm/E-stop/TTL chain still controls
+emission. Otherwise obtain a compatible low-power, TTL-controlled visible
+alignment module.
 
 **Safety enforcement (in code, not convention):**
 
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
 | Max pulse | per-cycle duration check + `Laser::enforce_max_pulse`; real software bound ≈ 100 ms config limit + one fixed 5 ms control cycle + jitter (~105 ms — a flat "≤ 100 ms" is a claim the software cannot make, AGENTS.md §4.1) | `FiringController`, `Laser` |
-| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at ≈ 99 ms with no software or operator involvement — see §3.1 below | wiring, §11a of `HARDWARE_WIRING.md` |
+| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at the scope-verified one-shot period (nominally ≈99 ms for the reported R/C values and a 0.45 vendor coefficient) with no software or operator involvement — see §3.2 below | wiring, §11a of `HARDWARE_WIRING.md` |
 | Cooldown | `cooldown_until_` gates `may_fire()` (configured 10 s; validator floor 1 s) | `FiringController` |
 | Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
 | Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
@@ -198,17 +246,23 @@ tunable in `camera_controls`.
 | Config validation | critical engagement mismatches abort startup | `validate_engagement_volume` |
 | RAII shutdown | laser GPIO forced LOW on init, on error, and on destruction | `Laser`, `~GpioImpl` |
 
-### 3.1 Hardware pulse-duration backstop (74HC123)
+### 3.2 Hardware pulse-duration backstop (74HC123)
 
 Every *software* mechanism that can end a pulse runs on the control thread; if
-that thread stalls with GPIO 18 HIGH, none of them fires. The backstop is an
-SN74HC123N retriggerable monostable plus an SN74HC08N AND gate between the
-level shifter and the laser driver: laser TTL = `GPIO18 ∧ one-shot Q`, one-shot
+that thread stalls with GPIO 18 HIGH, none of them fires. The backstop is a
+74HC123 DIP-16 retriggerable monostable plus an SN74HC08N AND gate between the
+dedicated qualified GPIO interface and the laser driver: laser TTL =
+`translated GPIO18 ∧ one-shot Q`, one-shot
 triggered by GPIO 18's rising edge. A normal short pulse passes through
 unchanged; a stuck-HIGH GPIO 18 is force-cut when Q times out — with no
-software path and no operator action. Period ≈ `0.45 · 220 kΩ · 1 µF ≈ 99 ms`
-(R/C tolerance can swing this ±20 %; measure it on a scope). The guarantee
-holds only if the AND gating is present, firing stays a single sustained level
+software path and no operator action. The fitted timing parts are reported as a
+1/2 W carbon-film 220 kΩ resistor and a 50 V monolithic-ceramic 1 µF capacitor.
+For an HC123 whose manufacturer specifies the 0.45 coefficient at 5 V, the
+nominal period is `0.45 · 220 kΩ · 1 µF ≈ 99 ms`. The full 74HC123 ordering code,
+R/C tolerances, and the ceramic capacitor's effective capacitance are not yet
+recorded; coefficient and tolerance are vendor-dependent, so measure the actual
+period on a scope. The guarantee holds only if the AND gating is present,
+firing stays a single sustained level
 (never a PWM burst), and the measured period is what you intend — the
 scope-verification procedure is in `PRE_FLIGHT_CHECKLIST.md` §2 and the wiring
 in `HARDWARE_WIRING.md` §11a. The '123 and the AND gate are single components:
