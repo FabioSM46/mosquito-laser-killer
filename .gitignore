@@ -4,3 +4,4 @@ Testing/
 *.a
 compile_commands.json
 .cache/
+.playwright-mcp
