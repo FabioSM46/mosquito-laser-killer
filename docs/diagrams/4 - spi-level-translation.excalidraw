@@ -1,0 +1,906 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "ms7cnkv88lz232fkfjl",
+      "type": "text",
+      "x": 40,
+      "y": 24,
+      "strokeColor": "#1e1e1e",
+      "text": "SPI Level Translation & MCP4922 DACs",
+      "fontSize": 30,
+      "fontFamily": 1,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8cdvkjiadnzw",
+      "type": "text",
+      "x": 40,
+      "y": 66,
+      "strokeColor": "#868e96",
+      "text": "HARDWARE_WIRING.md §8, §9, §10.  Pin numbers are PDIP. Confirm every one against the manufacturer's datasheet before soldering.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8678wdtmafdg",
+      "type": "text",
+      "x": 40,
+      "y": 86,
+      "strokeColor": "#e03131",
+      "text": "AHCT is load-bearing: AHC and HC are pin-identical but need 3.5 V and reproduce the exact problem this part solves. Read the marking on every device.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "pi",
+      "type": "rectangle",
+      "x": 40,
+      "y": 170,
+      "width": 160,
+      "height": 300,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "Raspberry\nPi 5"
+      },
+      "fontSize": 18,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv82q3ooh1uy72",
+      "type": "line",
+      "x": 200,
+      "y": 210,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          320,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8rhrld86ewdd",
+      "type": "text",
+      "x": 214,
+      "y": 192,
+      "strokeColor": "#868e96",
+      "text": "MOSI · GPIO 10 · pin 19",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8y3szceb85mo",
+      "type": "line",
+      "x": 200,
+      "y": 262,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          320,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv86okb29wghln",
+      "type": "text",
+      "x": 214,
+      "y": 244,
+      "strokeColor": "#868e96",
+      "text": "SCLK · GPIO 11 · pin 23",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8ytkpf3y6ckr",
+      "type": "line",
+      "x": 200,
+      "y": 314,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          320,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8j3gjjxycit",
+      "type": "text",
+      "x": 214,
+      "y": 296,
+      "strokeColor": "#868e96",
+      "text": "CE0 · GPIO 8 · pin 24",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv885fdyvigkpj",
+      "type": "line",
+      "x": 200,
+      "y": 366,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          320,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.281Z",
+      "updatedAt": "2026-07-30T10:07:14.281Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv8rgbnk3uypg",
+      "type": "text",
+      "x": 214,
+      "y": 348,
+      "strokeColor": "#868e96",
+      "text": "CE1 · GPIO 7 · pin 26",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "bz",
+      "type": "rectangle",
+      "x": 40,
+      "y": 520,
+      "width": 450,
+      "height": 150,
+      "backgroundColor": "#e7f5ff",
+      "strokeColor": "#1971c2",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv96tz0pbon06",
+      "type": "text",
+      "x": 58,
+      "y": 532,
+      "strokeColor": "#1971c2",
+      "text": "CHIP-SELECT BOOT BIAS — holds both DACs deselected",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9i182volsmo",
+      "type": "text",
+      "x": 58,
+      "y": 554,
+      "strokeColor": "#868e96",
+      "text": "from the instant the 5 V rail appears until SPI0 is configured",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv96aeb1xan62w",
+      "type": "text",
+      "x": 58,
+      "y": 580,
+      "strokeColor": "#1971c2",
+      "text": "+3.3 V",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9lt8v9dd79ke",
+      "type": "line",
+      "x": 70,
+      "y": 600,
+      "strokeColor": "#1971c2",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          52
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9dfsicqk23hj",
+      "type": "ellipse",
+      "x": 64,
+      "y": 600,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9uunqi9e5o7p",
+      "type": "line",
+      "x": 70,
+      "y": 606,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "pu606",
+      "type": "rectangle",
+      "x": 140,
+      "y": 590,
+      "width": 90,
+      "height": 32,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 12,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9g0jv5j36u2d",
+      "type": "line",
+      "x": 230,
+      "y": 606,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv951zxjertk16",
+      "type": "text",
+      "x": 306,
+      "y": 598,
+      "strokeColor": "#1e1e1e",
+      "text": "AHCT125 #1 pin  9   (CE0)",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9gmjo524p5e",
+      "type": "ellipse",
+      "x": 64,
+      "y": 644,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv97utdvku64zr",
+      "type": "line",
+      "x": 70,
+      "y": 650,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "pu650",
+      "type": "rectangle",
+      "x": 140,
+      "y": 634,
+      "width": 90,
+      "height": 32,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 12,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9japhmqb8rds",
+      "type": "line",
+      "x": 230,
+      "y": 650,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          70,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9khr1ffnd77q",
+      "type": "text",
+      "x": 306,
+      "y": 642,
+      "strokeColor": "#1e1e1e",
+      "text": "AHCT125 #1 pin 12   (CE1)",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ic1",
+      "type": "rectangle",
+      "x": 520,
+      "y": 170,
+      "width": 280,
+      "height": 330,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv96q90jpn3uth",
+      "type": "text",
+      "x": 538,
+      "y": 182,
+      "strokeColor": "#6741d9",
+      "text": "SN74AHCT125N #1",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv90a1rfsc5zp25",
+      "type": "text",
+      "x": 538,
+      "y": 204,
+      "strokeColor": "#868e96",
+      "text": "quad bus buffer · 4 of 4 channels used",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9v1mont98i1a",
+      "type": "text",
+      "x": 538,
+      "y": 228,
+      "strokeColor": "#1e1e1e",
+      "text": " 2  1A ← MOSI        3  1Y →\n 5  2A ← SCLK        6  2Y →\n 9  3A ← CE0         8  3Y →\n12  4A ← CE1        11  4Y →\n\n14  VCC  → +5 V\n 7  GND  → common ground\n 1,4,10,13  /OE → GND\n\n100 nF ceramic across 14 ↔ 7",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9f6tpg53arpa",
+      "type": "text",
+      "x": 538,
+      "y": 452,
+      "strokeColor": "#e03131",
+      "text": "/OE tied LOW — not a laser enable (§9.3)",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "dacx",
+      "type": "rectangle",
+      "x": 860,
+      "y": 170,
+      "width": 330,
+      "height": 300,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9oodise35d0g",
+      "type": "text",
+      "x": 878,
+      "y": 182,
+      "strokeColor": "#e8590c",
+      "text": "MCP4922 #1 — X axis",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9lfqjxwpbq0q",
+      "type": "text",
+      "x": 878,
+      "y": 210,
+      "strokeColor": "#1e1e1e",
+      "text": " 1  VDD    → +5 V\n 3  /CS    ← CE0 (translated)\n 4  SCK    ← SCLK (translated)\n 5  SDI    ← MOSI (translated)\n 8  /LDAC  → GND          ** required **\n 9  /SHDN  → +5 V         ** required **\n11  VREFB  → +5 V\n13  VREFA  → +5 V\n12  AVSS   → common ground\n14  VOUTA  → X driver IN+\n10  VOUTB  → X driver IN−\n 2,6,7  NC → leave open\n\n100 nF ceramic across 1 ↔ 12",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "dacy",
+      "type": "rectangle",
+      "x": 860,
+      "y": 500,
+      "width": 330,
+      "height": 300,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9vb8hp103dw",
+      "type": "text",
+      "x": 878,
+      "y": 512,
+      "strokeColor": "#e8590c",
+      "text": "MCP4922 #2 — Y axis",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9ypg5w4uyala",
+      "type": "text",
+      "x": 878,
+      "y": 540,
+      "strokeColor": "#1e1e1e",
+      "text": " 1  VDD    → +5 V\n 3  /CS    ← CE1 (translated)\n 4  SCK    ← SCLK (translated)\n 5  SDI    ← MOSI (translated)\n 8  /LDAC  → GND          ** required **\n 9  /SHDN  → +5 V         ** required **\n11  VREFB  → +5 V\n13  VREFA  → +5 V\n12  AVSS   → common ground\n14  VOUTA  → Y driver IN+\n10  VOUTB  → Y driver IN−\n 2,6,7  NC → leave open\n\n100 nF ceramic across 1 ↔ 12",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv97mro9dyxy1k",
+      "type": "arrow",
+      "x": 807.9932530560083,
+      "y": 328.91808549084897,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44.013493887983486,
+          -1.808773721423961
+        ]
+      ],
+      "start": {
+        "id": "ic1"
+      },
+      "end": {
+        "id": "dacx"
+      },
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9pwejtdfjh1",
+      "type": "arrow",
+      "x": 806.0564491633347,
+      "y": 461.04871640123406,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          47.88710167333056,
+          41.32722473177847
+        ]
+      ],
+      "start": {
+        "id": "ic1"
+      },
+      "end": {
+        "id": "dacy"
+      },
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9i3z2mcfhh9",
+      "type": "text",
+      "x": 530,
+      "y": 700,
+      "strokeColor": "#868e96",
+      "text": "MOSI and SCLK fan out to BOTH DACs.\nCE0 selects X, CE1 selects Y.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "gdx",
+      "type": "rectangle",
+      "x": 1250,
+      "y": 210,
+      "width": 210,
+      "height": 110,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "X galvo driver\n\nIN+   IN−"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.282Z",
+      "updatedAt": "2026-07-30T10:07:14.282Z",
+      "version": 1
+    },
+    {
+      "id": "gdy",
+      "type": "rectangle",
+      "x": 1250,
+      "y": 540,
+      "width": 210,
+      "height": 110,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "Y galvo driver\n\nIN+   IN−"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv951k7tc884wa",
+      "type": "arrow",
+      "x": 1197.8911513906571,
+      "y": 291.18480810155717,
+      "strokeColor": "#2f9e44",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44.21769721868577,
+          -7.369616203114333
+        ]
+      ],
+      "start": {
+        "id": "dacx"
+      },
+      "end": {
+        "id": "gdx"
+      },
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9yfzven2xli9",
+      "type": "arrow",
+      "x": 1197.8911513906571,
+      "y": 621.1848081015571,
+      "strokeColor": "#2f9e44",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44.21769721868577,
+          -7.369616203114219
+        ]
+      ],
+      "start": {
+        "id": "dacy"
+      },
+      "end": {
+        "id": "gdy"
+      },
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9iyo9cirxfnn",
+      "type": "text",
+      "x": 1250,
+      "y": 340,
+      "strokeColor": "#868e96",
+      "text": "common ground to\nEACH galvo driver\n(and the ±15 V COM)",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9no9mcqn5r",
+      "type": "text",
+      "x": 1250,
+      "y": 670,
+      "strokeColor": "#e03131",
+      "text": "Do NOT ground IN−.\nThe drive is differential;\ngrounding it halves the\nrange and invalidates the\ncoordinate mapping.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "nz",
+      "type": "rectangle",
+      "x": 40,
+      "y": 850,
+      "width": 1420,
+      "height": 160,
+      "backgroundColor": "#fff5f5",
+      "strokeColor": "#e03131",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9w2caw4fr02s",
+      "type": "text",
+      "x": 58,
+      "y": 862,
+      "strokeColor": "#e03131",
+      "text": "BEFORE CONNECTING THE DACs TO THE GALVO DRIVER — open no-go item (§10)",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv93zspge9fb6u",
+      "type": "text",
+      "x": 58,
+      "y": 892,
+      "strokeColor": "#1e1e1e",
+      "text": "The two channels of an axis are complementary unipolar 0–5 V outputs, so the pair presents a permanent 2.5 V COMMON MODE. It is the operating point, not a transient.\n\"±5 V analog input at 0.33 V/°\" in a seller listing establishes none of the following. Confirm all three from the driver's own manual:\n     1.  IN+ / IN− are a genuine differential pair — not two single-ended inputs, and not one input with the other meant to be grounded.\n     2.  The permitted input common-mode range includes 2.5 V.\n     3.  The ±5 V figure is a DIFFERENTIAL rating, not ±5 V per input measured to ground.\nIf any is wrong, §14 and CoordinateMapper are wrong and every commanded angle carries a silent scale or offset error. Re-check empirically during calibration:\ncommand a known angle, measure the actual deflection. Do not resolve this by trial with any laser connected.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv97hlc8c90s8j",
+      "type": "text",
+      "x": 40,
+      "y": 1050,
+      "strokeColor": "#e03131",
+      "text": "/LDAC and /SHDN are not optional.  Both are CMOS inputs with no internal pull. With /LDAC floating HIGH the serial latch never transfers to the output:\nMCP4922::write() returns success, the SPI traffic scopes correctly, and the outputs never move. It is the most likely thing to cost you an evening at DAC bring-up.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9qd23s2wwvn",
+      "type": "text",
+      "x": 40,
+      "y": 1100,
+      "strokeColor": "#2f9e44",
+      "text": "MOSI and SCLK get no external bias, deliberately.  They cannot float while the buffer is powered — the 5 V logic rail comes from the Pi header, so the translator\nis energised only when the Pi is, and GPIO 9–27 default to internal pull-downs at reset. With /CS held HIGH by its pull-up, no write can latch regardless.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9e13ubbw7wud",
+      "type": "text",
+      "x": 40,
+      "y": 1150,
+      "strokeColor": "#1e1e1e",
+      "text": "Vref is the Pi's 5 V rail, valid only because the driver writes BUF = 0 (unbuffered, range 0..VDD).  dac_reference_voltage in system_config.yaml must hold the\nMEASURED rail voltage at the DAC pin under load, not 5.0 — CoordinateMapper divides by it, so 2 % error is 2 % of commanded angle: ~0.3° full scale, ≈4 mm at 0.75 m.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cnkv9zsxnavn1wef",
+      "type": "text",
+      "x": 40,
+      "y": 1200,
+      "strokeColor": "#868e96",
+      "text": "For breadboard bring-up lower spi_speed_hz to about 1 MHz and scope MOSI/SCLK/CE0/CE1 AT THE MCP4922 PINS. One control cycle is four 16-bit transfers, so the\nclock is never the bottleneck, and 20 MHz edges on jumper wire will ring.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:07:14.283Z",
+      "updatedAt": "2026-07-30T10:07:14.283Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}

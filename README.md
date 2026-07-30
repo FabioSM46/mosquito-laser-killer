@@ -23,34 +23,43 @@ parts.
 | Test laser | 5 mW, 12 mm module | On hand; wavelength, supply, class label, pinout, and TTL compatibility must be recorded before use |
 | Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
-| Level shifter | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | On hand, but not yet qualified for 20 MHz push-pull SPI or fail-safe laser control |
-| Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified |
-| Switches | Lever switch + mushroom button | On hand; contact topology and power/mains ratings remain unverified |
+| Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | Specified; **on order**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
+| Level shifter (excluded) | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | On hand but **excluded** — open-drain with resistive pull-ups for 100–400 kHz I2C, far too slow for a 50 ns bit period, and 4 channels cannot cover 5 signals |
+| Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified. The 220 kΩ goes to **pin 14** |
+| Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | **Not on hand; required.** The mushroom must not switch mains directly |
+| Door interlock | Switch with 2 independent NC contacts, positive/direct opening | **Not on hand; required** |
+| Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
 | Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
-| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | On hand. **3.3 Ω is not the required 3.3 kΩ** |
-| Wiring connectors | WAGO 221-413, 3-conductor | On hand; use separate enclosed connectors for each electrical net |
+| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | On hand. **3.3 Ω is not the required 3.3 kΩ**, and **6× 10 kΩ** are needed |
+| Wiring connectors | WAGO 221-413, 3-conductor | On hand; splicing connectors — not terminal blocks, and never a barrier between circuits |
 
 The documented GPIO sense circuits still require **2× 3.3 kΩ** and **1× 1 kΩ**
 resistors; neither value was reported in the inventory. Do not substitute the
-stocked 3.3 Ω resistor. The four-channel I2C shifter also cannot be assumed to
-cover or meet the electrical requirements of the complete SPI and laser-control
-paths. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
+stocked 3.3 Ω resistor. The safety contactor, latching START circuit, mains
+isolator and door interlock are specified but neither purchased nor built, and the
+galvo driver's **differential input topology and common-mode range** are still
+unverified — that last one invalidates the coordinate mapping if it turns out
+wrong. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
 
 ### Wiring Notes
 
-A complete wiring guide is in [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md). Key points:
+A complete wiring guide is in [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md),
+with drawings in [`docs/diagrams/`](docs/diagrams/README.md). Key points:
 
-- **RPi 5 GPIO 18** → qualified fail-LOW level translation → 74HC123 monostable + AND-gate pulse-duration backstop → verified working-laser TTL input. Configurable via `laser_pin`. The on-hand generic I2C shifter is not yet qualified for this safety path. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §11a.
-- **RPi 5 GPIO 24** → lever-switch sense circuit (active HIGH when armed). The same switch must also interrupt 12 V power to the laser driver; verify its contact arrangement and DC rating first. Configurable via `arm_switch_pin`.
-- **RPi 5 GPIO 25** → mushroom E-stop sense (active LOW when pressed). The intended hardware requires two NC contacts: a mains-rated pole breaks Live and the second pole drives the GPIO sense circuit. The on-hand button must be checked against those requirements. Configurable via `e_stop_pin`.
-- **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC).
-- **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC).
-- **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** require logic levels guaranteed for MCP4922 operation at 5 V. Do not treat the generic I2C shifter or direct 3.3 V chip-select wiring as validated; see the hardware inventory reconciliation and wiring guide.
-- Both MCP4922 Vref pins tied to **5 V** → 0–5 V per channel, combined as **±5 V differential** per axis. See the guide for the channel mapping and differential-drive explanation.
-- Galvo scanner powered by **±15 V**; driver accepts the ±5 V differential signal from the DAC pair.
-- Laser driver powered by **12 V** from the Mean Well supply through the arm switch; forced-air cooling must run whenever the module is powered.
+- **RPi 5 GPIO 18** → **SN74AHCT125N #2** (`/OE` tied LOW) → 74HC123 monostable + SN74HC08N AND-gate pulse-duration backstop → verified working-laser TTL input. Configurable via `laser_pin`. **Three** 10 kΩ fail-LOW pull-downs, one per node: translator input, translator output, and the laser-driver connector — each covers a case none of the others reaches. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §9.3, §11a.
+- **RPi 5 GPIO 24** → lever-switch sense circuit (active HIGH when armed). The same switch must also interrupt 12 V power to the laser driver; verify its contact arrangement and DC rating first. The door interlock is in series with it, upstream of the sense tap, so an open door reads as a disarm. Configurable via `arm_switch_pin`.
+- **RPi 5 GPIO 25** → mushroom E-stop sense (active LOW when pressed). Two NC contacts are required: pole 1 breaks the **safety contactor's coil circuit** — not the mains itself — and pole 2 drives the GPIO sense circuit. The contactor latches, so releasing the mushroom does not restore power; only a deliberate START press does. Configurable via `e_stop_pin`.
+- **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC), with a 10 kΩ pull-up to 3.3 V so both DACs stay deselected at boot.
+- **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC), likewise.
+- **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** go through **SN74AHCT125N #1**. Direct 3.3 V chip-select wiring into a 5 V DAC is not validated, and the generic I2C shifter is excluded.
+- **Both MCP4922 `/LDAC` (pin 8) → GND and `/SHDN` (pin 9) → +5 V.** Left floating, `/LDAC` produces a silent failure: `write()` returns success, the SPI traffic scopes correctly, and the outputs never move.
+- Both MCP4922 Vref pins tied to **5 V** → 0–5 V per channel, combined as **±5 V differential** per axis. `dac_reference_voltage` must hold the *measured* rail voltage.
+- Galvo scanner powered by a separate **±15 V** supply (three conductors: +15 V, 0 V/COM, −15 V). Confirm from the driver's own manual that `IN+`/`IN−` are a genuine differential pair whose common-mode range admits the 2.5 V the complementary DAC pair presents, and that ±5 V is a *differential* rating.
+- Laser driver powered by **12 V** through the arm switch and door interlock; the cooling fan is wired **upstream** of the arm switch so it runs whenever the 12 V branch is live.
 
-For the complete E-Stop, arm switch, GPIO input, and SPI wiring details, see [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md).
+For the complete mains, contactor, E-Stop, arm switch, door interlock, GPIO input,
+and SPI wiring details — plus the risk-ordered build sequence in §17 — see
+[`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md).
 
 ### Camera Resolution Note
 
@@ -188,7 +197,7 @@ The system implements structurally-enforced safety guards (see `AGENTS.md` for f
 
 ### Known residual risk
 
-Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is scope-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver and the verified E-stop cuts mains — both hardware mechanisms, both requiring a human hand. The current inventory does not yet establish the switch contact ratings/topology, so it is not ready for powered use.
+Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is scope-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver, the door interlock cuts it independently, and the E-stop drops a latching safety contactor that removes mains from both DC supplies — all hardware mechanisms, and none of them on the control thread, but each requiring a human hand or an opened door. Because the contactor latches, releasing the mushroom restores nothing; only a deliberate START press does, which matters here because `SAFE_HALT` is terminal and the documented recovery is "restart the software". The contactor, START circuit, isolator and door interlock are specified but not yet built, and the current inventory does not establish the switch contact ratings/topology, so it is not ready for powered use.
 
 ## Building and Running Tests
 

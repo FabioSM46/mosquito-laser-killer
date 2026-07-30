@@ -47,37 +47,90 @@ The following software and hardware-abstraction components are present and pass 
 
 ## 2. Prerequisites Before Applying Any Power
 
-Do not plug in the 230 V AC until every item below is complete.
+Do not plug in the 230 V AC until every item below is complete. Note that most of
+these items do not need mains at all: `HARDWARE_WIRING.md` §17 stages 0–5 run
+entirely on SELV, because the 5 V logic rail comes from the Pi header. Build and
+verify the logic, backstop and sense circuits first; the mains package is stage 6.
 
 - [ ] Every no-go item in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md) is
   closed and the actual fitted part numbers/quantities are recorded.
 - [ ] Enclosure is built and fully closed with no laser exit path except the intended beam aperture.
 - [ ] Beam dump or laser-absorbing backstop is installed inside the enclosure.
-- [ ] The mushroom assembly is verified to provide two independent NC contacts
-  with the necessary mains ratings; one pole breaks mains Live and the second
-  drives GPIO 25.
+- [ ] **The mains switching architecture of `HARDWARE_WIRING.md` §3 is built and
+  commissioned by a qualified person.** Mains does not pass through the mushroom
+  contact: a safety contactor K1 does the switching, both live conductors are
+  broken, and the mushroom breaks only the coil circuit. Commission by measuring:
+  - Closing the isolator leaves K1 de-energised — both DC rails at 0 V.
+  - START energises K1 and it seals in when START is released.
+  - E-stop pressed → K1 drops → **both DC rails measured at 0 V**, not assumed.
+  - **E-stop released → nothing happens.** Only a START press restores power. If
+    releasing the mushroom re-energises the supplies, this is a **no-go**.
+- [ ] The mushroom assembly is verified to provide two independent NC contacts:
+  pole 1 in the K1 coil circuit, pole 2 driving GPIO 25. Pole 1 must be rated for
+  the coil current.
+- [ ] **The enclosure door interlock of `HARDWARE_WIRING.md` §6a is fitted and
+  tested.** Two independent positive-opening NC contacts:
+  - Door opened → K1 drops → both DC rails at 0 V; closing the door alone does
+    not restore power, START is required.
+  - Door opened → laser-driver +VIN removed on its own path, and GPIO 24 reads
+    disarmed.
+  - The actuator cannot be held closed by hand without a tool.
+- [ ] **The galvo driver's own manual confirms all three points in
+  `HARDWARE_WIRING.md` §10**: `IN+`/`IN−` are a genuine differential pair, the
+  permitted input common-mode range includes the **2.5 V** the complementary DAC
+  pair presents, and the ±5 V figure is a *differential* rating. If any is
+  unconfirmed, **no-go** — the failure is a silent scale/offset error in where the
+  beam points.
+- [ ] The laser cooling fan is wired **upstream** of the arm switch, so it runs
+  whenever the 12 V branch is live rather than stopping the instant the operator
+  disarms a module that was just dissipating 2.5 W.
+- [ ] The laser driver's TTL input is confirmed **active HIGH** from its own
+  documentation. On an active-LOW input every fail-LOW pull-down in §9.3 becomes a
+  fire command: **no-go** until the polarity is known.
 - [ ] The lever switch's contact arrangement and DC rating are verified; it
   switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
 - [ ] A correctly rated bipolar ±15 VDC supply is installed for the galvo
   driver. The Mean Well LRS-50-12 remains dedicated to the 12 V laser branch.
-- [ ] The GPIO sense networks contain meter-verified **3.3 kΩ** (×2), 10 kΩ
-  (×1), and 1 kΩ (×1) resistors. The stocked 3.3 Ω parts are segregated and not
-  fitted.
+- [ ] The GPIO sense networks contain meter-verified **3.3 kΩ** (×2), 10 kΩ, and
+  **1 kΩ** resistors, and in each network the 3.3 kΩ, the 100 nF, the Zener and the
+  GPIO wire all meet at **one junction** with the series resistor. Without that
+  connection there is no divider — and the pin still reads HIGH, so the omission is
+  silent. The stocked 3.3 Ω parts are segregated and not fitted.
+- [ ] Both BZX55C3V3 clamps are fitted **cathode (banded end) at the sense
+  junction, anode to GND**, confirmed with a diode test. Reversed, each one
+  forward-clamps its node near 0.7 V.
+- [ ] The full 10 kΩ count is present: **6** — one arm series, three laser-path
+  fail-LOW pull-downs, two chip-select pull-ups (`HARDWARE_WIRING.md` §2).
 - [ ] The four SPI outputs use a push-pull translator verified at
-  `spi_speed_hz`; GPIO 18 uses a separate interface verified fail-LOW through
-  power-up/down and open-wire cases. The generic I2C module is not accepted by
-  part name alone.
-- [ ] E-Stop and arm switch have been tested with a multimeter:
-  - E-Stop released → GPIO 25 ≈ 2.5 V (HIGH). If you measure ~0.8 V here, the
+  `spi_speed_hz`; GPIO 18 uses a separate `AHCT125` package verified fail-LOW
+  through power-up/down, open-wire, **and missing-IC** cases. The generic I2C
+  module is not accepted by part name alone. All **three** pull-downs of §9.3 are
+  fitted and each is individually proven:
+  - Disconnect the GPIO 18 wire → laser TTL LOW. *(tests (a))*
+  - Pull the `AHCT125` #2 → laser TTL LOW. *(tests (b))*
+  - Pull the `SN74HC08N` → voltage at the **laser-driver connector** stays LOW.
+    *(tests (c) — nothing upstream of the AND gate covers this)*
+- [ ] Both MCP4922s have **`/LDAC` (pin 8) tied to GND** and **`/SHDN` (pin 9) to
+  +5 V**. With `/LDAC` floating, `MCP4922::write()` returns success and the SPI
+  traffic scopes correctly while the outputs never move.
+- [ ] `dac_reference_voltage` holds the **measured** 5 V rail voltage at the DAC
+  pin under load, not the nominal 5.0.
+- [ ] E-Stop and arm switch have been tested with a multimeter, **each node
+  measured with its GPIO wire disconnected before the Pi is attached**:
+  - E-Stop released → ≈ 2.5 V (HIGH). If you measure ~0.8 V here, the
     sense network was built from the old drawing with a 10 kΩ series resistor
     from 3.3 V — replace it with 1 kΩ per `docs/HARDWARE_WIRING.md` §6.
-  - E-Stop pressed → GPIO 25 LOW.
-  - Arm switch OFF → GPIO 24 LOW.
-  - Arm switch ON → GPIO 24 ~2.98 V (HIGH).
+  - E-Stop pressed → LOW.
+  - Arm switch OFF → LOW.
+  - Arm switch ON → ≈ 2.98 V (HIGH).
 - [ ] **74HC123 pulse-duration backstop is wired and scope-verified** (see `docs/HARDWARE_WIRING.md` §11a). This is the only enforcer of the pulse-duration bound that is independent of the control thread:
+  - The **220 kΩ is on pin 14** (`1Rext/Cext`) and the 1 µF is between pins 15 and
+    14. The two channels are mirrored — channel 2 is `6 = 2Cext, 7 = 2Rext/Cext`,
+    channel 1 reverses that. On pin 15 the resistor feeds the discharge node and
+    the measured period means nothing: **no-go**.
   - A short (~10 ms) GPIO 18 pulse produces an equally short laser-TTL pulse (NOT stretched to ~99 ms — if stretched, the AND gate is missing/miswired: **no-go**).
   - A stuck-HIGH GPIO 18 drives the laser TTL LOW at the measured one-shot period and keeps it LOW.
-  - The one-shot period is measured on a scope and recorded.
+  - The one-shot period is measured on a scope and **recorded**.
 - [ ] All power supplies, DACs, the Pi, and the galvo driver share a single common ground.
 - [ ] OD 4+ safety eyewear for 450 nm is available for every person in the room.
 - [ ] The 2.5 W Class 4 laser module is **disconnected** and stored. For this checklist, use a low-power laser or no laser.
@@ -168,9 +221,15 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 | Item | Required Result |
 |------|-----------------|
 | Inventory reconciliation | Every no-go item in `HARDWARE_INVENTORY.md` closed; fitted parts and ratings recorded |
-| Enclosure + E-Stop + arm switch | Physically installed and functionally tested |
-| Power and logic interfaces | Bipolar ±15 V galvo supply installed; SPI and laser level interfaces electrically and scope verified |
-| 74HC123 pulse-duration backstop | Wired with AND gating and scope-verified (short pulse passes, stuck-HIGH capped) |
+| Build order followed | `HARDWARE_WIRING.md` §17 stages 0–11 complete, each gate passed in order |
+| Mains architecture | Contactor K1, latching START circuit, double-pole isolation, isolator/OCP/RCD built and inspected by a qualified person; **E-stop release does not restart** and both DC rails measure 0 V while pressed |
+| Enclosure + door interlock | Enclosure closed with beam dump; two positive-opening NC contacts fitted and both paths tested (§6a) |
+| E-Stop + arm switch | Physically installed and functionally tested; sense networks metered before connection |
+| Galvo driver input topology | Differential pair, 2.5 V common mode and differential ±5 V rating all confirmed from the driver's own manual (§10) |
+| Power and logic interfaces | Bipolar ±15 V galvo supply installed; SPI and laser level interfaces electrically and scope verified; all three §9.3 pull-downs individually proven |
+| MCP4922 control pins | `/LDAC` grounded, `/SHDN` at +5 V, `dac_reference_voltage` set from the measured rail |
+| 74HC123 pulse-duration backstop | Wired with AND gating, **220 kΩ on pin 14**, and scope-verified (short pulse passes, stuck-HIGH capped, period recorded) |
+| Laser driver TTL polarity | Confirmed **active HIGH** from the module's own documentation |
 | Camera calibration | Real values entered, startup validation passes |
 | Camera by-path identification | Stable symlinks in `config/system_config.yaml` |
 | Dry-run tracking | Low-power target tracked smoothly across the bounding box |
@@ -183,4 +242,9 @@ If any item is missing, **no-go**. Fix the issue and repeat the relevant section
 
 ## 8. After This Checklist
 
-Once all go/no-go criteria are satisfied, the system is ready for further development or, if you choose to proceed, installation of the Class 4 laser. Connecting the Class 4 laser requires its own final checklist: alignment verification, beam dump verification, door-interlock testing, and operator training. That is outside the scope of this document and must be written specifically for your jurisdiction and safety procedures.
+Once all go/no-go criteria are satisfied, the system is ready for further development or, if you choose to proceed, installation of the Class 4 laser. Connecting the Class 4 laser requires its own final checklist: alignment verification, beam dump verification, and operator training, plus the electrical, laser-safety and functional-safety review of `HARDWARE_WIRING.md` §17 stage 12. That is outside the scope of this document and must be written specifically for your jurisdiction and safety procedures.
+
+The door interlock is no longer an open item here: it is specified as a circuit in
+`HARDWARE_WIRING.md` §6a and tested in §2 above. Earlier revisions of this
+checklist called for door-interlock *testing* while no circuit existed anywhere in
+the documentation.

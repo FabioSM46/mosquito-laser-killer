@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running Raspberry Pi OS (64-bit, arm64, non-RTOS Linux kernel) controls two OV9281 global-shutter cameras, two dual-channel 12-bit MCP4922 DACs driving the X/Y galvo axes, and a 2.5W Class 4 blue laser via TTL GPIO. The intended hardware design requires a DC-rated lever arm switch and a two-contact, mains-rated mushroom E-stop; the contact arrangements/ratings of the switches currently on hand have not yet been verified.
+This project implements a stereoscopic laser-targeting system for in-flight pest control. A Raspberry Pi 5 running Raspberry Pi OS (64-bit, arm64, non-RTOS Linux kernel) controls two OV9281 global-shutter cameras, two dual-channel 12-bit MCP4922 DACs driving the X/Y galvo axes, and a 2.5W Class 4 blue laser via TTL GPIO. The intended hardware design requires a DC-rated lever arm switch, a two-contact mushroom E-stop breaking a **latching safety contactor's coil circuit** (§4.8), and a positive-opening enclosure door interlock (§4.5b); the contact arrangements/ratings of the switches currently on hand have not yet been verified, and the contactor, isolator and door switch are not on hand at all.
 
 **Critical domain constraint:** A 2.5W Class 4 laser causes instantaneous, irreversible blindness and fire hazard. Every safety guard is **structurally enforced in code** — never documented as comments or convention.
 
@@ -21,21 +21,25 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | Galvo power supply | Regulated bipolar ±15 VDC, sized for both axes | **Required but not reported in inventory**; the 12 V laser PSU is not a substitute |
 | X-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential X-axis galvo drive |
 | Y-axis DAC | MCP4922 DIP-14 12-bit dual DAC | Differential Y-axis galvo drive |
-| Reported level shifter | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | On hand but **not qualified** for 20 MHz push-pull SPI or fail-safe laser control; insufficient channels for all five signals |
+| Level translation | 2 × **SN74AHCT125N**, PDIP-14 quad bus buffer — package #1 carries the four SPI signals, package #2 carries GPIO 18 alone | Specified 2026-07-29; **on order, not on hand.** `AHCT` is load-bearing: `AHC`/`HC` are pin-identical with 3.5 V thresholds. The pin-identical `AHCT126` self-gated variant was considered and rejected (`HARDWARE_WIRING.md` §9.3) |
+| Reported level shifter (excluded) | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | **Excluded from this build.** Open-drain with resistive pull-ups for 100–400 kHz I2C: RC-limited rise times are orders of magnitude too slow for a 50 ns bit period, and four channels cannot cover five signals. Retained for future I2C peripherals only |
 | Monostable | 74HC123 (DIP-16), manufacturer/order code unverified | Hardware pulse-duration backstop on laser TTL (§4.1) |
 | Monostable timing R | 1/2 W carbon-film 220 kΩ (1Rext/Cext → +5 V) | Reported on hand; sets one-shot period with C_ext |
 | Monostable timing C | 50 V monolithic-ceramic 1 µF (across 1Cext ↔ 1Rext/Cext) | Reported on hand; nominal period ≈0.45·R·C ≈99 ms only for a matching vendor coefficient; scope verification is mandatory |
 | AND gate | SN74HC08N (DIP-14) quad 2-input AND | Gates laser TTL = GPIO18 ∧ one-shot-Q (§4.1) |
+| Safety contactor **K1** | 2 main poles rated for the *combined* cold-start inrush of both DC supplies, coil matched to the control circuit, ≥1 auxiliary NO | **Not on hand; required.** Does the mains switching so the mushroom breaks only the coil circuit, and latches so an E-stop *release* cannot restart the system (§4.8) |
+| START button + isolator/OCP/RCD | NO momentary; upstream isolator, overcurrent protection, RCD per local rules | **Not on hand; required.** START is the deliberate restart action |
+| Enclosure door interlock | Switch with 2 independent NC contacts, positive/direct opening (IEC 60947-5-1 Annex K), tool-required actuator | **Not on hand; required.** Contact 1 in the K1 coil circuit, contact 2 in series with the arm switch (§4.5b) |
 | Arm switch | Lever switch; topology/DC rating unverified | Must switch laser-driver 12 V power and provide active-HIGH GPIO 24 sense |
-| E-stop | Mushroom button; pole arrangement/contact ratings unverified | Intended circuit requires two independent NC contacts, including a mains-rated pole; GPIO 25 is active LOW |
-| Zener diodes | BZX55C3V3, DO-35, 0.5 W; count unverified | Circuit requires 2 for arm/E-stop GPIO clamps |
-| Reported resistors | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | 3.3 Ω has no role in the documented circuit and must not be mistaken for 3.3 kΩ |
+| E-stop | Mushroom button; pole arrangement/contact ratings unverified | Two independent NC contacts: pole 1 in the K1 coil circuit, pole 2 for GPIO 25 (active LOW). A monitored-safety-relay architecture would need a third |
+| Zener diodes | BZX55C3V3, DO-35, 0.5 W; count unverified | Circuit requires 2 for arm/E-stop GPIO clamps — **cathode at the sense junction, anode to GND**; reversed, each forward-clamps its node near 0.7 V |
+| Reported resistors | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | 3.3 Ω has no role in the documented circuit and must not be mistaken for 3.3 kΩ. **6 × 10 kΩ are needed**: 1 arm series, 3 laser-path fail-LOW, 2 chip-select pull-ups |
 | Missing resistors | 2× 3.3 kΩ and 1× 1 kΩ, all 1/2 W | **Must be obtained** for the arm/E-stop sense networks |
 | Capacitors | 50 V monolithic ceramic: 1 µF and 100 nF; counts unverified | Timing, per-IC decoupling, and input debounce; verify sufficient quantity |
 | Wiring connectors | WAGO 221-413, 3-conductor, max 4 mm²; count unverified | Power/signal distribution; one enclosed connector per electrical net |
 
 **Power and signal wiring:**
-- RPi 5 GPIO 18 → dedicated qualified fail-LOW translation → **74HC123 monostable + AND gate** → verified laser TTL-switch input (configurable via `laser_pin`). The on-hand generic I2C shifter is not accepted for this safety path without a complete electrical qualification. The monostable is the independent hardware pulse-duration backstop; see §4.1.
+- RPi 5 GPIO 18 → **SN74AHCT125N #2** (`/OE` tied LOW) → **74HC123 monostable + SN74HC08N AND gate** → verified laser TTL-switch input (configurable via `laser_pin`). **Three** 10 kΩ fail-LOW pull-downs, one per node: at the translator input, at its output beside the '123/'08 inputs, and at the laser-driver connector. Each covers a case none of the others reaches; the third is the only coverage for an unpowered or removed AND gate. The generic I2C shifter is excluded from this path. The monostable is the independent hardware pulse-duration backstop; see §4.1.
 - RPi 5 GPIO 24 → verified DC-rated lever arm switch (configurable via `arm_switch_pin`).
 - RPi 5 GPIO 25 → verified two-contact NC mushroom E-stop (configurable via `e_stop_pin`).
 - RPi 5 SPI0 MOSI, SCLK, CE0, and CE1 → qualified 3.3 V→5 V push-pull translation → the two MCP4922 DACs. Direct 3.3 V chip-select wiring is not guaranteed at a 5 V DAC supply.
@@ -119,7 +123,7 @@ No transition from `SAFE_HALT` back to any operational state — requires full s
 
 **Every *software* mechanism that can end a pulse runs on the control thread itself.** `enforce_max_pulse`, `execute_cycle`, `Laser::fire`'s re-entry check, the watchdog, and the E-stop poll are all on the *control thread*. If that thread stalls with the pin HIGH, none of them fires. This is why `core/print.h` is non-blocking (§4.11) — it removes the most likely way for that thread to stall — and it is why the pulse bound needs an enforcer that is *not* on that thread.
 
-**Hardware backstop — 74HC123 retriggerable monostable on the TTL line.** A one-shot sits between a dedicated qualified fail-LOW GPIO 18 interface and the laser driver TTL, wired so the laser TTL is `translated GPIO18 ∧ one-shot-Q`, with channel-1 A held LOW, the translated fire line driving channel-1 B and CLR/RD, and the active-HIGH Q taken from standard DIP pin 13 into the AND gate. The one-shot triggers on GPIO 18's rising edge and re-arms/reset while the fire line is LOW. Effect: a normal short pulse passes through unchanged (the AND gate follows GPIO 18), but a control thread that hangs with GPIO 18 stuck HIGH is force-cut when Q times out — **with no software path and no operator action.** This is the enforcer the software cannot be: it is the only thing that makes the pulse-duration bound independent of the control thread. For a vendor coefficient of 0.45, the reported `220 kΩ × 1 µF` timing parts give a nominal **99 ms**; the actual bound is the mandatory scope-measured assembled period because the on-hand 74HC123 manufacturer and passive tolerances are not yet recorded (see `docs/HARDWARE_WIRING.md` §11a).
+**Hardware backstop — 74HC123 retriggerable monostable on the TTL line.** A one-shot sits between the SN74AHCT125N #2 fail-LOW GPIO 18 interface and the laser driver TTL, wired so the laser TTL is `translated GPIO18 ∧ one-shot-Q`, with channel-1 A held LOW, the translated fire line driving channel-1 B and CLR/RD, and the active-HIGH Q taken from standard DIP pin 13 into the AND gate. The one-shot triggers on GPIO 18's rising edge and re-arms/reset while the fire line is LOW. Effect: a normal short pulse passes through unchanged (the AND gate follows GPIO 18), but a control thread that hangs with GPIO 18 stuck HIGH is force-cut when Q times out — **with no software path and no operator action.** This is the enforcer the software cannot be: it is the only thing that makes the pulse-duration bound independent of the control thread. For a vendor coefficient of 0.45, the reported `220 kΩ × 1 µF` timing parts give a nominal **99 ms**; the actual bound is the mandatory scope-measured assembled period because the on-hand 74HC123 manufacturer and passive tolerances are not yet recorded (see `docs/HARDWARE_WIRING.md` §11a). The 220 kΩ goes to **pin 14** (`1Rext/Cext`): the two channels are mirrored — channel 2 is `6 = 2Cext, 7 = 2Rext/Cext` and channel 1 reverses that — and a revision of the wiring guide had 14 and 15 swapped, which puts the resistor on the discharge node and makes the measured period meaningless.
 
 The guarantee is real **only if three conditions hold, and each must be scope-verified — an unverified backstop is a comment (§4, §7):**
 1. **The AND gating is present.** If Q drives the laser TTL *alone* (no AND with GPIO 18), every fire pulse is stretched to the full ~99 ms one-shot width — a hazard, not a guard. Verify: a short GPIO 18 pulse must produce an equally short laser pulse; a *stuck-HIGH* GPIO 18 must produce a single ~99 ms pulse and then stay dark.
@@ -178,6 +182,8 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 
 **Enforced by:** `FiringController::set_armed(false)` disarms and clears targets; `set_target` / fire path reject when `!armed_`. Control thread calls `set_armed(arm_switch.is_armed())` every cycle. GPIO read failure forces **disarmed** (fail-safe).
 
+**The enclosure door interlock rides this path, deliberately.** The door switch's second NC contact sits in series with the arm switch on the 12 V laser feed, *upstream* of the GPIO 24 sense tap (`docs/HARDWARE_WIRING.md` §5, §6a). So GPIO 24 means "the laser driver actually has power available", not merely "the lever is up", and opening the door reads as a disarm that this existing code path already handles correctly. **There is no door GPIO and no door-specific code, and that is the design, not an omission:** an interlock's job is to remove the hazard, not to inform software, and a contact that opens the 12 V feed is strictly stronger than a pin the control thread polls. Do not add an `IDoorInterlock` and a control-loop poll — it would buy a signal that cannot do anything the contacts have not already done.
+
 ### 4.6 Deterministic Initialization & RAII Shutdown
 
 **Enforced by:**
@@ -197,6 +203,13 @@ Settle is measured against a real deadline (`galvo_command_time_`), not an assum
 ### 4.8 Hardware Emergency Stop (E-Stop)
 
 **Enforced by:** The `EStop` class reads a dedicated GPIO input (active LOW) from the sense pole of the intended two-contact NC mushroom E-stop. The `ControlThread` checks `e_stop.is_pressed()` every cycle before any arm/fire logic. If pressed, it calls `FiringController::emergency_stop()` to force the laser off and transitions the state machine to `SAFE_HALT`, then breaks the control loop. The E-stop is independent of the arm switch and the watchdog, and it bypasses all state transitions via the `ANY → SAFE_HALT` path. GPIO read failure forces **pressed** (fail-safe). The software behaviour does not prove that the on-hand button has the required two contacts or mains rating; those remain pre-power hardware checks in `docs/HARDWARE_INVENTORY.md`.
+
+**The mushroom does not switch mains. A latching contactor does, and the reason is a software property.** `docs/HARDWARE_WIRING.md` §3 puts a safety contactor K1 in the mains path with a seal-in circuit: the mushroom breaks only K1's coil circuit, and K1's own auxiliary NO contact holds the coil energised, so **releasing the mushroom restores nothing** — only a deliberate START press does. The earlier direct-switching arrangement failed for two independent reasons, and the second is this code's own doing:
+
+1. The LRS-50-12 specifies a 45 A cold-start inrush at 230 VAC. A pilot-duty mushroom contact subjected to that **welds**, leaving an E-stop that feels normal and disconnects nothing.
+2. **`SAFE_HALT` is terminal**, so the documented recovery from an E-stop is "restart the process". With mains passing through the NC contact, an operator who releases the mushroom and restarts the software while the arm switch is still ON takes the state machine `INIT → IDLE → ARMED → TRACKING → FIRING` with no deliberate start action anywhere in the sequence. The terminal-`SAFE_HALT` design is correct; it is precisely *why* the hardware must not re-energise on release.
+
+The Raspberry Pi is deliberately **not** on the contactor — it runs from its own USB-C supply, so the log, the GPIO 25 sense circuit and the 5 V logic rail holding the §9.3 pull-downs defined all survive an E-stop. Residual risk: a welded K1 main pole means the coil drops and the supplies stay live. Mitigating that needs a monitored safety relay with mirror-contact feedback (IEC 60947-4-1) and is an open functional-safety item, not a wiring detail.
 
 ### 4.9 Signal Shutdown
 
@@ -355,7 +368,11 @@ mosquito-laser-killer/
 ├── docs/
 │   ├── HARDWARE_INVENTORY.md    # Reported stock + unresolved hardware no-go items
 │   ├── HARDWARE_PARAMETERS.md   # Component specs + derived engagement envelope
-│   ├── HARDWARE_WIRING.md       # Physical wiring incl. the 74HC123 backstop (§11a)
+│   ├── HARDWARE_WIRING.md       # Physical wiring incl. the 74HC123 backstop (§11a),
+│   │                            #   mains/contactor (§3), door interlock (§6a),
+│   │                            #   build order (§17). Source of truth for diagrams/
+│   ├── diagrams/                # Excalidraw sources + PNG renders, numbered in
+│   │                            #   reading order; they follow HARDWARE_WIRING.md
 │   ├── CALIBRATION.md           # Stereo + galvo calibration procedure
 │   └── PRE_FLIGHT_CHECKLIST.md  # Build/validation steps and go/no-go criteria
 ├── src/
@@ -474,9 +491,9 @@ mosquito-laser-killer/
 For the physical wiring corresponding to these protocols, see `docs/HARDWARE_WIRING.md`.
 
 - **SPI:** Mode 0, 20 MHz (MCP4922 max). Two MCP4922 dual-channel DACs on Bus 0: CS0 for the X-axis DAC, CS1 for the Y-axis DAC. Within each DAC, channel A is the positive side and channel B is the inverted side of the differential pair, producing a true ±5 V swing.
-- **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), through a dedicated qualified fail-LOW logic interface and the 74HC123/74HC08 backstop to the verified laser TTL-switch input. The reported generic I2C converter is not yet qualified for this path.
-- **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH. The same lever switch must switch 12 V power to the laser driver as a hardware interlock; verify its topology and DC rating.
-- **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW. The intended mushroom assembly has two independent NC contacts: a mains-rated pole breaks Live to the power supplies and the second drives the GPIO sense circuit. The on-hand button must be verified against that requirement.
+- **TTL Laser:** GPIO 18 (configurable via `laser_pin`) via libgpiod C++ character device API (`/dev/gpiochip0`), through **SN74AHCT125N #2** (`/OE` tied LOW) and the 74HC123/74HC08 backstop to the verified laser TTL-switch input, with the three fail-LOW pull-downs of `docs/HARDWARE_WIRING.md` §9.3. The driver's TTL polarity must be confirmed **active HIGH** before connection: on an active-LOW input every one of those pull-downs becomes a fire command. The generic I2C converter is excluded from this path.
+- **Arm Switch:** GPIO 24 (configurable via `arm_switch_pin`), active HIGH. The same lever switch must switch 12 V power to the laser driver as a hardware interlock; verify its topology and DC rating. The enclosure door interlock is in series with it and the sense tap is downstream of both, so an open door reads as a disarm (§4.5b).
+- **E-Stop:** GPIO 25 (configurable via `e_stop_pin`), active LOW. Two independent NC contacts: pole 1 breaks the **K1 contactor coil circuit** — not the mains itself — and pole 2 drives the GPIO sense circuit. K1 latches, so releasing the mushroom does not restore power (§4.8). The on-hand button must be verified against that requirement.
 - **Cameras:** USB 3.0 UVC, grayscale capture, 640×400@120fps by default (configurable via `frame_width`, `frame_height`, `target_fps`; OV9281 supports up to 210 FPS at 640×400).
 - **Config:** YAML file loaded at startup; bounding box, settle delays, pulse/cooldown limits, GPIO pins, camera device paths.
 

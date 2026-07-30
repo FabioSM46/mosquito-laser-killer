@@ -1,0 +1,1072 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 40,
+      "y": 24,
+      "strokeColor": "#1e1e1e",
+      "text": "System Overview — Mosquito Laser Killer",
+      "fontSize": 30,
+      "fontFamily": 1,
+      "createdAt": "2026-07-30T09:53:41.427Z",
+      "updatedAt": "2026-07-30T09:53:41.427Z",
+      "version": 1
+    },
+    {
+      "id": "subtitle",
+      "type": "text",
+      "x": 40,
+      "y": 66,
+      "strokeColor": "#868e96",
+      "text": "Follows docs/HARDWARE_WIRING.md. Where they disagree, the document is correct.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.427Z",
+      "updatedAt": "2026-07-30T09:53:41.427Z",
+      "version": 1
+    },
+    {
+      "id": "cam-l",
+      "type": "rectangle",
+      "x": 40,
+      "y": 110,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "LEFT camera"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.427Z",
+      "updatedAt": "2026-07-30T09:53:41.427Z",
+      "version": 1
+    },
+    {
+      "id": "cam-r",
+      "type": "rectangle",
+      "x": 40,
+      "y": 190,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "RIGHT camera"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "cam-note",
+      "type": "text",
+      "x": 40,
+      "y": 260,
+      "strokeColor": "#868e96",
+      "text": "OV9281 · 640×400 @ 210 fps\nUSB 3.0 · identify by /dev/v4l/by-path\nlabel each camera LEFT / RIGHT",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "pi",
+      "type": "rectangle",
+      "x": 280,
+      "y": 110,
+      "width": 170,
+      "height": 290,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "Raspberry\nPi 5"
+      },
+      "fontSize": 18,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "pi-note",
+      "type": "text",
+      "x": 40,
+      "y": 325,
+      "strokeColor": "#2f9e44",
+      "text": "Pi 5: own USB-C 5 V supply — NOT on K1.\nIts header feeds the 5 V logic rail, so the\nfail-LOW pull-downs stay defined through\nan E-stop.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:54:12.175Z",
+      "version": 2,
+      "originalText": "Pi 5: own USB-C 5 V supply — NOT on K1.\nIts header feeds the 5 V logic rail, so the\nfail-LOW pull-downs stay defined through\nan E-stop."
+    },
+    {
+      "id": "t1",
+      "type": "rectangle",
+      "x": 510,
+      "y": 110,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "label": {
+        "text": "SN74AHCT125N #1"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "dacs",
+      "type": "rectangle",
+      "x": 740,
+      "y": 110,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "2× MCP4922"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "gdrv",
+      "type": "rectangle",
+      "x": 970,
+      "y": 110,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "Galvo drivers"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "ghead",
+      "type": "rectangle",
+      "x": 1200,
+      "y": 110,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "X/Y galvo head"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "lzone",
+      "type": "rectangle",
+      "x": 490,
+      "y": 222,
+      "width": 915,
+      "height": 168,
+      "backgroundColor": "#ebfbee",
+      "strokeColor": "#2f9e44",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "lzone-label",
+      "type": "text",
+      "x": 506,
+      "y": 232,
+      "strokeColor": "#2f9e44",
+      "text": "LASER PATH",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "t2",
+      "type": "rectangle",
+      "x": 510,
+      "y": 258,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "label": {
+        "text": "SN74AHCT125N #2"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "backstop",
+      "type": "rectangle",
+      "x": 740,
+      "y": 258,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "label": {
+        "text": "74HC123 ∧ 74HC08"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "ldrv",
+      "type": "rectangle",
+      "x": 970,
+      "y": 258,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "Laser driver"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "laser",
+      "type": "rectangle",
+      "x": 1200,
+      "y": 258,
+      "width": 190,
+      "height": 58,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "2.5 W 450 nm"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "lzone-cap1",
+      "type": "text",
+      "x": 510,
+      "y": 328,
+      "strokeColor": "#2f9e44",
+      "text": "Hardware-bounded pulse duration — the one guard that does not need the control thread.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.428Z",
+      "updatedAt": "2026-07-30T09:53:41.428Z",
+      "version": 1
+    },
+    {
+      "id": "lzone-cap2",
+      "type": "text",
+      "x": 510,
+      "y": 350,
+      "strokeColor": "#e03131",
+      "text": "Software is still in the loop: GPIO 18 decides whether and when to fire. The 74HC123 only caps how long a stuck-HIGH can last.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "lzone-cap3",
+      "type": "text",
+      "x": 510,
+      "y": 370,
+      "strokeColor": "#868e96",
+      "text": "One sustained HIGH per pulse — never PWM. Three 10 kΩ fail-LOW pull-downs: translator in, translator out, driver connector.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "sense-hint",
+      "type": "text",
+      "x": 388,
+      "y": 470,
+      "strokeColor": "#868e96",
+      "text": "GPIO 24 / GPIO 25 sense",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "izone",
+      "type": "rectangle",
+      "x": 40,
+      "y": 548,
+      "width": 1365,
+      "height": 250,
+      "backgroundColor": "#fff9db",
+      "strokeColor": "#f08c00",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "izone-label",
+      "type": "text",
+      "x": 56,
+      "y": 558,
+      "strokeColor": "#e8590c",
+      "text": "INTERLOCKS — hardware. None of these needs the control thread to act.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "arm",
+      "type": "rectangle",
+      "x": 60,
+      "y": 588,
+      "width": 200,
+      "height": 52,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "ARM switch"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "arm-txt",
+      "type": "text",
+      "x": 286,
+      "y": 598,
+      "strokeColor": "#1e1e1e",
+      "text": "cuts 12 V to the laser driver  ·  GPIO 24 active-HIGH sense",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "door",
+      "type": "rectangle",
+      "x": 60,
+      "y": 655,
+      "width": 200,
+      "height": 52,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "DOOR interlock"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "door-txt",
+      "type": "text",
+      "x": 286,
+      "y": 653,
+      "strokeColor": "#1e1e1e",
+      "text": "contact 1 → drops K1, removing ±15 V and 12 V\ncontact 2 → cuts laser 12 V directly; reads as a disarm on GPIO 24",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "estop",
+      "type": "rectangle",
+      "x": 60,
+      "y": 722,
+      "width": 200,
+      "height": 52,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "E-STOP"
+      },
+      "fontSize": 16,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "estop-txt",
+      "type": "text",
+      "x": 286,
+      "y": 720,
+      "strokeColor": "#1e1e1e",
+      "text": "pole 1 → drops the K1 coil.  Releasing it does NOT restart — START is required.\npole 2 → GPIO 25 active-LOW sense",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "pzone-label",
+      "type": "text",
+      "x": 40,
+      "y": 836,
+      "strokeColor": "#868e96",
+      "text": "POWER — detail in drawing 2",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "mains",
+      "type": "rectangle",
+      "x": 40,
+      "y": 864,
+      "width": 170,
+      "height": 52,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "Mains inlet"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "iso",
+      "type": "rectangle",
+      "x": 245,
+      "y": 864,
+      "width": 240,
+      "height": 52,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "Isolator · OCP · RCD"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "k1",
+      "type": "rectangle",
+      "x": 520,
+      "y": 864,
+      "width": 240,
+      "height": 52,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "K1 contactor · 2-pole"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "ps15",
+      "type": "rectangle",
+      "x": 795,
+      "y": 838,
+      "width": 230,
+      "height": 50,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "±15 VDC → galvo"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.429Z",
+      "updatedAt": "2026-07-30T09:53:41.429Z",
+      "version": 1
+    },
+    {
+      "id": "ps12",
+      "type": "rectangle",
+      "x": 795,
+      "y": 900,
+      "width": 230,
+      "height": 50,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "12 VDC → laser + fan"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "pwr-note",
+      "type": "text",
+      "x": 1055,
+      "y": 840,
+      "strokeColor": "#1e1e1e",
+      "text": "Both live conductors are switched: on a reversible\ninlet \"L\" is not reliably Live.\n\nK1 latches — closing the isolator energises nothing.\nSTART does, and it is the last step of power-up.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0ho867bfuwkq",
+      "type": "arrow",
+      "x": 199.64295186937179,
+      "y": 171.60253224716143,
+      "strokeColor": "#1971c2",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          73.2140962612564,
+          36.92537028828582
+        ]
+      ],
+      "start": {
+        "id": "cam-l"
+      },
+      "end": {
+        "id": "pi"
+      },
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o02pnr0w5eula",
+      "type": "arrow",
+      "x": 237.90376840176285,
+      "y": 235.10667679331942,
+      "strokeColor": "#1971c2",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          34.192463196474336,
+          5.351863804665527
+        ]
+      ],
+      "start": {
+        "id": "cam-r"
+      },
+      "end": {
+        "id": "pi"
+      },
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0is1jdhplg3a",
+      "type": "arrow",
+      "x": 708,
+      "y": 139,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "t1"
+      },
+      "end": {
+        "id": "dacs"
+      },
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0rxsm27wfih",
+      "type": "arrow",
+      "x": 938,
+      "y": 139,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "dacs"
+      },
+      "end": {
+        "id": "gdrv"
+      },
+      "createdAt": "2026-07-30T09:53:41.430Z",
+      "updatedAt": "2026-07-30T09:53:41.430Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o04be37o61ej7",
+      "type": "arrow",
+      "x": 1168,
+      "y": 139,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "gdrv"
+      },
+      "end": {
+        "id": "ghead"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0yl1bjhma6ve",
+      "type": "arrow",
+      "x": 708,
+      "y": 287,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "t2"
+      },
+      "end": {
+        "id": "backstop"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o09yommu43adq",
+      "type": "arrow",
+      "x": 938,
+      "y": 287,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "backstop"
+      },
+      "end": {
+        "id": "ldrv"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0xg4brr0h2hd",
+      "type": "arrow",
+      "x": 1168,
+      "y": 287,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "ldrv"
+      },
+      "end": {
+        "id": "laser"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0g9nyuq92byw",
+      "type": "arrow",
+      "x": 218,
+      "y": 890,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          19,
+          0
+        ]
+      ],
+      "start": {
+        "id": "mains"
+      },
+      "end": {
+        "id": "iso"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o07t2g6ekfpcv",
+      "type": "arrow",
+      "x": 493,
+      "y": 890,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          19,
+          0
+        ]
+      ],
+      "start": {
+        "id": "iso"
+      },
+      "end": {
+        "id": "k1"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0dp7rkr7dl8m",
+      "type": "arrow",
+      "x": 767.9602975216799,
+      "y": 877.203970247832,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          19.079404956640246,
+          -1.9079404956639792
+        ]
+      ],
+      "start": {
+        "id": "k1"
+      },
+      "end": {
+        "id": "ps15"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "ms7c65o0358u6nfam2b",
+      "type": "arrow",
+      "x": 767.9336200532975,
+      "y": 906.5839877846867,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          19.13275989340491,
+          2.480172578774841
+        ]
+      ],
+      "start": {
+        "id": "k1"
+      },
+      "end": {
+        "id": "ps12"
+      },
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "n-t1",
+      "type": "text",
+      "x": 520,
+      "y": 176,
+      "strokeColor": "#868e96",
+      "text": "3.3 V in → 5 V push-pull, /OE LOW",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "n-dac",
+      "type": "text",
+      "x": 742,
+      "y": 176,
+      "strokeColor": "#868e96",
+      "text": "/LDAC → GND, /SHDN → +5 V",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "n-gd",
+      "type": "text",
+      "x": 972,
+      "y": 176,
+      "strokeColor": "#868e96",
+      "text": "±5 V diff · do NOT ground IN−",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "a-pi-t1",
+      "type": "arrow",
+      "x": 454,
+      "y": 139,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          52,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "a-pi-t2",
+      "type": "arrow",
+      "x": 454,
+      "y": 287,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          52,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    },
+    {
+      "id": "a-sense",
+      "type": "arrow",
+      "x": 365,
+      "y": 404,
+      "strokeColor": "#868e96",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          140
+        ]
+      ],
+      "createdAt": "2026-07-30T09:53:41.431Z",
+      "updatedAt": "2026-07-30T09:53:41.431Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}

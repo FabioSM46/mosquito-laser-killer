@@ -1,0 +1,1161 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "ms7cqbd8ibgb2kfgr6",
+      "type": "text",
+      "x": 40,
+      "y": 24,
+      "strokeColor": "#1e1e1e",
+      "text": "Laser TTL Safety Chain",
+      "fontSize": 30,
+      "fontFamily": 1,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8jbkks6cbffa",
+      "type": "text",
+      "x": 40,
+      "y": 66,
+      "strokeColor": "#6741d9",
+      "text": "HARDWARE_WIRING.md §9.3, §11, §11a.   laser TTL  =  translated GPIO 18  ∧  74HC123 1Q",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd86lsb7ijtexs",
+      "type": "text",
+      "x": 40,
+      "y": 90,
+      "strokeColor": "#e03131",
+      "text": "One sustained HIGH per pulse — NEVER PWM. Retriggering edges inside the one-shot window would hold Q HIGH indefinitely and defeat the duration cap.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "gpio18",
+      "type": "rectangle",
+      "x": 40,
+      "y": 210,
+      "width": 180,
+      "height": 74,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "GPIO 18\nRPi pin 12 · 3.3 V"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8ynosugtx8o",
+      "type": "line",
+      "x": 220,
+      "y": 247,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          110,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd83ubbj4f5x1r",
+      "type": "ellipse",
+      "x": 262,
+      "y": 241,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8fov36g9xqrd",
+      "type": "line",
+      "x": 268,
+      "y": 247,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          73
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "pda",
+      "type": "rectangle",
+      "x": 220,
+      "y": 320,
+      "width": 96,
+      "height": 34,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8l7s27qeoub",
+      "type": "line",
+      "x": 268,
+      "y": 354,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8t8cvaxa1k3d",
+      "type": "line",
+      "x": 250,
+      "y": 404,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd87rux5wed196",
+      "type": "line",
+      "x": 257,
+      "y": 411,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8gsofzlm4x3t",
+      "type": "line",
+      "x": 263,
+      "y": 418,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8ma4mgtzk92k",
+      "type": "text",
+      "x": 294,
+      "y": 397,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8jz2h5w98ki",
+      "type": "text",
+      "x": 40,
+      "y": 432,
+      "strokeColor": "#e03131",
+      "text": "(a)  broken input wire, Pi not yet\nbooted, or GPIO 18 released\nback to an input",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ic2",
+      "type": "rectangle",
+      "x": 330,
+      "y": 180,
+      "width": 250,
+      "height": 250,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8kpikn71prgd",
+      "type": "text",
+      "x": 348,
+      "y": 192,
+      "strokeColor": "#6741d9",
+      "text": "SN74AHCT125N #2",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd806f8lzxd0gop",
+      "type": "text",
+      "x": 348,
+      "y": 214,
+      "strokeColor": "#868e96",
+      "text": "1 of 4 channels used",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8qq4l7boegj",
+      "type": "text",
+      "x": 348,
+      "y": 238,
+      "strokeColor": "#1e1e1e",
+      "text": " 2  1A  ← GPIO 18\n 3  1Y  → fire line\n 1  /OE → GND\n14  VCC → +5 V\n 7  GND → common\n\nunused  5,9,12 (A)  → GND\n        4,10,13 (/OE)→ GND\n        6,8,11 (Y)  → open\n100 nF across 14 ↔ 7",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8xtj8d78d0ai",
+      "type": "line",
+      "x": 580,
+      "y": 247,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8seaw8g0rmin",
+      "type": "line",
+      "x": 640,
+      "y": 224,
+      "strokeColor": "#6741d9",
+      "strokeWidth": 3,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          416
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd8zm4bv4v216",
+      "type": "text",
+      "x": 586,
+      "y": 452,
+      "strokeColor": "#6741d9",
+      "text": "FIRE LINE\ntranslated\nGPIO 18, 5 V",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9odne7exyvde",
+      "type": "ellipse",
+      "x": 634,
+      "y": 244,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9vdk882uxzv",
+      "type": "line",
+      "x": 640,
+      "y": 250,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9i0binngya1",
+      "type": "ellipse",
+      "x": 634,
+      "y": 286,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd96fj6bsemrc8",
+      "type": "line",
+      "x": 640,
+      "y": 292,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9jx43g7z32cq",
+      "type": "ellipse",
+      "x": 634,
+      "y": 524,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9lunh495i419",
+      "type": "line",
+      "x": 640,
+      "y": 530,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          450,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9rsuyy8nv78r",
+      "type": "ellipse",
+      "x": 634,
+      "y": 634,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9cv9groarbn5",
+      "type": "line",
+      "x": 640,
+      "y": 640,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          20
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.936Z",
+      "updatedAt": "2026-07-30T10:09:21.936Z",
+      "version": 1
+    },
+    {
+      "id": "pdb",
+      "type": "rectangle",
+      "x": 592,
+      "y": 660,
+      "width": 96,
+      "height": 34,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9di3sjw6n8ik",
+      "type": "line",
+      "x": 640,
+      "y": 694,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9bmd20j3b3kq",
+      "type": "line",
+      "x": 622,
+      "y": 744,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9eblyr0gd226",
+      "type": "line",
+      "x": 629,
+      "y": 751,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9za0dyz1o2q",
+      "type": "line",
+      "x": 635,
+      "y": 758,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9suc00x1shmb",
+      "type": "text",
+      "x": 666,
+      "y": 737,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9vyffdp1uj79",
+      "type": "text",
+      "x": 700,
+      "y": 664,
+      "strokeColor": "#e03131",
+      "text": "(b)  translator Hi-Z: unpowered,\n/OE high, or IC pulled from\nits socket — nothing else\ncovers this case",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ic123",
+      "type": "rectangle",
+      "x": 700,
+      "y": 180,
+      "width": 352,
+      "height": 310,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9h96pgzdyt59",
+      "type": "text",
+      "x": 718,
+      "y": 192,
+      "strokeColor": "#6741d9",
+      "text": "74HC123  retriggerable one-shot",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9m22vbzmii",
+      "type": "text",
+      "x": 718,
+      "y": 216,
+      "strokeColor": "#1e1e1e",
+      "text": " 1  1A        → GND  (required for the 1B\n                      rising edge to trigger)\n 2  1B        ← fire line   (+edge trigger)\n 3  1CLR/1RD  ← fire line   (resets while idle)\n13  1Q        → 74HC08 pin 2    ACTIVE HIGH\n 4  1Q-bar    → open            NOT this one\n16  VCC       → +5 V\n 8  GND       → common ground\n\nunused ch 2:  11 (2CLR) LOW\n              9,10 (2A,2B) to a defined level\n              6,7 (2Cext, 2Rext/Cext) open\n100 nF ceramic across 16 ↔ 8",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "tbox",
+      "type": "rectangle",
+      "x": 700,
+      "y": 510,
+      "width": 352,
+      "height": 152,
+      "backgroundColor": "#fff9db",
+      "strokeColor": "#e8590c",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9t5jb63ia0o",
+      "type": "text",
+      "x": 716,
+      "y": 520,
+      "strokeColor": "#e8590c",
+      "text": "TIMING NETWORK — channel 1",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9yz33dil6vwa",
+      "type": "text",
+      "x": 716,
+      "y": 544,
+      "strokeColor": "#1e1e1e",
+      "text": "pin 14  1Rext/Cext ── 220 kΩ ──► +5 V\npin 15  1Cext ────── 1 µF ────── pin 14",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9l6rnhhnfmbr",
+      "type": "text",
+      "x": 716,
+      "y": 588,
+      "strokeColor": "#e03131",
+      "text": "The two channels are MIRRORED. Channel 2 is\n6 = 2Cext, 7 = 2Rext/Cext; channel 1 reverses it.\nThe 220 kΩ goes to PIN 14. On pin 15 it feeds the\ndischarge node and the measured period is meaningless.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ic08",
+      "type": "rectangle",
+      "x": 1090,
+      "y": 500,
+      "width": 320,
+      "height": 190,
+      "backgroundColor": "#d0bfff",
+      "strokeColor": "#6741d9",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9up9ur13u2m",
+      "type": "text",
+      "x": 1108,
+      "y": 512,
+      "strokeColor": "#6741d9",
+      "text": "SN74HC08N  quad 2-input AND",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9gzw0nn9napq",
+      "type": "text",
+      "x": 1108,
+      "y": 536,
+      "strokeColor": "#1e1e1e",
+      "text": " 1  1A ← fire line\n 2  1B ← 74HC123 pin 13 (1Q)\n 3  1Y → laser-driver TTL pin\n14  VCC → +5 V     7  GND → common\n\nunused gates: tie every input to a\ndefined level, leave outputs open\n100 nF ceramic across 14 ↔ 7",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9ydttmwhm6w",
+      "type": "line",
+      "x": 1052,
+      "y": 420,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          198,
+          0
+        ],
+        [
+          198,
+          80
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9dijcdbiyh65",
+      "type": "text",
+      "x": 1064,
+      "y": 394,
+      "strokeColor": "#6741d9",
+      "text": "1Q (pin 13) → 1B (pin 2)",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd99v1kcawuanf",
+      "type": "line",
+      "x": 1410,
+      "y": 598,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          150,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9mi4qhwc11ff",
+      "type": "ellipse",
+      "x": 1464,
+      "y": 592,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9g6w65ckv9dt",
+      "type": "line",
+      "x": 1470,
+      "y": 598,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          62
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "pdc",
+      "type": "rectangle",
+      "x": 1422,
+      "y": 660,
+      "width": 96,
+      "height": 34,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd97uvn9rc5gz7",
+      "type": "line",
+      "x": 1470,
+      "y": 694,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd91ru0kb55ota",
+      "type": "line",
+      "x": 1452,
+      "y": 744,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9jf11q979qo",
+      "type": "line",
+      "x": 1459,
+      "y": 751,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd936q1endxb9k",
+      "type": "line",
+      "x": 1465,
+      "y": 758,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9o390q840bpc",
+      "type": "text",
+      "x": 1496,
+      "y": 737,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9zyeb3xnvso",
+      "type": "text",
+      "x": 1120,
+      "y": 706,
+      "strokeColor": "#e03131",
+      "text": "(c)  74HC08 unpowered or removed, or a\nbroken TTL cable. (a) and (b) are both on\nthe translator side and do not reach past\nthe AND gate — nothing else covers this.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ldrv",
+      "type": "rectangle",
+      "x": 1560,
+      "y": 560,
+      "width": 220,
+      "height": 76,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "Laser driver\nTTL-switch pin"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9bl9bivgtepo",
+      "type": "text",
+      "x": 1560,
+      "y": 646,
+      "strokeColor": "#e03131",
+      "text": "Confirm this input is\nACTIVE HIGH before\nconnecting it. On an\nactive-LOW input every\npull-down above becomes\na FIRE command.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "wz",
+      "type": "rectangle",
+      "x": 40,
+      "y": 790,
+      "width": 1000,
+      "height": 150,
+      "backgroundColor": "#ebfbee",
+      "strokeColor": "#2f9e44",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd97xiq2ieyw78",
+      "type": "text",
+      "x": 58,
+      "y": 802,
+      "strokeColor": "#2f9e44",
+      "text": "WHY THE ONE-SHOT EXISTS",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd95m35ghiqcqs",
+      "type": "text",
+      "x": 58,
+      "y": 828,
+      "strokeColor": "#1e1e1e",
+      "text": "Every SOFTWARE mechanism that can end a pulse — enforce_max_pulse, execute_cycle, Laser::fire's re-entry check, the\nwatchdog, the E-stop poll — runs on the control thread. If that thread hangs with GPIO 18 HIGH, none of them fires.\nThe one-shot is not on that thread and needs neither software nor an operator: it is the ONLY autonomous enforcer of the\nduration bound. A normal short pulse passes through unchanged because the AND gate follows GPIO 18; a stuck-HIGH GPIO 18\nis force-cut when Q times out.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "vz",
+      "type": "rectangle",
+      "x": 1070,
+      "y": 790,
+      "width": 720,
+      "height": 150,
+      "backgroundColor": "#fff5f5",
+      "strokeColor": "#e03131",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9emetd4sx4j8",
+      "type": "text",
+      "x": 1088,
+      "y": 802,
+      "strokeColor": "#e03131",
+      "text": "MANDATORY SCOPE TESTS — before either laser is connected",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9d0lhs81jfbi",
+      "type": "text",
+      "x": 1088,
+      "y": 828,
+      "strokeColor": "#1e1e1e",
+      "text": "1.  10 ms GPIO 18 pulse → equally short laser TTL. If it stretches to the\n    full period, Q is driving the TTL alone: the AND gate is missing.\n2.  GPIO 18 held HIGH → TTL goes LOW at the measured period, stays LOW.\n3.  Pull AHCT125 #2 → TTL stays LOW.  (proves (b))\n4.  Pull SN74HC08N → TTL at the connector stays LOW.  (proves (c))\n5.  Disconnect the GPIO 18 wire → TTL stays LOW.  (proves (a))\n6.  Record the measured period.",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd9yfzh30y8ev",
+      "type": "text",
+      "x": 40,
+      "y": 966,
+      "strokeColor": "#1e1e1e",
+      "text": "Nominal period for a vendor coefficient of 0.45 and the reported 220 kΩ × 1 µF is ≈ 99 ms — but the on-hand device's manufacturer and the passive tolerances are not recorded,\nso THE BOUND IS THE MEASURED ASSEMBLED PERIOD, not the calculation. R/C tolerance alone can swing it ±20 %. At ≈99 ms the hardware sits just below the ~105 ms real\nsoftware bound, so it becomes the binding limit and will also clip legitimate maximum-length pulses. If the backstop should only trip on a failure, raise it above the software\nbound (e.g. C_ext = 1.5 µF → ~130–150 ms) and re-measure.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cqbd92svseriiug3",
+      "type": "text",
+      "x": 40,
+      "y": 1058,
+      "strokeColor": "#e8590c",
+      "text": "Residual risk: the '123 is itself a single component, and a broken AND gate or a failed one-shot must be considered in the FMEA. The arm switch and E-stop remain the outer\nlayers and are not on the control thread — but both need a human hand. The monostable is the only autonomous enforcer of the duration bound.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:09:21.937Z",
+      "updatedAt": "2026-07-30T10:09:21.937Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}

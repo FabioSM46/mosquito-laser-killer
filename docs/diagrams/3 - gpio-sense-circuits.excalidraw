@@ -1,0 +1,1786 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "ms7chivp1vzx8fidv6o",
+      "type": "text",
+      "x": 40,
+      "y": 24,
+      "strokeColor": "#1e1e1e",
+      "text": "Arm, E-Stop & Door Sense Circuits",
+      "fontSize": 30,
+      "fontFamily": 1,
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqd4h7791blov",
+      "type": "text",
+      "x": 40,
+      "y": 66,
+      "strokeColor": "#868e96",
+      "text": "HARDWARE_WIRING.md §5, §6, §6a.  The filled black dots are real connections. Every leg of each divider lands on ONE junction.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq6uzxbi8fb4s",
+      "type": "text",
+      "x": 40,
+      "y": 86,
+      "strokeColor": "#e03131",
+      "text": "Meter each junction with its GPIO wire DISCONNECTED, before attaching it to the Pi.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqku3etvkjsxg",
+      "type": "text",
+      "x": 40,
+      "y": 126,
+      "strokeColor": "#e8590c",
+      "text": "ARM SWITCH → GPIO 24   (active HIGH)",
+      "fontSize": 16,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "v12",
+      "type": "rectangle",
+      "x": 40,
+      "y": 160,
+      "width": 160,
+      "height": 56,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "12 V +\nK1-switched"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "arm",
+      "type": "rectangle",
+      "x": 232,
+      "y": 160,
+      "width": 170,
+      "height": 56,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "ARM switch"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "door",
+      "type": "rectangle",
+      "x": 434,
+      "y": 160,
+      "width": 190,
+      "height": 56,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "DOOR contact 2 (NC)"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ldrv",
+      "type": "rectangle",
+      "x": 830,
+      "y": 160,
+      "width": 200,
+      "height": 56,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "Laser driver +VIN"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq8c87z6b6afl",
+      "type": "arrow",
+      "x": 208,
+      "y": 188,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "v12"
+      },
+      "end": {
+        "id": "arm"
+      },
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqjeyaiag8jw",
+      "type": "arrow",
+      "x": 410,
+      "y": 188,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "arm"
+      },
+      "end": {
+        "id": "door"
+      },
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqss6niotqf4",
+      "type": "line",
+      "x": 624,
+      "y": 188,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          76,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq6mp6sof1r5w",
+      "type": "ellipse",
+      "x": 694,
+      "y": 182,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqf812s731ryk",
+      "type": "line",
+      "x": 700,
+      "y": 188,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          82
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "r10k",
+      "type": "rectangle",
+      "x": 640,
+      "y": 270,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "10 kΩ"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqjry9fxc3m8",
+      "type": "line",
+      "x": 700,
+      "y": 316,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          54
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq0q15fisxzczd",
+      "type": "line",
+      "x": 440,
+      "y": 370,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          630,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqcrh6zviudd",
+      "type": "ellipse",
+      "x": 434,
+      "y": 364,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqjewgdd8gljd",
+      "type": "ellipse",
+      "x": 694,
+      "y": 364,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqs53yie8osqh",
+      "type": "ellipse",
+      "x": 934,
+      "y": 364,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.770Z",
+      "updatedAt": "2026-07-30T10:02:31.770Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqieqrwh5jnn",
+      "type": "text",
+      "x": 436,
+      "y": 338,
+      "strokeColor": "#2f9e44",
+      "text": "ONE junction — every leg lands here",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq059oczqwwusk",
+      "type": "line",
+      "x": 440,
+      "y": 370,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          34
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "r3k3",
+      "type": "rectangle",
+      "x": 380,
+      "y": 404,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "3.3 kΩ"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq9o0zoe06365",
+      "type": "line",
+      "x": 440,
+      "y": 450,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          40
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq5m9qjhh8ne",
+      "type": "line",
+      "x": 422,
+      "y": 490,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqoidwrp6hbfp",
+      "type": "line",
+      "x": 429,
+      "y": 497,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivql6sgtf2oya",
+      "type": "line",
+      "x": 435,
+      "y": 504,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq63pu6l1kpfx",
+      "type": "text",
+      "x": 466,
+      "y": 483,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqmek9ei0lwhk",
+      "type": "line",
+      "x": 700,
+      "y": 370,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          34
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "c100n",
+      "type": "rectangle",
+      "x": 640,
+      "y": 404,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "100 nF"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivquyudha31y7g",
+      "type": "line",
+      "x": 700,
+      "y": 450,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          40
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq6002f2o38ac",
+      "type": "line",
+      "x": 682,
+      "y": 490,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq5i5v0v7eawq",
+      "type": "line",
+      "x": 689,
+      "y": 497,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqckla14wgfo",
+      "type": "line",
+      "x": 695,
+      "y": 504,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqf9x91xorxpq",
+      "type": "text",
+      "x": 726,
+      "y": 483,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqrdzsg5gxw7r",
+      "type": "line",
+      "x": 940,
+      "y": 370,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          44
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq526sf5gx1om",
+      "type": "line",
+      "x": 918,
+      "y": 420,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -6
+        ],
+        [
+          44,
+          -6
+        ],
+        [
+          44,
+          -12
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqxh6k9ebv9za",
+      "type": "line",
+      "x": 926,
+      "y": 440,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "fillStyle": "solid",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          14,
+          -24
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqp3hn5n4zfzk",
+      "type": "text",
+      "x": 964,
+      "y": 394,
+      "strokeColor": "#2f9e44",
+      "text": "cathode",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq7cb5twz3gf8",
+      "type": "text",
+      "x": 964,
+      "y": 430,
+      "strokeColor": "#2f9e44",
+      "text": "anode",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqbix1grhn3dt",
+      "type": "line",
+      "x": 940,
+      "y": 440,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqt7u2twjsmp",
+      "type": "line",
+      "x": 922,
+      "y": 490,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqiqovfphii5",
+      "type": "line",
+      "x": 929,
+      "y": 497,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqwxih0urkmsh",
+      "type": "line",
+      "x": 935,
+      "y": 504,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqw4fvwtjpaxq",
+      "type": "text",
+      "x": 966,
+      "y": 483,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "gpio24",
+      "type": "rectangle",
+      "x": 1090,
+      "y": 342,
+      "width": 210,
+      "height": 56,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "GPIO 24 · pin 18"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqwa06x4uon9",
+      "type": "text",
+      "x": 1094,
+      "y": 410,
+      "strokeColor": "#2f9e44",
+      "text": "≈ 2.98 V when armed\n12 V × 3.3 / (10 + 3.3)",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqg95e7wkrgh8",
+      "type": "line",
+      "x": 700,
+      "y": 188,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          130,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqcssnx38v4wu",
+      "type": "text",
+      "x": 40,
+      "y": 540,
+      "strokeColor": "#e03131",
+      "text": "The 3.3 kΩ is the lower leg of the divider and it MUST\nland on the junction. Omit it and the pin STILL READS\nHIGH: it sees 12 V through 10 kΩ with the Zener as the\nonly thing between the rail and a 3.3 V input, passing\n~0.9 mA continuously. It \"works\" until the Zener dies.\nThat is what makes the omission dangerous rather than\nmerely wrong.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqw0ufwm0hz5q",
+      "type": "text",
+      "x": 470,
+      "y": 540,
+      "strokeColor": "#1e1e1e",
+      "text": "Meter every resistor: 3.3 kΩ, NOT the stocked\n3.3 Ω. The Ω part gives ≈ 4 mV at the pin — the\nPi could never observe an armed state.\n\n100 nF debounces the switch. The 10 kΩ limits\ncurrent from the 12 V rail.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqzr0b418pos9",
+      "type": "text",
+      "x": 900,
+      "y": 540,
+      "strokeColor": "#e03131",
+      "text": "BZX55C3V3 — cathode (the banded end) at the junction,\nanode to GND. Fitted backwards it is a forward-biased\ndiode pinning the junction near 0.7 V, so the Pi can\nnever read armed. Fail-safe, but silent and baffling.\nConfirm the band with a multimeter diode test.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqfo3sux7izs",
+      "type": "text",
+      "x": 40,
+      "y": 726,
+      "strokeColor": "#e8590c",
+      "text": "E-STOP → GPIO 25   (active LOW, fail-safe)",
+      "fontSize": 16,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "v33",
+      "type": "rectangle",
+      "x": 40,
+      "y": 760,
+      "width": 160,
+      "height": 56,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "3.3 V (Pi)"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "estop",
+      "type": "rectangle",
+      "x": 232,
+      "y": 760,
+      "width": 200,
+      "height": 56,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "E-STOP pole 2 (NC)"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq1fs47lr4pmz",
+      "type": "arrow",
+      "x": 208,
+      "y": 788,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "v33"
+      },
+      "end": {
+        "id": "estop"
+      },
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqp6q55kowggh",
+      "type": "line",
+      "x": 432,
+      "y": 788,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          268,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq6d8glfhqroo",
+      "type": "ellipse",
+      "x": 694,
+      "y": 782,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqh0s0w9rfkgp",
+      "type": "line",
+      "x": 700,
+      "y": 788,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          82
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "r1k",
+      "type": "rectangle",
+      "x": 640,
+      "y": 870,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "1 kΩ"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.771Z",
+      "updatedAt": "2026-07-30T10:02:31.771Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqvrwp0whcf2",
+      "type": "line",
+      "x": 700,
+      "y": 916,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          54
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqv18kyadbnvf",
+      "type": "line",
+      "x": 440,
+      "y": 970,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          630,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqsz1f13c2u3",
+      "type": "ellipse",
+      "x": 434,
+      "y": 964,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqn1ndgkr5bh",
+      "type": "ellipse",
+      "x": 694,
+      "y": 964,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqagzxp73oqpp",
+      "type": "ellipse",
+      "x": 934,
+      "y": 964,
+      "width": 12,
+      "height": 12,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqy04l5sgcjo",
+      "type": "text",
+      "x": 436,
+      "y": 938,
+      "strokeColor": "#2f9e44",
+      "text": "ONE junction — every leg lands here",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqcxz7bb3xo44",
+      "type": "line",
+      "x": 440,
+      "y": 970,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          34
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "r3k3b",
+      "type": "rectangle",
+      "x": 380,
+      "y": 1004,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "3.3 kΩ"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqr6p29tm6l4o",
+      "type": "line",
+      "x": 440,
+      "y": 1050,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          40
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq0cu6agvggriv",
+      "type": "line",
+      "x": 422,
+      "y": 1090,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq8yatigyn39g",
+      "type": "line",
+      "x": 429,
+      "y": 1097,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqexvkp4xzlt",
+      "type": "line",
+      "x": 435,
+      "y": 1104,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqrjgk5ut4uhk",
+      "type": "text",
+      "x": 466,
+      "y": 1083,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqt61fybrxqir",
+      "type": "line",
+      "x": 700,
+      "y": 970,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          34
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "c100nb",
+      "type": "rectangle",
+      "x": 640,
+      "y": 1004,
+      "width": 120,
+      "height": 46,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "100 nF"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq3evcmbrh6mv",
+      "type": "line",
+      "x": 700,
+      "y": 1050,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          40
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqy29ahgvk76h",
+      "type": "line",
+      "x": 682,
+      "y": 1090,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.772Z",
+      "updatedAt": "2026-07-30T10:02:31.772Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqzy8sg7w7pjf",
+      "type": "line",
+      "x": 689,
+      "y": 1097,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq7g2pwcfn8n9",
+      "type": "line",
+      "x": 695,
+      "y": 1104,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqzkr8ld713z",
+      "type": "text",
+      "x": 726,
+      "y": 1083,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqctteyd645tl",
+      "type": "line",
+      "x": 940,
+      "y": 970,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          44
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq625ozxfsgn",
+      "type": "line",
+      "x": 918,
+      "y": 1020,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -6
+        ],
+        [
+          44,
+          -6
+        ],
+        [
+          44,
+          -12
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq4a5z199l2yc",
+      "type": "line",
+      "x": 926,
+      "y": 1040,
+      "backgroundColor": "#1e1e1e",
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "fillStyle": "solid",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          28,
+          0
+        ],
+        [
+          14,
+          -24
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqx14skbd88",
+      "type": "text",
+      "x": 964,
+      "y": 994,
+      "strokeColor": "#2f9e44",
+      "text": "cathode",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq6bkzmt86rh3",
+      "type": "text",
+      "x": 964,
+      "y": 1030,
+      "strokeColor": "#2f9e44",
+      "text": "anode",
+      "fontSize": 10,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqsyex4whson8",
+      "type": "line",
+      "x": 940,
+      "y": 1040,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          50
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqkknoqb7wd6j",
+      "type": "line",
+      "x": 922,
+      "y": 1090,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          36,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq16lhxml5xvi",
+      "type": "line",
+      "x": 929,
+      "y": 1097,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          22,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqsyymlc65i2r",
+      "type": "line",
+      "x": 935,
+      "y": 1104,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqaiunacss0ob",
+      "type": "text",
+      "x": 966,
+      "y": 1083,
+      "strokeColor": "#868e96",
+      "text": "GND",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "gpio25",
+      "type": "rectangle",
+      "x": 1090,
+      "y": 942,
+      "width": 210,
+      "height": 56,
+      "backgroundColor": "#a5d8ff",
+      "strokeColor": "#1971c2",
+      "label": {
+        "text": "GPIO 25 · pin 22"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqjossvokl9i",
+      "type": "text",
+      "x": 1094,
+      "y": 1010,
+      "strokeColor": "#2f9e44",
+      "text": "≈ 2.53 V when released\n3.3 V × 3.3 / (1 + 3.3)",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivqj6mid92242",
+      "type": "text",
+      "x": 40,
+      "y": 1140,
+      "strokeColor": "#e03131",
+      "text": "Series resistor is 1 kΩ, NOT the arm circuit's 10 kΩ. The\nsource here is the Pi's own 3.3 V rail, so the divider must\nbe recomputed: 10 kΩ would give ≈ 0.82 V, below V_IH, so\nthe pin would read \"pressed\" permanently and the system\ncould never leave SAFE_HALT. If your bench was built from\nan older drawing, replace it.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq0owo7i7ogq2a",
+      "type": "text",
+      "x": 470,
+      "y": 1140,
+      "strokeColor": "#2f9e44",
+      "text": "Pressed, or a broken wire → the 3.3 kΩ pulls the\npin LOW → SAFE_HALT.\n\nFail-safe: a pressed button and a severed wire\nproduce the same safe state, which is the whole\nreason the pull-down is there.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq0bjcry9h8f8e",
+      "type": "text",
+      "x": 900,
+      "y": 1140,
+      "strokeColor": "#1e1e1e",
+      "text": "Pole 1 of the same mushroom breaks the K1 contactor\ncoil circuit (drawing 2). This pole is sense only — it\ntells the software, it does not remove power.\n\nA monitored-safety-relay architecture would need a\nthird contact, or this sense would move to a K1 aux.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    },
+    {
+      "id": "ms7chivq732rw7hglvm",
+      "type": "text",
+      "x": 40,
+      "y": 1268,
+      "strokeColor": "#2f9e44",
+      "text": "Door interlock contact 2 sits between the arm switch and the sense tap, so an open door reads as a disarm on GPIO 24. The existing\nFiringController::set_armed(false) path handles it — no door GPIO, no code change. Contact 1 is in the K1 coil circuit (drawing 2).",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T10:02:31.773Z",
+      "updatedAt": "2026-07-30T10:02:31.773Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}

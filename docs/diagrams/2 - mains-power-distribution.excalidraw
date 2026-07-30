@@ -1,0 +1,1310 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "mcp-excalidraw-server",
+  "elements": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 40,
+      "y": 24,
+      "strokeColor": "#1e1e1e",
+      "text": "Mains Power, Safety Contactor & DC Distribution",
+      "fontSize": 30,
+      "fontFamily": 1,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "sub1",
+      "type": "text",
+      "x": 40,
+      "y": 66,
+      "strokeColor": "#868e96",
+      "text": "HARDWARE_WIRING.md §3, §4.  Mains does NOT pass through the mushroom contact — K1 switches, the mushroom breaks K1's coil circuit.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "sub2",
+      "type": "text",
+      "x": 40,
+      "y": 86,
+      "strokeColor": "#e03131",
+      "text": "Design and inspection by a qualified person. Nothing in this drawing substitutes for that.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "phead",
+      "type": "text",
+      "x": 40,
+      "y": 126,
+      "strokeColor": "#e8590c",
+      "text": "POWER CIRCUIT — K1 main contacts, double-pole",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "inlet",
+      "type": "rectangle",
+      "x": 40,
+      "y": 154,
+      "width": 190,
+      "height": 76,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "Mains inlet\nnon-polarised"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "iso",
+      "type": "rectangle",
+      "x": 272,
+      "y": 154,
+      "width": 190,
+      "height": 76,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "Isolator\nOCP · RCD"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "tbun",
+      "type": "rectangle",
+      "x": 504,
+      "y": 154,
+      "width": 190,
+      "height": 76,
+      "backgroundColor": "#e9ecef",
+      "strokeColor": "#495057",
+      "label": {
+        "text": "Terminal blocks\nunswitched A / B"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "k1",
+      "type": "rectangle",
+      "x": 736,
+      "y": 144,
+      "width": 200,
+      "height": 96,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "K1 main contacts\n2 poles"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "tbsw",
+      "type": "rectangle",
+      "x": 978,
+      "y": 154,
+      "width": 190,
+      "height": 76,
+      "backgroundColor": "#e9ecef",
+      "strokeColor": "#495057",
+      "label": {
+        "text": "Terminal blocks\nswitched A / B"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "ps15",
+      "type": "rectangle",
+      "x": 1210,
+      "y": 124,
+      "width": 210,
+      "height": 62,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "±15 VDC supply"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "ps12",
+      "type": "rectangle",
+      "x": 1210,
+      "y": 198,
+      "width": 210,
+      "height": 62,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "12 VDC LRS-50-12"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "inlet-note",
+      "type": "text",
+      "x": 40,
+      "y": 238,
+      "strokeColor": "#e03131",
+      "text": "Conductors A and B. On a reversible inlet\n(Type L, Schuko) neither is reliably Live,\nso BOTH are switched — never \"L only\".",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "tbun-note",
+      "type": "text",
+      "x": 476,
+      "y": 238,
+      "strokeColor": "#868e96",
+      "text": "One terminal block per net. A WAGO 221-413\njoins all three of its ports into one net, so it is\nnot a terminal strip and never a barrier.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "k1-note",
+      "type": "text",
+      "x": 930,
+      "y": 248,
+      "strokeColor": "#e03131",
+      "text": "Main poles must be rated for the COMBINED\ncold-start inrush, not the steady-state current:\nthe LRS-50-12 alone specifies 45 A at 230 VAC.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "ps15-note",
+      "type": "text",
+      "x": 1210,
+      "y": 302,
+      "strokeColor": "#868e96",
+      "text": "Three conductors: +15 V, 0 V/COM, −15 V.\nCOM is the galvo driver's signal reference\nand bonds into the common ground.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "pe",
+      "type": "text",
+      "x": 40,
+      "y": 352,
+      "strokeColor": "#2f9e44",
+      "text": "PE  ─────  never switched, never fused  ─────►  both supply PE terminals  ·  enclosure  ·  laser chassis  ·  galvo head and driver chassis",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "lhead",
+      "type": "text",
+      "x": 40,
+      "y": 398,
+      "backgroundColor": "transparent",
+      "strokeColor": "#e8590c",
+      "text": "12 V BRANCH — from the switched 12 VDC supply above",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "fan",
+      "type": "rectangle",
+      "x": 40,
+      "y": 536,
+      "width": 150,
+      "height": 58,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "Cooling fan"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "arm",
+      "type": "rectangle",
+      "x": 222,
+      "y": 426,
+      "width": 180,
+      "height": 72,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "ARM switch"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "door2",
+      "type": "rectangle",
+      "x": 434,
+      "y": 426,
+      "width": 180,
+      "height": 72,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "DOOR interlock\ncontact 2 (NC)"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.475Z",
+      "updatedAt": "2026-07-30T09:57:49.475Z",
+      "version": 1
+    },
+    {
+      "id": "ldrv",
+      "type": "rectangle",
+      "x": 646,
+      "y": 426,
+      "width": 200,
+      "height": 72,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "Laser driver +VIN"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "fan-note",
+      "type": "text",
+      "x": 210,
+      "y": 534,
+      "strokeColor": "#2f9e44",
+      "text": "Fan is UPSTREAM of the ARM switch — a parallel tap, not in series — so it runs whenever the 12 V branch is live.\nDownstream it would stop the instant the operator disarms a diode that was dissipating 2.5 W.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "tap-note",
+      "type": "text",
+      "x": 434,
+      "y": 506,
+      "strokeColor": "#868e96",
+      "text": "The GPIO 24 sense tap is downstream of both (drawing 3), so an open door reads as a disarm.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "ghead-lbl",
+      "type": "text",
+      "x": 1000,
+      "y": 398,
+      "strokeColor": "#e8590c",
+      "text": "±15 V BRANCH",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "gdrv",
+      "type": "rectangle",
+      "x": 1000,
+      "y": 426,
+      "width": 200,
+      "height": 72,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "Galvo driver board"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "ghead",
+      "type": "rectangle",
+      "x": 1240,
+      "y": 426,
+      "width": 190,
+      "height": 72,
+      "backgroundColor": "#b2f2bb",
+      "strokeColor": "#2f9e44",
+      "label": {
+        "text": "X/Y galvo head"
+      },
+      "fontSize": 14,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "czone",
+      "type": "rectangle",
+      "x": 40,
+      "y": 620,
+      "width": 1400,
+      "height": 260,
+      "backgroundColor": "#fff9db",
+      "strokeColor": "#f08c00",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "czone-lbl",
+      "type": "text",
+      "x": 56,
+      "y": 632,
+      "strokeColor": "#e8590c",
+      "text": "CONTROL CIRCUIT — carries only the K1 coil current. This is what makes the E-stop contact rating easy and the restart deliberate.",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "ca",
+      "type": "rectangle",
+      "x": 60,
+      "y": 726,
+      "width": 150,
+      "height": 56,
+      "backgroundColor": "#e9ecef",
+      "strokeColor": "#495057",
+      "label": {
+        "text": "unswitched A"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "ces",
+      "type": "rectangle",
+      "x": 244,
+      "y": 726,
+      "width": 180,
+      "height": 56,
+      "backgroundColor": "#ffc9c9",
+      "strokeColor": "#e03131",
+      "label": {
+        "text": "E-STOP pole 1 NC"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "cdoor",
+      "type": "rectangle",
+      "x": 458,
+      "y": 726,
+      "width": 180,
+      "height": 56,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "DOOR contact 1 NC"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "cstart",
+      "type": "rectangle",
+      "x": 700,
+      "y": 676,
+      "width": 190,
+      "height": 52,
+      "backgroundColor": "#ffec99",
+      "strokeColor": "#f08c00",
+      "label": {
+        "text": "START  ·  NO momentary"
+      },
+      "fontSize": 12,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "caux",
+      "type": "rectangle",
+      "x": 700,
+      "y": 780,
+      "width": 190,
+      "height": 52,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "K1 auxiliary NO  ·  seal-in"
+      },
+      "fontSize": 12,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "ccoil",
+      "type": "rectangle",
+      "x": 952,
+      "y": 726,
+      "width": 150,
+      "height": 56,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "K1 coil"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "cb",
+      "type": "rectangle",
+      "x": 1136,
+      "y": 726,
+      "width": 150,
+      "height": 56,
+      "backgroundColor": "#e9ecef",
+      "strokeColor": "#495057",
+      "label": {
+        "text": "unswitched B"
+      },
+      "fontSize": 13,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "vl1",
+      "type": "line",
+      "x": 662,
+      "y": 702,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          104
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "vl2",
+      "type": "line",
+      "x": 918,
+      "y": 702,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          104
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "hs1",
+      "type": "line",
+      "x": 662,
+      "y": 702,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          38,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.476Z",
+      "updatedAt": "2026-07-30T09:57:49.476Z",
+      "version": 1
+    },
+    {
+      "id": "hs2",
+      "type": "line",
+      "x": 890,
+      "y": 702,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          28,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "ha1",
+      "type": "line",
+      "x": 662,
+      "y": 806,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          38,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "ha2",
+      "type": "line",
+      "x": 890,
+      "y": 806,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          28,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "hm1",
+      "type": "line",
+      "x": 638,
+      "y": 754,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "hm2",
+      "type": "line",
+      "x": 918,
+      "y": 754,
+      "strokeColor": "#1e1e1e",
+      "strokeWidth": 2,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          34,
+          0
+        ]
+      ],
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "par-lbl",
+      "type": "text",
+      "x": 712,
+      "y": 742,
+      "strokeColor": "#868e96",
+      "text": "in parallel",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "coil-note",
+      "type": "text",
+      "x": 60,
+      "y": 798,
+      "strokeColor": "#868e96",
+      "text": "Tapped UPSTREAM of K1's own\nmain poles — otherwise the coil\ncould never pull in.",
+      "fontSize": 11,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "seal-note",
+      "type": "text",
+      "x": 952,
+      "y": 798,
+      "strokeColor": "#1e1e1e",
+      "text": "START energises the coil; the auxiliary contact then closes and holds it.\nAnything that breaks the series path drops K1, which opens the auxiliary\ncontact and destroys the hold. Nothing re-energises K1 but another START.",
+      "fontSize": 12,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "bhead",
+      "type": "text",
+      "x": 40,
+      "y": 912,
+      "strokeColor": "#1e1e1e",
+      "text": "BEHAVIOUR",
+      "fontSize": 15,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "btable",
+      "type": "text",
+      "x": 40,
+      "y": 940,
+      "strokeColor": "#1e1e1e",
+      "text": "EVENT                            K1                    ±15 V and 12 V     TO RESTORE\nMains applied at the isolator    de-energised          OFF                press START\nSTART pressed, then released     energised, sealed in  ON                 —\nE-STOP pressed                   drops out             OFF                release E-stop, THEN press START\nE-STOP released                  stays de-energised    OFF                press START\nEnclosure door opened            drops out             OFF                close door, THEN press START\nMains dip or interruption        drops out             OFF                press START",
+      "fontSize": 12,
+      "fontFamily": 3,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "key1",
+      "type": "text",
+      "x": 40,
+      "y": 1086,
+      "strokeColor": "#e03131",
+      "text": "Releasing the mushroom restores nothing. Only a deliberate START press does — that is the whole point of the seal-in circuit.",
+      "fontSize": 14,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.477Z",
+      "updatedAt": "2026-07-30T09:57:49.477Z",
+      "version": 1
+    },
+    {
+      "id": "key2",
+      "type": "text",
+      "x": 40,
+      "y": 1110,
+      "strokeColor": "#2f9e44",
+      "text": "The Pi is NOT on K1. It keeps running on its own USB-C supply, so the log, the GPIO 25 sense circuit and the 5 V logic rail holding the laser-path pull-downs all survive an E-stop.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "key3",
+      "type": "text",
+      "x": 40,
+      "y": 1134,
+      "strokeColor": "#e8590c",
+      "text": "Residual risk: a welded K1 main pole means the coil drops and the supplies stay live. Detecting that needs a monitored safety relay with mirror-contact feedback (IEC 60947-4-1) — an open item.",
+      "fontSize": 13,
+      "fontFamily": 2,
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh278fm51aaz83g",
+      "type": "arrow",
+      "x": 238,
+      "y": 192,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26,
+          0
+        ]
+      ],
+      "start": {
+        "id": "inlet"
+      },
+      "end": {
+        "id": "iso"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh273e86dlx5lq2",
+      "type": "arrow",
+      "x": 470,
+      "y": 192,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26,
+          0
+        ]
+      ],
+      "start": {
+        "id": "iso"
+      },
+      "end": {
+        "id": "tbun"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27tqeatg895b",
+      "type": "arrow",
+      "x": 702,
+      "y": 192,
+      "strokeColor": "#e03131",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26,
+          0
+        ]
+      ],
+      "start": {
+        "id": "tbun"
+      },
+      "end": {
+        "id": "k1"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh2726kymb46o3e",
+      "type": "arrow",
+      "x": 944,
+      "y": 192,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26,
+          0
+        ]
+      ],
+      "start": {
+        "id": "k1"
+      },
+      "end": {
+        "id": "tbsw"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27424bjd64gl6",
+      "type": "arrow",
+      "x": 1175.9081034944743,
+      "y": 176.26611640786965,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26.18379301105142,
+          -4.0033071959045685
+        ]
+      ],
+      "start": {
+        "id": "tbsw"
+      },
+      "end": {
+        "id": "ps15"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27l7z20yi7ecq",
+      "type": "arrow",
+      "x": 1175.9081034944743,
+      "y": 207.73388359213035,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          26.18379301105142,
+          4.0033071959045685
+        ]
+      ],
+      "start": {
+        "id": "tbsw"
+      },
+      "end": {
+        "id": "ps12"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27k39yu6avjsj",
+      "type": "arrow",
+      "x": 410,
+      "y": 462,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "arm"
+      },
+      "end": {
+        "id": "door2"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27szrnvfofnlc",
+      "type": "arrow",
+      "x": 622,
+      "y": 462,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "door2"
+      },
+      "end": {
+        "id": "ldrv"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh271p2g4hv4cga",
+      "type": "arrow",
+      "x": 1208,
+      "y": 462,
+      "strokeColor": "#2f9e44",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          24,
+          0
+        ]
+      ],
+      "start": {
+        "id": "gdrv"
+      },
+      "end": {
+        "id": "ghead"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27e520mqxx00b",
+      "type": "arrow",
+      "x": 218,
+      "y": 754,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          18,
+          0
+        ]
+      ],
+      "start": {
+        "id": "ca"
+      },
+      "end": {
+        "id": "ces"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27lgyifyilumh",
+      "type": "arrow",
+      "x": 432,
+      "y": 754,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          18,
+          0
+        ]
+      ],
+      "start": {
+        "id": "ces"
+      },
+      "end": {
+        "id": "cdoor"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh278q2ifpl4yoi",
+      "type": "arrow",
+      "x": 1110,
+      "y": 754,
+      "strokeColor": "#1e1e1e",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          18,
+          0
+        ]
+      ],
+      "start": {
+        "id": "ccoil"
+      },
+      "end": {
+        "id": "cb"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "v12",
+      "type": "rectangle",
+      "x": 40,
+      "y": 426,
+      "width": 150,
+      "height": 72,
+      "backgroundColor": "#ffd8a8",
+      "strokeColor": "#e8590c",
+      "label": {
+        "text": "12 V +"
+      },
+      "fontSize": 15,
+      "fontFamily": 2,
+      "roundness": {
+        "type": 3
+      },
+      "fillStyle": "solid",
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh27425az1k02t1",
+      "type": "arrow",
+      "x": 198,
+      "y": 462,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ]
+      ],
+      "start": {
+        "id": "v12"
+      },
+      "end": {
+        "id": "arm"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    },
+    {
+      "id": "ms7cbh273n1st09zk28",
+      "type": "arrow",
+      "x": 115,
+      "y": 506,
+      "strokeColor": "#e8590c",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          22
+        ]
+      ],
+      "start": {
+        "id": "v12"
+      },
+      "end": {
+        "id": "fan"
+      },
+      "createdAt": "2026-07-30T09:57:49.478Z",
+      "updatedAt": "2026-07-30T09:57:49.478Z",
+      "version": 1
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  }
+}
