@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="1900" viewBox="0 0 2600 1900" role="img" aria-labelledby="title desc">
+  <title id="title">Complete control-board wiring — Mosquito Laser Killer</title>
+  <desc id="desc">Consolidated pin-to-pin interconnection map for the Raspberry Pi 5, two SN74AHCT125N buffers, two MCP4922 DACs, 74HC123 one-shot, SN74HC08 AND gate, arm and E-stop sense circuits, cameras, galvo drivers, laser driver, and power and safety modules.</desc>
+  <defs>
+    <style><![CDATA[
+      .title { font: 700 38px Inter, Arial, sans-serif; fill: #102a43; }
+      .subtitle { font: 20px Inter, Arial, sans-serif; fill: #52606d; }
+      .section { font: 700 22px Inter, Arial, sans-serif; fill: #102a43; letter-spacing: .5px; }
+      .box-title { font: 700 21px Inter, Arial, sans-serif; fill: #102a43; }
+      .text { font: 17px Inter, Arial, sans-serif; fill: #243b53; }
+      .small { font: 15px Inter, Arial, sans-serif; fill: #486581; }
+      .tiny { font: 13px Inter, Arial, sans-serif; fill: #52606d; }
+      .mono { font: 15px "DejaVu Sans Mono", Consolas, monospace; fill: #102a43; }
+      .mono-small { font: 13px "DejaVu Sans Mono", Consolas, monospace; fill: #102a43; }
+      .warning { font: 700 17px Inter, Arial, sans-serif; fill: #b42318; }
+      .note { font: 700 15px Inter, Arial, sans-serif; fill: #7a2e0e; }
+      .zone { fill: #f8fbff; stroke: #829ab1; stroke-width: 3; stroke-dasharray: 12 9; }
+      .external-zone { fill: #fbfcfe; stroke: #9fb3c8; stroke-width: 3; stroke-dasharray: 12 9; }
+      .power-zone { fill: #fffaf0; stroke: #d97706; stroke-width: 3; stroke-dasharray: 12 9; }
+      .pi-box { fill: #dbeafe; stroke: #1976d2; stroke-width: 3; }
+      .logic-box { fill: #ede9fe; stroke: #6d28d9; stroke-width: 3; }
+      .dac-box { fill: #ffedd5; stroke: #ea580c; stroke-width: 3; }
+      .driver-box { fill: #dcfce7; stroke: #16a34a; stroke-width: 3; }
+      .laser-box { fill: #fee2e2; stroke: #dc2626; stroke-width: 3; }
+      .safety-box { fill: #fef3c7; stroke: #d97706; stroke-width: 3; }
+      .connector-box { fill: #f1f5f9; stroke: #475569; stroke-width: 2; }
+      .missing-box { fill: #fff1f2; stroke: #e11d48; stroke-width: 3; stroke-dasharray: 9 7; }
+      .wire { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4; }
+      .signal { stroke: #1976d2; }
+      .translated { stroke: #6d28d9; }
+      .analog { stroke: #16a34a; }
+      .laser { stroke: #dc2626; }
+      .v5 { stroke: #f59e0b; }
+      .v33 { stroke: #8b5cf6; }
+      .v12 { stroke: #c2410c; }
+      .v15 { stroke: #be185d; }
+      .gnd { stroke: #334155; }
+      .pe { stroke: #15803d; stroke-dasharray: 11 8; }
+      .mains { stroke: #111827; stroke-width: 6; }
+      .thin { stroke-width: 2.5; }
+      .dot { fill: #111827; }
+      .port { fill: #ffffff; stroke: #334155; stroke-width: 2; }
+      .rail-label { font: 700 15px Inter, Arial, sans-serif; }
+    ]]></style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1976d2"/></marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6d28d9"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/></marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/></marker>
+    <marker id="arrow-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#be185d"/></marker>
+    <marker id="arrow-black" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#111827"/></marker>
+  </defs>
+
+  <rect width="2600" height="1900" fill="#ffffff"/>
+  <text class="title" x="40" y="52">Complete control-board wiring — Raspberry Pi 5 + interface board</text>
+  <text class="subtitle" x="40" y="84">Consolidated interconnection sheet. Pin numbers are physical header / PDIP pins. HARDWARE_WIRING.md remains the source of truth.</text>
+  <text class="warning" x="40" y="112">CLASS 4 LASER • DO NOT ENERGIZE: missing/unverified parts are outlined red. Mains assembly must be designed, built, and inspected by a qualified person.</text>
+
+  <!-- Zones -->
+  <rect class="zone" x="390" y="135" width="1640" height="1285" rx="24"/>
+  <text class="section" x="415" y="170">5 V LOGIC / INTERFACE BOARD — soldered final assembly, not a permanent breadboard</text>
+  <rect class="external-zone" x="2065" y="135" width="495" height="1285" rx="24"/>
+  <text class="section" x="2090" y="170">EXTERNAL MODULES</text>
+
+  <!-- Cameras and Raspberry Pi -->
+  <rect class="pi-box" x="40" y="145" width="145" height="90" rx="14"/>
+  <text class="box-title" x="112" y="178" text-anchor="middle">LEFT</text>
+  <text class="small" x="112" y="202" text-anchor="middle">OV9281</text>
+  <text class="tiny" x="112" y="222" text-anchor="middle">USB 3 • label port</text>
+  <rect class="pi-box" x="205" y="145" width="145" height="90" rx="14"/>
+  <text class="box-title" x="277" y="178" text-anchor="middle">RIGHT</text>
+  <text class="small" x="277" y="202" text-anchor="middle">OV9281</text>
+  <text class="tiny" x="277" y="222" text-anchor="middle">USB 3 • label port</text>
+  <path class="wire signal" d="M112 235 V265 H150 V295" marker-end="url(#arrow-blue)"/>
+  <path class="wire signal" d="M277 235 V265 H245 V295" marker-end="url(#arrow-blue)"/>
+
+  <rect class="pi-box" x="40" y="295" width="310" height="1125" rx="22"/>
+  <text class="box-title" x="195" y="335" text-anchor="middle">RASPBERRY PI 5</text>
+  <text class="small" x="195" y="360" text-anchor="middle">40-pin header + two USB 3 camera ports</text>
+  <line x1="60" y1="382" x2="330" y2="382" stroke="#1976d2" stroke-width="2"/>
+  <text class="mono" x="65" y="414">pin 2/4   +5 V logic rail</text>
+  <text class="mono" x="65" y="444">pin 1/17  +3.3 V sense rail</text>
+  <text class="mono" x="65" y="474">pin 6     GND (common)</text>
+  <line x1="60" y1="492" x2="330" y2="492" stroke="#9fb3c8" stroke-width="2"/>
+  <text class="mono" x="65" y="526">pin 19 • GPIO10 • MOSI</text>
+  <text class="mono" x="65" y="576">pin 23 • GPIO11 • SCLK</text>
+  <text class="mono" x="65" y="626">pin 24 • GPIO8  • CE0 / X</text>
+  <text class="mono" x="65" y="676">pin 26 • GPIO7  • CE1 / Y</text>
+  <text class="tiny" x="65" y="706">pin 21 / GPIO9 / MISO: not used</text>
+  <line x1="60" y1="730" x2="330" y2="730" stroke="#9fb3c8" stroke-width="2"/>
+  <text class="mono" x="65" y="1006">pin 12 • GPIO18 • FIRE</text>
+  <text class="mono" x="65" y="1286">pin 22 • GPIO25 • E-STOP</text>
+  <text class="mono" x="65" y="1366">pin 18 • GPIO24 • ARM</text>
+  <line x1="60" y1="1390" x2="330" y2="1390" stroke="#9fb3c8" stroke-width="2"/>
+  <text class="tiny" x="65" y="1411">Pi is powered separately by USB-C; it is NOT on K1.</text>
+
+  <!-- Board power rails -->
+  <path class="wire v5" d="M350 410 H405 V205 H1995"/>
+  <text class="rail-label" x="420" y="199" fill="#b45309">+5 V FROM PI HEADER • survives E-stop</text>
+  <path class="wire gnd" d="M350 470 H420 V245 H1995"/>
+  <text class="rail-label" x="420" y="239" fill="#334155">COMMON SIGNAL GND • star-bond to galvo COM and 12 V−</text>
+  <path class="wire v33" d="M350 440 H435 V280 H1995"/>
+  <text class="rail-label" x="450" y="274" fill="#7c3aed">+3.3 V FROM PI HEADER • sense / CS pull-ups only</text>
+  <rect class="connector-box" x="1770" y="183" width="205" height="107" rx="12"/>
+  <text class="small" x="1788" y="207">Rail entry:</text>
+  <text class="mono-small" x="1788" y="229">10 µF: +5 V ↔ GND</text>
+  <text class="mono-small" x="1788" y="251">100 nF per IC</text>
+  <text class="tiny" x="1788" y="273">place at supply pins</text>
+
+  <!-- SPI translator -->
+  <rect class="missing-box" x="430" y="320" width="370" height="440" rx="20"/>
+  <text class="box-title" x="455" y="355">SN74AHCT125N #1 — SPI</text>
+  <text class="warning" x="455" y="380">ON ORDER • must be AHCT125</text>
+  <text class="mono" x="455" y="417">2  1A ← MOSI       1Y  3 → SDI bus</text>
+  <text class="mono" x="455" y="467">5  2A ← SCLK       2Y  6 → SCK bus</text>
+  <text class="mono" x="455" y="517">9  3A ← CE0        3Y  8 → X /CS</text>
+  <text class="mono" x="455" y="567">12 4A ← CE1        4Y 11 → Y /CS</text>
+  <text class="mono-small" x="455" y="612">1,4,10,13  /OE → GND (LOW)</text>
+  <text class="mono-small" x="455" y="638">14 VCC → +5 V      7 GND → GND</text>
+  <text class="mono-small" x="455" y="664">100 nF directly across pins 14 ↔ 7</text>
+  <text class="mono-small" x="455" y="703">10 kΩ: pin 9  → +3.3 V (CE0 bias)</text>
+  <text class="mono-small" x="455" y="727">10 kΩ: pin 12 → +3.3 V (CE1 bias)</text>
+  <path class="wire v5 thin" d="M615 320 V205"/>
+  <path class="wire gnd thin" d="M650 320 V245"/>
+  <path class="wire v33 thin" d="M690 320 V280"/>
+
+  <!-- Pi SPI input wires -->
+  <path class="wire signal" d="M350 520 H430" marker-end="url(#arrow-blue)"/>
+  <path class="wire signal" d="M350 570 H430" marker-end="url(#arrow-blue)"/>
+  <path class="wire signal" d="M350 620 H430" marker-end="url(#arrow-blue)"/>
+  <path class="wire signal" d="M350 670 H430" marker-end="url(#arrow-blue)"/>
+
+  <!-- MCP4922 X -->
+  <rect class="dac-box" x="935" y="310" width="440" height="292" rx="20"/>
+  <text class="box-title" x="960" y="344">MCP4922 #1 — X AXIS • PDIP-14</text>
+  <text class="mono-small" x="960" y="374">1 VDD → +5 V       3 /CS ← CE0_5V</text>
+  <text class="mono-small" x="960" y="398">4 SCK ← SCLK_5V    5 SDI ← MOSI_5V</text>
+  <text class="mono-small" x="960" y="422">8 /LDAC → GND      9 /SHDN → +5 V</text>
+  <text class="mono-small" x="960" y="446">11 VREFB → +5 V   13 VREFA → +5 V</text>
+  <text class="mono-small" x="960" y="470">12 AVSS → GND      2,6,7 NC → OPEN</text>
+  <text class="mono" x="960" y="512">14 VOUTA → X driver IN+</text>
+  <text class="mono" x="960" y="542">10 VOUTB → X driver IN−</text>
+  <text class="mono-small" x="960" y="574">100 nF directly across pins 1 ↔ 12</text>
+  <path class="wire v5 thin" d="M1100 310 V205"/>
+  <path class="wire gnd thin" d="M1140 310 V245"/>
+
+  <!-- MCP4922 Y -->
+  <rect class="dac-box" x="935" y="630" width="440" height="292" rx="20"/>
+  <text class="box-title" x="960" y="664">MCP4922 #2 — Y AXIS • PDIP-14</text>
+  <text class="mono-small" x="960" y="694">1 VDD → +5 V       3 /CS ← CE1_5V</text>
+  <text class="mono-small" x="960" y="718">4 SCK ← SCLK_5V    5 SDI ← MOSI_5V</text>
+  <text class="mono-small" x="960" y="742">8 /LDAC → GND      9 /SHDN → +5 V</text>
+  <text class="mono-small" x="960" y="766">11 VREFB → +5 V   13 VREFA → +5 V</text>
+  <text class="mono-small" x="960" y="790">12 AVSS → GND      2,6,7 NC → OPEN</text>
+  <text class="mono" x="960" y="832">14 VOUTA → Y driver IN+</text>
+  <text class="mono" x="960" y="862">10 VOUTB → Y driver IN−</text>
+  <text class="mono-small" x="960" y="894">100 nF directly across pins 1 ↔ 12</text>
+  <path class="wire v5 thin" d="M1100 630 V615 H1970 V205"/>
+  <path class="wire gnd thin" d="M1140 630 V607 H1985 V245"/>
+
+  <!-- Translated SPI fanout -->
+  <path class="wire translated" d="M800 410 H845 V382 H935" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M845 410 V706 H935" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M800 460 H870 V406 H935" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M870 460 V730 H935" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M800 510 H900 V430 H935" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M800 560 H900 V754 H935" marker-end="url(#arrow-purple)"/>
+  <text class="tiny" x="810" y="396" fill="#6d28d9">MOSI_5V fans out</text>
+  <text class="tiny" x="810" y="448" fill="#6d28d9">SCLK_5V fans out</text>
+
+  <!-- Galvo connectors -->
+  <rect class="connector-box" x="1510" y="340" width="440" height="192" rx="16"/>
+  <text class="box-title" x="1535" y="374">JX — X GALVO SIGNAL</text>
+  <text class="mono" x="1535" y="414">1 X+  ← MCP #1 pin 14 VOUTA</text>
+  <text class="mono" x="1535" y="450">2 X−  ← MCP #1 pin 10 VOUTB</text>
+  <text class="mono" x="1535" y="486">3 GND ← common signal GND</text>
+  <text class="warning" x="1535" y="516">Do not ground X−.</text>
+  <path class="wire analog" d="M1375 510 H1450 V405 H1510" marker-end="url(#arrow-green)"/>
+  <path class="wire analog" d="M1375 540 H1475 V441 H1510" marker-end="url(#arrow-green)"/>
+  <path class="wire gnd thin" d="M1510 477 H1488 V245"/>
+
+  <rect class="connector-box" x="1510" y="665" width="440" height="192" rx="16"/>
+  <text class="box-title" x="1535" y="699">JY — Y GALVO SIGNAL</text>
+  <text class="mono" x="1535" y="739">1 Y+  ← MCP #2 pin 14 VOUTA</text>
+  <text class="mono" x="1535" y="775">2 Y−  ← MCP #2 pin 10 VOUTB</text>
+  <text class="mono" x="1535" y="811">3 GND ← common signal GND</text>
+  <text class="warning" x="1535" y="841">Do not ground Y−.</text>
+  <path class="wire analog" d="M1375 830 H1450 V730 H1510" marker-end="url(#arrow-green)"/>
+  <path class="wire analog" d="M1375 860 H1475 V766 H1510" marker-end="url(#arrow-green)"/>
+  <path class="wire gnd thin" d="M1510 802 H1488 V245"/>
+
+  <!-- External galvo drivers -->
+  <rect class="missing-box" x="2095" y="285" width="435" height="245" rx="20"/>
+  <text class="box-title" x="2120" y="321">X GALVO DRIVER</text>
+  <text class="mono" x="2120" y="360">IN+  ← JX-1</text>
+  <text class="mono" x="2120" y="390">IN−  ← JX-2</text>
+  <text class="mono" x="2120" y="420">GND  ← JX-3 / PSU COM</text>
+  <text class="mono" x="2120" y="450">POWER: +15 V / COM / −15 V</text>
+  <text class="warning" x="2120" y="480">NO-GO: differential topology,</text>
+  <text class="warning" x="2120" y="503">2.5 V common-mode unverified</text>
+  <path class="wire analog" d="M1950 405 H2095" marker-end="url(#arrow-green)"/>
+  <path class="wire analog" d="M1950 441 H2065 V390 H2095" marker-end="url(#arrow-green)"/>
+  <path class="wire gnd thin" d="M1950 477 H2040 V420 H2095"/>
+
+  <rect class="missing-box" x="2095" y="610" width="435" height="245" rx="20"/>
+  <text class="box-title" x="2120" y="646">Y GALVO DRIVER</text>
+  <text class="mono" x="2120" y="685">IN+  ← JY-1</text>
+  <text class="mono" x="2120" y="715">IN−  ← JY-2</text>
+  <text class="mono" x="2120" y="745">GND  ← JY-3 / PSU COM</text>
+  <text class="mono" x="2120" y="775">POWER: +15 V / COM / −15 V</text>
+  <text class="warning" x="2120" y="805">NO-GO: verify driver manual</text>
+  <text class="warning" x="2120" y="828">before DAC connection</text>
+  <path class="wire analog" d="M1950 730 H2095" marker-end="url(#arrow-green)"/>
+  <path class="wire analog" d="M1950 766 H2065 V715 H2095" marker-end="url(#arrow-green)"/>
+  <path class="wire gnd thin" d="M1950 802 H2040 V745 H2095"/>
+  <rect class="driver-box" x="2200" y="875" width="330" height="70" rx="14"/>
+  <text class="box-title" x="2365" y="905" text-anchor="middle">X/Y GALVO HEAD</text>
+  <text class="small" x="2365" y="930" text-anchor="middle">driver outputs → head coils</text>
+  <path class="wire analog" d="M2480 530 V865 H2430 V875" marker-end="url(#arrow-green)"/>
+  <path class="wire analog" d="M2290 855 V865 H2300 V875" marker-end="url(#arrow-green)"/>
+
+  <!-- Laser translator -->
+  <rect class="missing-box" x="430" y="900" width="370" height="280" rx="20"/>
+  <text class="box-title" x="455" y="935">SN74AHCT125N #2 — LASER</text>
+  <text class="warning" x="455" y="960">ON ORDER • separate package</text>
+  <text class="mono" x="455" y="1006">2 1A ← GPIO18   1Y 3 → FIRE_5V</text>
+  <text class="mono-small" x="455" y="1040">1 /OE → GND (permanently LOW)</text>
+  <text class="mono-small" x="455" y="1066">14 VCC → +5 V    7 GND → GND</text>
+  <text class="mono-small" x="455" y="1092">4,10,13 /OE → GND</text>
+  <text class="mono-small" x="455" y="1118">unused A pins 5,9,12 → GND</text>
+  <text class="mono-small" x="455" y="1144">unused Y pins 6,8,11 → OPEN</text>
+  <text class="mono-small" x="455" y="1168">100 nF across pins 14 ↔ 7</text>
+  <path class="wire v5 thin" d="M590 900 V875 H1970 V205"/>
+  <path class="wire gnd thin" d="M625 1180 V1405"/>
+  <path class="wire signal" d="M350 1000 H430" marker-end="url(#arrow-blue)"/>
+  <!-- pull-down a -->
+  <circle class="dot" cx="400" cy="1000" r="7"/>
+  <path class="wire gnd thin" d="M400 1000 V1060"/>
+  <rect class="connector-box" x="365" y="1060" width="70" height="42" rx="8"/>
+  <text class="tiny" x="400" y="1086" text-anchor="middle">10 kΩ (a)</text>
+  <path class="wire gnd thin" d="M400 1102 V1165 H420 V1405"/>
+
+  <!-- 74HC123 one-shot -->
+  <rect class="logic-box" x="900" y="885" width="405" height="315" rx="20"/>
+  <text class="box-title" x="925" y="920">74HC123 — CHANNEL 1 BACKSTOP</text>
+  <text class="mono-small" x="925" y="956">1  1A → GND</text>
+  <text class="mono-small" x="925" y="980">2  1B ← FIRE_5V (+edge trigger)</text>
+  <text class="mono-small" x="925" y="1004">3  1CLR/1RD ← FIRE_5V</text>
+  <text class="mono-small" x="925" y="1028">13 1Q → 74HC08 pin 2 (active HIGH)</text>
+  <text class="mono-small" x="925" y="1052">14 1Rext/Cext → 220 kΩ → +5 V</text>
+  <text class="mono-small" x="925" y="1076">15 1Cext → 1 µF → pin 14</text>
+  <text class="mono-small" x="925" y="1100">16 VCC → +5 V      8 GND → GND</text>
+  <text class="mono-small" x="925" y="1124">100 nF directly across pins 16 ↔ 8</text>
+  <text class="mono-small" x="925" y="1155">unused ch2: 9,10,11 → GND; 6,7 OPEN</text>
+  <text class="tiny" x="925" y="1180">pins 4,5,12 outputs open • scope-measure pulse width</text>
+  <path class="wire v5 thin" d="M1080 885 V875"/>
+  <path class="wire gnd thin" d="M1115 1200 V1405"/>
+
+  <!-- Fire 5V bus and pull-down b -->
+  <path class="wire translated" d="M800 1000 H900" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M845 1000 V975 H900"/>
+  <circle class="dot" cx="845" cy="1000" r="7"/>
+  <path class="wire gnd thin" d="M845 1000 V1060"/>
+  <rect class="connector-box" x="810" y="1060" width="70" height="42" rx="8"/>
+  <text class="tiny" x="845" y="1086" text-anchor="middle">10 kΩ (b)</text>
+  <path class="wire gnd thin" d="M845 1102 V1178 H875 V1405"/>
+
+  <!-- 74HC08 AND -->
+  <rect class="logic-box" x="1420" y="900" width="330" height="270" rx="20"/>
+  <text class="box-title" x="1445" y="935">SN74HC08N — GATE 1</text>
+  <text class="mono" x="1445" y="978">1 1A ← FIRE_5V</text>
+  <text class="mono" x="1445" y="1008">2 1B ← 74HC123 1Q</text>
+  <text class="mono" x="1445" y="1038">3 1Y → LASER_TTL</text>
+  <text class="mono-small" x="1445" y="1076">14 VCC → +5 V   7 GND → GND</text>
+  <text class="mono-small" x="1445" y="1100">100 nF across pins 14 ↔ 7</text>
+  <text class="mono-small" x="1445" y="1127">unused inputs 4,5,9,10,12,13 → GND</text>
+  <text class="tiny" x="1445" y="1152">unused outputs 6,8,11 → OPEN</text>
+  <path class="wire v5 thin" d="M1540 900 V875"/>
+  <path class="wire gnd thin" d="M1575 1170 V1405"/>
+  <path class="wire translated" d="M845 1000 V865 H1385 V978 H1420" marker-end="url(#arrow-purple)"/>
+  <path class="wire translated" d="M1305 1028 H1420" marker-end="url(#arrow-purple)"/>
+
+  <!-- Laser connector and external driver -->
+  <rect class="connector-box" x="1800" y="945" width="195" height="178" rx="16"/>
+  <text class="box-title" x="1820" y="978">JL — LASER</text>
+  <text class="mono-small" x="1820" y="1012">1 TTL active-HIGH*</text>
+  <text class="mono-small" x="1820" y="1040">2 logic GND*</text>
+  <text class="mono-small" x="1820" y="1068">other pin(s): per manual*</text>
+  <text class="warning" x="1820" y="1098">*PINOUT UNVERIFIED</text>
+  <path class="wire laser" d="M1750 1038 H1800" marker-end="url(#arrow-red)"/>
+  <circle class="dot" cx="1775" cy="1038" r="7"/>
+  <path class="wire gnd thin" d="M1775 1038 V1090"/>
+  <rect class="connector-box" x="1740" y="1090" width="70" height="42" rx="8"/>
+  <text class="tiny" x="1775" y="1116" text-anchor="middle">10 kΩ (c)</text>
+  <path class="wire gnd thin" d="M1775 1132 V1178 H1795 V1405"/>
+
+  <rect class="missing-box" x="2095" y="970" width="435" height="218" rx="20"/>
+  <text class="box-title" x="2120" y="1005">LASER CONSTANT-CURRENT DRIVER</text>
+  <text class="mono" x="2120" y="1043">TTL*  ← JL-1 LASER_TTL</text>
+  <text class="mono" x="2120" y="1073">GND*  ← JL-2 / common GND</text>
+  <text class="mono" x="2120" y="1103">+VIN* ← 12 V after ARM + DOOR 2</text>
+  <text class="warning" x="2120" y="1135">NO-GO: pinout, thresholds, and</text>
+  <text class="warning" x="2120" y="1159">active-HIGH polarity unverified</text>
+  <path class="wire laser" d="M1995 1008 H2095" marker-end="url(#arrow-red)"/>
+  <path class="wire gnd thin" d="M1995 1040 H2040 V1073 H2095"/>
+  <rect class="laser-box" x="2170" y="1200" width="360" height="90" rx="16"/>
+  <text class="box-title" x="2350" y="1235" text-anchor="middle">2.5 W • 450 nm • CLASS 4</text>
+  <text class="small" x="2350" y="1265" text-anchor="middle">driver output → laser diode module</text>
+  <path class="wire laser" d="M2300 1188 V1200" marker-end="url(#arrow-red)"/>
+
+  <!-- E-stop sense circuit -->
+  <text class="section" x="430" y="1230">PANEL SENSE CIRCUITS</text>
+  <rect class="missing-box" x="430" y="1245" width="770" height="150" rx="18"/>
+  <text class="box-title" x="452" y="1274">E-STOP POLE 2 — GPIO25 • active LOW / fail-safe</text>
+  <path class="wire v33 thin" d="M475 1245 H410 V280 H475"/>
+  <rect class="safety-box" x="500" y="1292" width="180" height="42" rx="9"/>
+  <text class="small" x="590" y="1319" text-anchor="middle">E-stop pole 2 NC</text>
+  <rect class="connector-box" x="715" y="1292" width="90" height="42" rx="9"/>
+  <text class="small" x="760" y="1319" text-anchor="middle">1 kΩ</text>
+  <path class="wire v33 thin" d="M475 1313 H500"/>
+  <path class="wire signal thin" d="M680 1313 H715 M805 1313 H860"/>
+  <circle class="dot" cx="860" cy="1313" r="7"/>
+  <path class="wire signal" d="M860 1313 V1280 H350" marker-end="url(#arrow-blue)"/>
+  <path class="wire gnd thin" d="M860 1313 V1365"/>
+  <text class="mono-small" x="885" y="1340">junction → 3.3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND</text>
+  <text class="tiny" x="885" y="1365">Zener cathode/band at junction; anode to GND • released ≈2.53 V</text>
+  <path class="wire gnd thin" d="M860 1365 V1405"/>
+
+  <!-- Arm + door circuit -->
+  <rect class="missing-box" x="1220" y="1245" width="775" height="150" rx="18"/>
+  <text class="box-title" x="1242" y="1274">ARM + DOOR CONTACT 2 — hard 12 V cut + GPIO24 sense</text>
+  <text class="small" x="1242" y="1303">12 V_K1 → ARM switch → DOOR contact 2 NC → laser driver +VIN</text>
+  <path class="wire v12" d="M1250 1328 H1330"/>
+  <rect class="safety-box" x="1330" y="1308" width="130" height="42" rx="9"/>
+  <text class="small" x="1395" y="1335" text-anchor="middle">ARM</text>
+  <rect class="missing-box" x="1480" y="1308" width="190" height="42" rx="9"/>
+  <text class="small" x="1575" y="1335" text-anchor="middle">DOOR 2 • NC</text>
+  <path class="wire v12" d="M1460 1329 H1480 M1670 1329 H1970" marker-end="url(#arrow-orange)"/>
+  <circle class="dot" cx="1700" cy="1329" r="7"/>
+  <path class="wire signal thin" d="M1700 1329 V1370 H1650"/>
+  <rect class="connector-box" x="1560" y="1350" width="90" height="40" rx="9"/>
+  <text class="small" x="1605" y="1376" text-anchor="middle">10 kΩ</text>
+  <path class="wire signal thin" d="M1560 1370 H1500"/>
+  <circle class="dot" cx="1500" cy="1370" r="7"/>
+  <path class="wire signal" d="M1500 1370 H350" marker-end="url(#arrow-blue)"/>
+  <text class="mono-small" x="1245" y="1390">sense junction → 3.3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND; cathode/band at node • armed ≈2.98 V</text>
+  <path class="wire gnd thin" d="M1500 1370 V1405"/>
+  <path class="wire v12" d="M1970 1329 H2038 V1103 H2095" marker-end="url(#arrow-orange)"/>
+
+  <!-- External cooling fan -->
+  <rect class="driver-box" x="2095" y="1310" width="220" height="82" rx="14"/>
+  <text class="box-title" x="2205" y="1342" text-anchor="middle">LASER FAN</text>
+  <text class="tiny" x="2205" y="1368" text-anchor="middle">12 V upstream of ARM</text>
+  <rect class="missing-box" x="2330" y="1310" width="200" height="82" rx="14"/>
+  <text class="box-title" x="2430" y="1342" text-anchor="middle">DOOR SWITCH</text>
+  <text class="tiny" x="2430" y="1368" text-anchor="middle">2× positive-opening NC</text>
+
+  <!-- Power and hazardous-voltage area -->
+  <rect class="power-zone" x="40" y="1460" width="2520" height="405" rx="24"/>
+  <text class="section" x="65" y="1495">POWER + SAFETY CONTACTOR — functional map only; use drawing 2 for mains terminals and segregation</text>
+  <rect class="connector-box" x="65" y="1525" width="190" height="88" rx="14"/>
+  <text class="box-title" x="160" y="1558" text-anchor="middle">MAINS INLET</text>
+  <text class="small" x="160" y="1586" text-anchor="middle">A • B • PE</text>
+  <rect class="missing-box" x="300" y="1525" width="265" height="88" rx="14"/>
+  <text class="box-title" x="432" y="1558" text-anchor="middle">ISOLATOR / OCP / RCD</text>
+  <text class="tiny" x="432" y="1586" text-anchor="middle">per local rules • not on hand</text>
+  <rect class="missing-box" x="610" y="1525" width="250" height="88" rx="14"/>
+  <text class="box-title" x="735" y="1558" text-anchor="middle">K1 • 2 MAIN POLES</text>
+  <text class="tiny" x="735" y="1586" text-anchor="middle">combined-inrush rated • not on hand</text>
+  <path class="wire mains" d="M255 1558 H300" marker-end="url(#arrow-black)"/>
+  <path class="wire mains" d="M565 1558 H610" marker-end="url(#arrow-black)"/>
+
+  <rect class="missing-box" x="910" y="1508" width="300" height="105" rx="14"/>
+  <text class="box-title" x="1060" y="1542" text-anchor="middle">BIPOLAR GALVO PSU</text>
+  <text class="mono" x="1060" y="1573" text-anchor="middle">+15 V • COM • −15 V</text>
+  <text class="warning" x="1060" y="1598" text-anchor="middle">NOT ON HAND</text>
+  <rect class="connector-box" x="1250" y="1508" width="300" height="105" rx="14"/>
+  <text class="box-title" x="1400" y="1542" text-anchor="middle">MEAN WELL LRS-50-12</text>
+  <text class="mono" x="1400" y="1573" text-anchor="middle">+12 V • 12 V−</text>
+  <text class="tiny" x="1400" y="1598" text-anchor="middle">K1-switched laser branch</text>
+  <path class="wire mains" d="M860 1558 H885 V1545 H910" marker-end="url(#arrow-black)"/>
+  <path class="wire mains" d="M885 1558 V1585 H1250" marker-end="url(#arrow-black)"/>
+
+  <!-- Supply output routes -->
+  <path class="wire v15" d="M1060 1508 V1440 H2050 V450 H2095" marker-end="url(#arrow-pink)"/>
+  <path class="wire v15" d="M2050 775 H2095" marker-end="url(#arrow-pink)"/>
+  <text class="tiny" x="1700" y="1434" fill="#be185d">+15 / COM / −15 three-conductor power harness to BOTH galvo drivers</text>
+  <path class="wire v12" d="M1400 1508 V1440 H1250 V1328" marker-end="url(#arrow-orange)"/>
+  <path class="wire v12" d="M1400 1440 H2070 V1350 H2095" marker-end="url(#arrow-orange)"/>
+  <text class="tiny" x="1420" y="1460" fill="#c2410c">fan upstream; driver branch through ARM + DOOR 2</text>
+
+  <!-- Coil latch circuit -->
+  <rect class="missing-box" x="1600" y="1515" width="925" height="128" rx="16"/>
+  <text class="box-title" x="1625" y="1548">K1 LATCHING COIL CIRCUIT • all parts / ratings require qualified selection</text>
+  <text class="mono" x="1625" y="1582">post-isolator A → E-STOP pole 1 NC → DOOR contact 1 NC → (START NO ∥ K1 AUX NO) → K1 coil → conductor B</text>
+  <text class="warning" x="1625" y="1615">Releasing E-stop or closing door must NOT restart power; a deliberate START press is required.</text>
+  <path class="wire mains thin" d="M565 1578 V1665 H1590 V1578 H1600" marker-end="url(#arrow-black)"/>
+
+  <!-- Pi supply and common signal reference -->
+  <rect class="pi-box" x="65" y="1665" width="310" height="88" rx="14"/>
+  <text class="box-title" x="220" y="1698" text-anchor="middle">SEPARATE USB-C 5 V PSU</text>
+  <text class="small" x="220" y="1727" text-anchor="middle">Pi stays powered through E-stop</text>
+  <path class="wire v5" d="M220 1665 V1638 H195 V1420" marker-end="url(#arrow-orange)"/>
+  <rect class="connector-box" x="430" y="1665" width="560" height="88" rx="14"/>
+  <text class="box-title" x="455" y="1698">COMMON SIGNAL REFERENCE — one central point</text>
+  <text class="small" x="455" y="1727">Pi/DAC/logic GND + galvo PSU COM + driver signal GND + 12 V−</text>
+  <path class="wire gnd thin" d="M420 1405 H2000 V245"/>
+  <path class="wire gnd" d="M710 1665 V1645 H1520 V1405"/>
+
+  <!-- PE rail -->
+  <path class="wire pe" d="M90 1818 H2515"/>
+  <text class="rail-label" x="95" y="1806" fill="#15803d">PROTECTIVE EARTH — never switched, never fused • bond both PSU PE terminals, metal enclosure, laser chassis, galvo driver/head chassis</text>
+  <path class="wire pe thin" d="M160 1613 V1818 M1060 1613 V1818 M1400 1613 V1818 M2300 1290 V1818 M2470 945 V1818"/>
+  <text class="tiny" x="1980" y="1850">PE is a safety conductor; it is not interchangeable with logic GND.</text>
+
+  <!-- Legend -->
+  <rect x="1010" y="1665" width="1515" height="88" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text class="box-title" x="1035" y="1695">WIRE LEGEND</text>
+  <line class="wire signal" x1="1200" y1="1690" x2="1260" y2="1690"/><text class="small" x="1270" y="1697">3.3 V GPIO/SPI</text>
+  <line class="wire translated" x1="1425" y1="1690" x2="1485" y2="1690"/><text class="small" x="1495" y="1697">5 V logic</text>
+  <line class="wire analog" x1="1605" y1="1690" x2="1665" y2="1690"/><text class="small" x="1675" y="1697">analogue differential</text>
+  <line class="wire laser" x1="1870" y1="1690" x2="1930" y2="1690"/><text class="small" x="1940" y="1697">laser TTL</text>
+  <line class="wire v12" x1="2050" y1="1690" x2="2110" y2="1690"/><text class="small" x="2120" y="1697">12 VDC</text>
+  <line class="wire gnd" x1="2240" y1="1690" x2="2300" y2="1690"/><text class="small" x="2310" y="1697">signal GND</text>
+  <line class="wire v5" x1="1200" y1="1723" x2="1260" y2="1723"/><text class="small" x="1270" y="1730">+5 V rail</text>
+  <line class="wire v33" x1="1425" y1="1723" x2="1485" y2="1723"/><text class="small" x="1495" y="1730">+3.3 V rail</text>
+  <line class="wire v15" x1="1605" y1="1723" x2="1665" y2="1723"/><text class="small" x="1675" y="1730">±15 V / COM</text>
+  <line class="wire pe" x1="1870" y1="1723" x2="1930" y2="1723"/><text class="small" x="1940" y="1730">PE bond</text>
+  <rect x="2080" y="1708" width="26" height="20" class="missing-box"/><text class="small" x="2120" y="1725">missing / unverified = NO-GO</text>
+
+  <text class="warning" x="40" y="1885">Before either laser is connected: verify every part marking and pinout against its manufacturer datasheet; meter both sense nodes disconnected from the Pi; scope SPI at the DAC pins; scope all six fail-LOW / one-shot tests in HARDWARE_WIRING.md §9.4 and §11a.</text>
+</svg>

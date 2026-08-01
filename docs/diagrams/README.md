@@ -1,7 +1,7 @@
 # Wiring Diagrams
 
-Excalidraw sources plus PNG renders, numbered in **reading order**: orient with
-the overview, then work inward.
+Editable Excalidraw/SVG sources plus PNG renders, numbered in **reading order**:
+orient with the overview, then work inward.
 
 | Drawing | Covers | Document sections |
 |---------|--------|-------------------|
@@ -10,6 +10,7 @@ the overview, then work inward.
 | `3 - gpio-sense-circuits` | Arm and E-stop sense dividers, Zener polarity, door interlock | [§5](../HARDWARE_WIRING.md#5-arming-switch--gpio-24-sensing-circuit), [§6](../HARDWARE_WIRING.md#6-e-stop-gpio-circuit), [§6a](../HARDWARE_WIRING.md#6a-enclosure-door-interlock) |
 | `4 - spi-level-translation` | AHCT125 #1, both MCP4922s with full pin assignment, galvo driver inputs | [§8](../HARDWARE_WIRING.md#8-spi-bus--mcp4922-dac-wiring), [§9](../HARDWARE_WIRING.md#9-logic-level-translation), [§10](../HARDWARE_WIRING.md#10-galvo-driver-connections) |
 | `5 - laser-ttl-safety-chain` | AHCT125 #2, the 74HC123 one-shot, the AND gate, all three fail-LOW pull-downs | [§9.3](../HARDWARE_WIRING.md#93-the-laser-path-must-fail-low-at-every-stage-not-just-the-first), [§11](../HARDWARE_WIRING.md#11-laser-module-wiring), [§11a](../HARDWARE_WIRING.md#11a-laser-ttl-pulse-duration-backstop-74hc123) |
+| `6 - complete-control-board-wiring` | Consolidated pin-to-pin sheet: Pi header, complete interface board, sense circuits, external modules, and functional power map | [§3](../HARDWARE_WIRING.md#3-mains-power-safety-contactor--e-stop)–[§13](../HARDWARE_WIRING.md#13-grounding--shielding) |
 
 ## Rules
 
@@ -31,7 +32,7 @@ the overview, then work inward.
 
 ## Editing
 
-The sources are plain `.excalidraw` JSON. Either open them at
+Drawings 1–5 use plain `.excalidraw` JSON sources. Either open them at
 [excalidraw.com](https://excalidraw.com), or drive the canvas server:
 
 ```bash
@@ -43,3 +44,8 @@ npx -y mcp-excalidraw-server screenshot --out "docs/diagrams/3 - gpio-sense-circ
 
 Re-export the PNG whenever the source changes — a stale render next to a Class 4
 laser is worse than no render.
+
+Drawing 6 uses an editable SVG source because it is a dense, aligned pin-to-pin
+sheet. Edit `6 - complete-control-board-wiring.svg` in a vector editor or as XML,
+then re-render `6 - complete-control-board-wiring.png`. The SVG is the editable
+source; the PNG is only the convenient preview.

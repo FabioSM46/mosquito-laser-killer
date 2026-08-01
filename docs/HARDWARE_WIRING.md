@@ -59,6 +59,7 @@ order — not build order, which is §17:
 | [3 — GPIO sense circuits](diagrams/3%20-%20gpio-sense-circuits.png) | Arm and E-stop sense dividers, Zener polarity, door interlock (§5, §6, §6a) |
 | [4 — SPI level translation](diagrams/4%20-%20spi-level-translation.png) | AHCT125 #1, both MCP4922s with full pin assignment, galvo inputs (§8, §9, §10) |
 | [5 — laser TTL safety chain](diagrams/5%20-%20laser-ttl-safety-chain.png) | AHCT125 #2, the 74HC123 one-shot, the AND gate, all three pull-downs (§9.3, §11, §11a) |
+| [6 — complete control-board wiring](diagrams/6%20-%20complete-control-board-wiring.png) ([editable SVG](diagrams/6%20-%20complete-control-board-wiring.svg)) | Consolidated Pi-header-to-module wiring, logic rails, sense networks, external connectors, and functional power map (§3–§13) |
 
 The drawings follow this document, not the other way round. Where they disagree,
 this document is correct and the drawing is stale — fix the drawing, and never
