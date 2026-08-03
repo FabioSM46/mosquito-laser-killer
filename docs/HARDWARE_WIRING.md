@@ -144,7 +144,7 @@ the counts to shop against; the rows above are the counts per role.
 | 1 kΩ, 1/2 W | **1** | E-stop series |
 | BZX55C3V3 | **2** | one clamp per sense junction |
 | 10 µF | **1** | 5 V rail bulk |
-| 220 kΩ, 1/2 W | **1** | 74HC123 timing, to **pin 14** (§11a) |
+| 220 kΩ, 1/2 W | **1** | 74HC123 timing, to **pin 15** (§11a) |
 | 1 µF, 50 V ceramic | **1** | 74HC123 timing, pins 15↔14 (§11a) |
 
 Meter every resistor before installation and fit it against the value in the
@@ -901,8 +901,8 @@ SN74AHCT125N #2 1Y (pin 3, §9) ─────┬──────────
 
 Timing network (channel 1) — the pin numbers below are load-bearing, see the
 warning that follows this block:
-    74HC123  1Cext (pin 15) ──── 1 µF / 50 V monolithic ceramic ──── 1Rext/Cext (pin 14)
-    74HC123  1Rext/Cext (pin 14) ── 220 kΩ ──► +5 V
+    74HC123  1Cext (pin 14) ──── 1 µF / 50 V monolithic ceramic ──── 1Rext/Cext (pin 15)
+    74HC123  1Rext/Cext (pin 15) ── 220 kΩ ──► +5 V
     74HC123 VCC (pin 16) ──► +5 V ; GND (pin 8) ──► common GND
     100 nF ceramic directly across 74HC123 pins 16↔8
     Unused channel 2: hold 2CLR/2RD (pin 11) LOW; tie 2A/2B (pins 9/10) to defined levels;
@@ -914,15 +914,18 @@ AND gate:
     Tie every unused AND-gate input to a defined HIGH or LOW; leave unused outputs open
 ```
 
-> **The two channels are mirrored — do not carry channel 2's pin order into
-> channel 1.** On the standard 74HC123 pinout channel 2 is `6 = 2Cext,
-> 7 = 2Rext/Cext`, while channel 1 is `14 = 1Rext/Cext, 15 = 1Cext`. The order
-> reverses. A previous revision of this document had 14 and 15 swapped, which
-> puts the 220 kΩ on the discharge node instead of the timing node: the one-shot
-> does not time as designed, and the mandatory measurement below then
-> corresponds to nothing in the design. **The 220 kΩ goes to pin 14.** Check it
-> against the datasheet of the device actually in your hand before powering the
-> board.
+> **The 220 kΩ goes to pin 15.** On the standard 74HC123 pinout the two channels
+> follow the *same* order, not a mirrored one: `6 = 2Cext, 7 = 2Rext/Cext` for
+> channel 2, and `14 = 1Cext, 15 = 1Rext/Cext` for channel 1 — Cext at the lower
+> pin number in both. This is confirmed against the pin arrangement in the
+> Hitachi **HD74HC123A** datasheet, the family of the device actually on hand.
+>
+> Two earlier revisions of this document had 14 and 15 the other way round, the
+> second one justified by a "mirrored channels" claim that the datasheet does not
+> support. Built that way the 220 kΩ lands on the capacitor-only node instead of
+> the timing node: the one-shot does not time as designed, and the mandatory
+> measurement below then corresponds to nothing in the design. Check it against
+> the datasheet of the device actually in your hand before powering the board.
 
 Pin 13 is the channel-1 **active-HIGH Q** output on the standard 74HC123 pinout;
 pin 4 is its active-LOW complement and must not be used for the AND gate. Verify
@@ -942,19 +945,45 @@ with the 74HC08 absent, while still letting the 74HC08 pull it HIGH.
 
 ### Timing
 
-For a 74HC123 whose manufacturer specifies `K = 0.45` at 5 V and this
-capacitance range:
+The on-hand device is a **Hitachi HD74HC123P** (date code 9K06). Its datasheet
+states the pulse equation with **no coefficient at all**:
 
-`t_W ≈ K · R_ext · C_ext = 0.45 · 220 kΩ · 1 µF ≈ 99 ms`
+`t_W = R_ext · C_ext`
 
-The on-hand device's manufacturer/full ordering code and the R/C tolerances are
-not recorded. The coefficient can differ by manufacturer, and the fitted
-monolithic ceramic capacitor's effective capacitance can differ from its label.
-**Measure the assembled circuit.** If the measured result is around 99 ms it
-sits just below the ~105 ms real software bound, so the hardware becomes the
-binding limit and clips legitimate max-length pulses. Any change to the timing
-network requires a new calculation and a fresh measurement; do not rely on the
-nominal marking alone.
+and the switching table confirms it — `C_ext = 0.1 µF, R_ext = 10 kΩ` is
+specified as a typical `t_WQ` of **1.0 ms**, which is exactly `R · C`. So for the
+fitted parts:
+
+`t_W = 220 kΩ · 1 µF ≈ 220 ms`
+
+**This is not the 99 ms this document previously claimed.** That figure came
+from applying the Texas Instruments `K = 0.45` coefficient to a part that is not
+a TI part — an assumption recorded as an assumption, and wrong by a factor of
+2.2 in the direction that *weakens* the backstop. At 220 ms the one-shot sits
+**above** the ~105 ms real software bound rather than just below it, so it no
+longer clips legitimate pulses and instead trips only on a genuine control-thread
+failure — but with far more slack than intended, holding 2.5 W on for over twice
+the software limit before cutting.
+
+Choose the regime deliberately and size the network for it, all values with
+`K = 1`:
+
+| Intent | Target | With C = 1 µF | With R = 220 kΩ |
+|--------|--------|---------------|-----------------|
+| Hardware is the binding limit, clips long pulses | ~99 ms | R = 100 kΩ | C = 0.45 µF |
+| Trips only on failure, modest slack | ~130–150 ms | R = 130–150 kΩ | C = 0.6–0.68 µF |
+| As currently fitted | ~220 ms | — | — |
+
+**Measure the assembled circuit** whatever you choose. The datasheet gives the
+equation, not the part in your hand: the capacitor's dielectric is unrecorded,
+and a Y5V or Z5U 1 µF can deliver a fraction of its nominal capacitance under
+bias and temperature. Any change to the timing network requires a new
+calculation and a fresh measurement.
+
+The marking reads `HD74HC123P`, without the `A` of the datasheet revision
+obtained (`HD74HC123A`). The pin arrangement is the industry-standard 74123
+pinout and is not in doubt; the coefficient should be re-confirmed by the
+measurement, which is mandatory regardless.
 
 **±20% is accurate enough — this is a bound to be known, not a parameter to be
 tuned.** What the measurement rules out is not a 10% error but a
@@ -1042,7 +1071,7 @@ something it cannot act on that the hardware has not already done. Pull-downs
 
 ### Verification (mandatory before connecting the Class 4 laser)
 
-- [ ] **Short pulse passes through:** drive GPIO 18 HIGH for ~10 ms; the laser TTL must be HIGH for ~10 ms (not stretched to ~99 ms). If it stretches, Q is driving the TTL *alone* — the AND gate is missing or miswired. Fix before proceeding.
+- [ ] **Short pulse passes through:** drive GPIO 18 HIGH for ~10 ms; the laser TTL must be HIGH for ~10 ms (not stretched to the full one-shot width, ~220 ms as fitted). If it stretches, Q is driving the TTL *alone* — the AND gate is missing or miswired. Fix before proceeding.
 - [ ] **Stuck-HIGH is capped:** hold GPIO 18 HIGH indefinitely; the laser TTL must go LOW at the measured t_W and stay LOW.
 - [ ] **Trigger pins verified:** confirm 1A is LOW, translated GPIO 18 reaches
   1B and 1CLR/1RD, and pin 13 (not pin 4) supplies active-HIGH Q to the AND gate.
@@ -1054,9 +1083,9 @@ something it cannot act on that the hardware has not already done. Pull-downs
   unpower it) and confirm the voltage at the **laser-driver TTL connector** stays
   LOW. This proves pull-down (c). Nothing upstream of the AND gate covers this
   case: (a) and (b) are both on the translator side.
-- [ ] **Timing pins verified against the datasheet:** 220 kΩ on **pin 14**
-  (1Rext/Cext), capacitor between pins 15 and 14. Wired to pin 15 instead, the
-  measured period is meaningless.
+- [ ] **Timing pins verified against the datasheet:** 220 kΩ on **pin 15**
+  (1Rext/Cext), capacitor between pins 14 and 15. Wired to pin 14 instead, the
+  resistor feeds the capacitor-only node and the measured period is meaningless.
 - [ ] **Period measured** and recorded; matches intent (§ Timing above).
 - [ ] **No PWM firing:** confirm the firing path drives a single sustained level per pulse — a retriggering burst within t_W would hold the output HIGH and defeat the cap.
 
@@ -1258,7 +1287,7 @@ it is a separate work package for a qualified person — but it must not be
 | **1** | **Enclosure mechanics.** Case, beam dump, door-interlock switch mounting, PE bonding plan. No electronics. | Door interlock actuates on door movement and cannot be defeated without a tool (§6a) |
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |
-| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 14**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded** |
+| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 15**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded** |
 | **5** | **Sense networks.** Arm and E-stop dividers, Zeners with the band at the junction, door-interlock contacts. Meter each node **with the GPIO wire disconnected**, then attach. | ≈ 0 V / 2.98 V on arm OFF/ON; ≈ 0 V / 2.53 V on E-stop pressed/released (§5, §6) |
 | **6** | **Mains package.** Isolator, overcurrent protection, RCD, K1, START/STOP, terminal blocks, PE bonding. Designed, built and inspected by a qualified person. | Latching verified: E-stop drops K1; **releasing it does nothing**; only START restores. Both DC rails measured at 0 V with the E-stop pressed (§3) |
 | **7** | **DC supplies, unloaded.** Energise ±15 V and 12 V with nothing connected. | +15 V, 0 V, −15 V and 12 V all within tolerance; COM bonded to common ground (§13) |

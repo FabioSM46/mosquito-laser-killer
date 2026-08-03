@@ -37,7 +37,7 @@ the reported **2.5 W** module only.
 |--------------|-----|------------------------|
 | DAC | 2 | MCP4922, DIP-14, dual-channel 12-bit DAC |
 | Level translation | 2 | SN74AHCT125N, PDIP-14 quad bus buffer with 3-state outputs — package #1 for the four SPI signals, package #2 for GPIO 18 alone. **Marking not yet checked on either device** |
-| Monostable | 1 | 74HC123, DIP-16; manufacturer and full ordering code not recorded |
+| Monostable | 1 | **Hitachi HD74HC123P**, DIP-16, date code 9K06 — identified from the package marking 2026-08-03. Marked without the `A` of the `HD74HC123A` datasheet revision obtained |
 | AND gate | 1 | SN74HC08N, DIP-14, quad 2-input AND gate |
 | Resistors | count not recorded | Carbon film, 1/2 W: 220 kΩ, 10 kΩ, 3.3 kΩ and 1 kΩ values |
 | Capacitors | count not recorded | 50 V monolithic ceramic: 1 µF and 100 nF values, plus a 10 µF rail bulk capacitor |
@@ -84,7 +84,7 @@ believe it is there and working.
 | **Galvo-driver analog input topology and common-mode range are unverified** | This is the assumption with the widest blast radius in the design: `HARDWARE_WIRING.md` §14, `CoordinateMapper`, `DifferentialGalvoDriver` and the choice of two MCP4922s all rest on it. Because the DAC channels are complementary unipolar 0–5 V outputs, the pair presents a permanent **2.5 V common mode**. "±5 V analog input at 0.33 V/°" in a seller listing establishes neither that the inputs are a genuine differential pair, nor that 2.5 V is inside the permitted common-mode range, nor that ±5 V is a *differential* rating rather than per-input-to-ground. If any is wrong, every commanded angle is wrong by a scale or offset error — a silent aiming fault. | Obtain the driver's own manual or schematic and confirm all three points before connecting the DACs. Re-confirm empirically during calibration: command a known angle and measure the actual deflection. Do not resolve this by trial with any laser connected. |
 | Test-laser electrical details are unknown | A bare 12 mm, 5 mW module may not accept the working laser’s 3-pin TTL interface and therefore may not test the real gating chain. | Record its wavelength, labelled class, supply voltage, current, pinout, and TTL behaviour. Use it for gated alignment only if electrically compatible; otherwise use a suitably classified TTL-controlled alignment module. |
 | Working-laser 3-pin pinout and TTL levels are unknown | “TTL/PWM” in a seller listing does not establish pin order, active polarity, input thresholds, or safe power-up state. **Polarity is the critical unknown:** every fail-LOW measure in `HARDWARE_WIRING.md` §9.3 and §11a assumes LOW = off. On an active-LOW input the whole chain inverts and all three pull-downs become a *fire* command — the pull-downs would have to become pull-ups and the AND gate would have to become a different gate. | Obtain the module/driver pinout and confirm the input is **active HIGH** from its own documentation. Verify with the Class 4 optical output disconnected or blocked by an appropriate non-optical test load. Do not establish polarity experimentally with the Class 4 module connected. The project firing path must remain single-level TTL, never PWM. |
-| Passive-component quantities/tolerances are still unmeasured | The design needs a timing R/C, per-IC supply decoupling, rail bulk decoupling, two debounce capacitors, two Zener clamps, three laser-path fail-LOW pull-downs, and two chip-select pull-ups. The actual 74HC123 pulse width depends on the fitted R/C values and vendor. | Count and meter-check parts against the running totals in `HARDWARE_WIRING.md` §2: **6 × 10 kΩ**, **8 × 100 nF**, 2 × 3.3 kΩ, 1 × 1 kΩ, 2 × BZX55C3V3, 1 × 10 µF, 1 × 220 kΩ, 1 × 1 µF. Fit 100 nF at each IC, and measure the one-shot period before connecting either laser. |
+| Passive-component quantities/tolerances are still unmeasured | The design needs a timing R/C, per-IC supply decoupling, rail bulk decoupling, two debounce capacitors, two Zener clamps, three laser-path fail-LOW pull-downs, and two chip-select pull-ups. The actual 74HC123 pulse width depends on the fitted R/C values; the vendor is now known (Hitachi, `t_W = R·C`), which puts the nominal at ≈220 ms. | Count and meter-check parts against the running totals in `HARDWARE_WIRING.md` §2: **6 × 10 kΩ**, **8 × 100 nF**, 2 × 3.3 kΩ, 1 × 1 kΩ, 2 × BZX55C3V3, 1 × 10 µF, 1 × 220 kΩ, 1 × 1 µF. Fit 100 nF at each IC, and measure the one-shot period before connecting either laser. |
 
 WAGO 221-413 connectors are three-conductor splicing connectors, not barriers
 between unrelated circuits. Use a separate connector for each of Live, Neutral,
@@ -99,7 +99,12 @@ manufacturer of an unmarked on-hand part.
 - [Microchip MCP4902/4912/4922 data sheet](https://ww1.microchip.com/downloads/en/devicedoc/22250a.pdf) — `/LDAC`, `/SHDN`, and the BUF = 0 reference range
 - [TI SN74AHCT125 product information](https://www.ti.com/product/SN74AHCT125)
 - [TI SN74AHCT126 product information](https://www.ti.com/product/SN74AHCT126) — the pin-identical active-HIGH `OE` variant, considered and rejected
-- [TI CD74HC123 product information](https://www.ti.com/product/CD74HC123) — channel-1 timing pins are **14 = 1Rext/Cext, 15 = 1Cext**, mirrored relative to channel 2
+- **Hitachi HD74HC123A data sheet** — the family of the device actually on hand.
+  Two things come from it and neither matches what this project previously
+  assumed from a TI part: the pulse equation is `t_W = R_ext · C_ext` with **no
+  coefficient** (confirmed by its own switching table, where 10 kΩ × 0.1 µF is
+  specified as a typical 1.0 ms), and the channel-1 timing pins are
+  **14 = 1Cext, 15 = 1Rext/Cext** — the *same* order as channel 2, not mirrored
 - [TI SN74HC08 product information](https://www.ti.com/product/SN74HC08)
 - [Mean Well LRS-50 series data sheet](https://www.meanwell.com/Upload/PDF/LRS-50/LRS-50-SPEC.PDF) — the 45 A cold-start inrush figure that rules out direct mains switching through a pilot-duty contact
 - [WAGO 221-413 product information](https://www.wago.com/global/installation-terminal-blocks-and-connectors/splicing-connector-with-levers/p/221-413) — a three-port *splicing* connector, not a terminal block and not a barrier between circuits

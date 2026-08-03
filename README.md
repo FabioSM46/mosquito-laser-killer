@@ -24,7 +24,7 @@ parts.
 | Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
 | Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | On hand; **marking not yet read**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
-| Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified. The 220 kΩ goes to **pin 14** |
+| Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand. `74HC123` is a Hitachi HD74HC123P whose datasheet gives `t_W = R·C`, so the fitted parts are **≈220 ms**, not 99 ms. Actual period must still be measured. The 220 kΩ goes to **pin 15** |
 | Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | On hand; **not wired.** The mushroom must not switch mains directly |
 | Door interlock | Switch with 2 independent NC contacts, positive/direct opening | On hand; contact arrangement unconfirmed |
 | Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
@@ -181,7 +181,7 @@ If either `left_camera_device` or `right_camera_device` is empty — or the two 
 
 The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot independently caps the TTL at its mandatory measured period (nominally ~99 ms for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient)
+1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot independently caps the TTL at its mandatory measured period (nominally ~220 ms: the on-hand Hitachi part specifies `t_W = R·C` with no coefficient, so it sits *above* the software bound)
 2. **10-second firing cooldown** — `may_fire(now)` gate, applied on *every* pulse-end path (clean, aborted, and fault)
 3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
 4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed

@@ -236,7 +236,7 @@ alignment module.
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
 | Max pulse | per-cycle duration check + `Laser::enforce_max_pulse`; real software bound ≈ 100 ms config limit + one fixed 5 ms control cycle + jitter (~105 ms — a flat "≤ 100 ms" is a claim the software cannot make, AGENTS.md §4.1) | `FiringController`, `Laser` |
-| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at the measured one-shot period (nominally ≈99 ms for the reported R/C values and a 0.45 vendor coefficient) with no software or operator involvement — see §3.2 below | wiring, §11a of `HARDWARE_WIRING.md` |
+| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at the measured one-shot period (nominally ≈220 ms: the on-hand Hitachi HD74HC123P specifies `t_W = R·C` with no coefficient) with no software or operator involvement — see §3.2 below | wiring, §11a of `HARDWARE_WIRING.md` |
 | Cooldown | `cooldown_until_` gates `may_fire()` (configured 10 s; validator floor 1 s) | `FiringController` |
 | Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
 | Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
@@ -257,8 +257,10 @@ triggered by GPIO 18's rising edge. A normal short pulse passes through
 unchanged; a stuck-HIGH GPIO 18 is force-cut when Q times out — with no
 software path and no operator action. The fitted timing parts are reported as a
 1/2 W carbon-film 220 kΩ resistor and a 50 V monolithic-ceramic 1 µF capacitor.
-For an HC123 whose manufacturer specifies the 0.45 coefficient at 5 V, the
-nominal period is `0.45 · 220 kΩ · 1 µF ≈ 99 ms`. The full 74HC123 ordering code,
+The on-hand device is a Hitachi HD74HC123P, whose datasheet gives the pulse
+equation as `t_W = R_ext · C_ext` with no coefficient, so the fitted parts
+compute to `220 kΩ · 1 µF ≈ 220 ms` — not the 99 ms that TI's 0.45 coefficient
+would give for a TI part. The full 74HC123 ordering code,
 R/C tolerances, and the ceramic capacitor's effective capacitance are not yet
 recorded; coefficient and tolerance are vendor-dependent, so measure the actual
 period on the assembled circuit. The guarantee holds only if the AND gating is

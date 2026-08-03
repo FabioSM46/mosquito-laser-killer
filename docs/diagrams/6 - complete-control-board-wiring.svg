@@ -111,7 +111,7 @@
   <!-- SPI translator -->
   <rect class="missing-box" x="430" y="320" width="370" height="440" rx="20"/>
   <text class="box-title" x="455" y="355">SN74AHCT125N #1 — SPI</text>
-  <text class="warning" x="455" y="380">ON ORDER • must be AHCT125</text>
+  <text class="warning" x="455" y="380">ON HAND • marking unread • must be AHCT125</text>
   <text class="mono" x="455" y="417">2  1A ← MOSI       1Y  3 → SDI bus</text>
   <text class="mono" x="455" y="467">5  2A ← SCLK       2Y  6 → SCK bus</text>
   <text class="mono" x="455" y="517">9  3A ← CE0        3Y  8 → X /CS</text>
@@ -223,7 +223,7 @@
   <!-- Laser translator -->
   <rect class="missing-box" x="430" y="900" width="370" height="280" rx="20"/>
   <text class="box-title" x="455" y="935">SN74AHCT125N #2 — LASER</text>
-  <text class="warning" x="455" y="960">ON ORDER • separate package</text>
+  <text class="warning" x="455" y="960">ON HAND • marking unread • separate package</text>
   <text class="mono" x="455" y="1006">2 1A ← GPIO18   1Y 3 → FIRE_5V</text>
   <text class="mono-small" x="455" y="1040">1 /OE → GND (permanently LOW)</text>
   <text class="mono-small" x="455" y="1066">14 VCC → +5 V    7 GND → GND</text>
@@ -248,12 +248,12 @@
   <text class="mono-small" x="925" y="980">2  1B ← FIRE_5V (+edge trigger)</text>
   <text class="mono-small" x="925" y="1004">3  1CLR/1RD ← FIRE_5V</text>
   <text class="mono-small" x="925" y="1028">13 1Q → 74HC08 pin 2 (active HIGH)</text>
-  <text class="mono-small" x="925" y="1052">14 1Rext/Cext → 220 kΩ → +5 V</text>
-  <text class="mono-small" x="925" y="1076">15 1Cext → 1 µF → pin 14</text>
+  <text class="mono-small" x="925" y="1052">15 1Rext/Cext → 220 kΩ → +5 V</text>
+  <text class="mono-small" x="925" y="1076">14 1Cext → 1 µF → pin 15</text>
   <text class="mono-small" x="925" y="1100">16 VCC → +5 V      8 GND → GND</text>
   <text class="mono-small" x="925" y="1124">100 nF directly across pins 16 ↔ 8</text>
   <text class="mono-small" x="925" y="1155">unused ch2: 9,10,11 → GND; 6,7 OPEN</text>
-  <text class="tiny" x="925" y="1180">pins 4,5,12 outputs open • scope-measure pulse width</text>
+  <text class="tiny" x="925" y="1180">pins 4,5,12 outputs open • measure pulse width (Hitachi: t_W = R·C ≈ 220 ms)</text>
   <path class="wire v5 thin" d="M1080 885 V875"/>
   <path class="wire gnd thin" d="M1115 1200 V1405"/>
 
@@ -364,17 +364,17 @@
   <text class="small" x="160" y="1586" text-anchor="middle">A • B • PE</text>
   <rect class="missing-box" x="300" y="1525" width="265" height="88" rx="14"/>
   <text class="box-title" x="432" y="1558" text-anchor="middle">ISOLATOR / OCP / RCD</text>
-  <text class="tiny" x="432" y="1586" text-anchor="middle">per local rules • not on hand</text>
+  <text class="tiny" x="432" y="1586" text-anchor="middle">per local rules • on hand, not built</text>
   <rect class="missing-box" x="610" y="1525" width="250" height="88" rx="14"/>
   <text class="box-title" x="735" y="1558" text-anchor="middle">K1 • 2 MAIN POLES</text>
-  <text class="tiny" x="735" y="1586" text-anchor="middle">combined-inrush rated • not on hand</text>
+  <text class="tiny" x="735" y="1586" text-anchor="middle">on hand • inrush/coil ratings unconfirmed</text>
   <path class="wire mains" d="M255 1558 H300" marker-end="url(#arrow-black)"/>
   <path class="wire mains" d="M565 1558 H610" marker-end="url(#arrow-black)"/>
 
   <rect class="missing-box" x="910" y="1508" width="300" height="105" rx="14"/>
   <text class="box-title" x="1060" y="1542" text-anchor="middle">BIPOLAR GALVO PSU</text>
   <text class="mono" x="1060" y="1573" text-anchor="middle">+15 V • COM • −15 V</text>
-  <text class="warning" x="1060" y="1598" text-anchor="middle">NOT ON HAND</text>
+  <text class="warning" x="1060" y="1598" text-anchor="middle">ON HAND • RAILS UNMEASURED</text>
   <rect class="connector-box" x="1250" y="1508" width="300" height="105" rx="14"/>
   <text class="box-title" x="1400" y="1542" text-anchor="middle">MEAN WELL LRS-50-12</text>
   <text class="mono" x="1400" y="1573" text-anchor="middle">+12 V • 12 V−</text>

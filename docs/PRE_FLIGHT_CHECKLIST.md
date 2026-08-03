@@ -22,7 +22,7 @@ The following software and hardware-abstraction components are present and pass 
 | Thread architecture | Implemented | Three decoupled threads: capture, processing, control. |
 | Frame dropping | Implemented | `ThreadSafeQueue::drain_all()` keeps only the freshest frame. |
 | Safety state machine | Implemented | `INIT → IDLE → ARMED → TRACKING → FIRING → COOLDOWN` plus `SAFE_HALT`. |
-| Max pulse limit | Implemented in software; hardware pending measurement | `FiringController` / `Laser` enforce the 100 ms config limit; the true software bound is ~105 ms (limit + one fixed 5 ms control cycle + jitter). The 74HC123 independently caps the TTL at its measured period; ~99 ms is only the nominal calculation for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient. |
+| Max pulse limit | Implemented in software; hardware pending measurement | `FiringController` / `Laser` enforce the 100 ms config limit; the true software bound is ~105 ms (limit + one fixed 5 ms control cycle + jitter). The 74HC123 independently caps the TTL at its measured period; the on-hand Hitachi HD74HC123P computes to ≈220 ms from `t_W = R·C`, which is **above** the software bound rather than below it. |
 | Cooldown | Implemented | 10-second non-bypassable cooldown after each pulse. |
 | Motion blanking | Implemented | No galvo writes while the laser is ON. |
 | Arm switch gating | Implemented | `FiringController` rejects targets/fire when disarmed. |
@@ -124,11 +124,11 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   - Arm switch OFF → LOW.
   - Arm switch ON → ≈ 2.98 V (HIGH).
 - [ ] **74HC123 pulse-duration backstop is wired and bench-verified** (see `docs/HARDWARE_WIRING.md` §11a). This is the only enforcer of the pulse-duration bound that is independent of the control thread:
-  - The **220 kΩ is on pin 14** (`1Rext/Cext`) and the 1 µF is between pins 15 and
-    14. The two channels are mirrored — channel 2 is `6 = 2Cext, 7 = 2Rext/Cext`,
-    channel 1 reverses that. On pin 15 the resistor feeds the discharge node and
+  - The **220 kΩ is on pin 15** (`1Rext/Cext`) and the 1 µF is between pins 14 and
+    15. Both channels use the same order — `6 = 2Cext, 7 = 2Rext/Cext` and
+    `14 = 1Cext, 15 = 1Rext/Cext`. On pin 14 the resistor feeds the capacitor-only node and
     the measured period means nothing: **no-go**.
-  - A short (~10 ms) GPIO 18 pulse produces an equally short laser-TTL pulse (NOT stretched to ~99 ms — if stretched, the AND gate is missing/miswired: **no-go**).
+  - A short (~10 ms) GPIO 18 pulse produces an equally short laser-TTL pulse (NOT stretched to the full one-shot width, ~220 ms as fitted — if stretched, the AND gate is missing/miswired: **no-go**).
   - A stuck-HIGH GPIO 18 drives the laser TTL LOW at the measured one-shot period and keeps it LOW.
   - The one-shot period is measured and **recorded** — scope, logic analyser,
     or the Pi's own `gpiomon` (`HARDWARE_WIRING.md` §11a). ±20% is accurate enough.
@@ -229,7 +229,7 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 | Galvo driver input topology | Differential pair, 2.5 V common mode and differential ±5 V rating all confirmed from the driver's own manual (§10) |
 | Power and logic interfaces | Bipolar ±15 V galvo supply installed; SPI and laser level interfaces electrically and scope verified; all three §9.3 pull-downs individually proven |
 | MCP4922 control pins | `/LDAC` grounded, `/SHDN` at +5 V, `dac_reference_voltage` set from the measured rail |
-| 74HC123 pulse-duration backstop | Wired with AND gating, **220 kΩ on pin 14**, and bench-verified (short pulse passes, stuck-HIGH capped, period recorded) |
+| 74HC123 pulse-duration backstop | Wired with AND gating, **220 kΩ on pin 15**, and bench-verified (short pulse passes, stuck-HIGH capped, period recorded) |
 | Laser driver TTL polarity | Confirmed **active HIGH** from the module's own documentation |
 | Camera calibration | Real values entered, startup validation passes |
 | Camera by-path identification | Stable symlinks in `config/system_config.yaml` |
