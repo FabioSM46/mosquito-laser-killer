@@ -18,27 +18,27 @@ parts.
 |-----------|-------------------|------------------|
 | Host | Raspberry Pi 5 | Real-time control and stereo vision processing |
 | Cameras | 2× OV9281 global-shutter monochrome USB3 UVC | On hand; stereoscopic target detection |
-| Galvo scanner + driver | 20 kpps X-Y kit; 400–700 nm; head ±12 V; driver ±15 VDC, ±5 V analog input, 0.33 V/° | On hand; laser beam steering. A separate bipolar ±15 VDC supply was not reported |
+| Galvo scanner + driver | 20 kpps X-Y kit; 400–700 nm; head ±12 V; driver ±15 VDC, ±5 V analog input, 0.33 V/° | On hand; laser beam steering. The separate bipolar ±15 VDC supply is also on hand but unmeasured |
 | Working laser | 2.5 W, 450 nm blue, 33 × 70 mm; 12 V external constant-current drive, forced-air cooling, 3-pin TTL/PWM | On hand; Class 4 target laser. Pinout and TTL levels must be verified |
 | Test laser | 5 mW, 12 mm module | On hand; wavelength, supply, class label, pinout, and TTL compatibility must be recorded before use |
 | Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
-| Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | Specified; **on order**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
+| Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | On hand; **marking not yet read**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
 | Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified. The 220 kΩ goes to **pin 14** |
-| Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | **Not on hand; required.** The mushroom must not switch mains directly |
-| Door interlock | Switch with 2 independent NC contacts, positive/direct opening | **Not on hand; required** |
+| Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | On hand; **not wired.** The mushroom must not switch mains directly |
+| Door interlock | Switch with 2 independent NC contacts, positive/direct opening | On hand; contact arrangement unconfirmed |
 | Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
 | Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
-| Resistor stock | 1/2 W carbon film: 220 kΩ and 10 kΩ | On hand; quantities not yet recorded. **6× 10 kΩ** are needed |
+| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3.3 kΩ, 1 kΩ | On hand; quantities and values not yet metered. **6× 10 kΩ** are needed |
 | Wiring connectors | WAGO 221-413, 3-conductor | On hand; splicing connectors — not terminal blocks, and never a barrier between circuits |
 
-The documented GPIO sense circuits still require **2× 3.3 kΩ** and **1× 1 kΩ**
-resistors; neither value was reported in the inventory. The safety contactor,
-latching START circuit, mains isolator and door interlock are specified but
-neither purchased nor built, and the galvo driver's **differential input
-topology and common-mode range** are still unverified — that last one
-invalidates the coordinate mapping if it turns out wrong. These are no-go items
-in `docs/HARDWARE_INVENTORY.md`.
+**Every part is on hand; none of it is verified.** No switch contact has been
+ringed out, no IC marking read, no passive metered, and the 74HC123 period has
+not been measured. The safety contactor, latching START circuit, mains
+isolator and door interlock are purchased but **not built**, and the galvo
+driver's **differential input topology and common-mode range** are still
+unconfirmed — that last one invalidates the coordinate mapping if it turns out
+wrong. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
 
 ### Wiring Notes
 
@@ -181,7 +181,7 @@ If either `left_camera_device` or `right_camera_device` is empty — or the two 
 
 The system implements structurally-enforced safety guards (see `AGENTS.md` for full detail):
 
-1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot independently caps the TTL at its mandatory scope-measured period (nominally ~99 ms for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient)
+1. **Laser pulse duration** — control-loop + HAL max-pulse enforcement. Real software bound is ~105ms (limit + one fixed 5 ms control cycle), not a flat 100ms; the 74HC123 one-shot independently caps the TTL at its mandatory measured period (nominally ~99 ms for the reported 220 kΩ / 1 µF parts and a matching vendor coefficient)
 2. **10-second firing cooldown** — `may_fire(now)` gate, applied on *every* pulse-end path (clean, aborted, and fault)
 3. **Motion blanking** — no galvo writes while laser ON; fire only after settle
 4. **Arm switch gating** — targets/fire rejected when disarmed; GPIO fault → disarmed
@@ -196,7 +196,7 @@ The system implements structurally-enforced safety guards (see `AGENTS.md` for f
 
 ### Known residual risk
 
-Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is scope-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be scope-verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver, the door interlock cuts it independently, and the E-stop drops a latching safety contactor that removes mains from both DC supplies — all hardware mechanisms, and none of them on the control thread, but each requiring a human hand or an opened door. Because the contactor latches, releasing the mushroom restores nothing; only a deliberate START press does, which matters here because `SAFE_HALT` is terminal and the documented recovery is "restart the software". The contactor, START circuit, isolator and door interlock are specified but not yet built, and the current inventory does not establish the switch contact ratings/topology, so it is not ready for powered use.
+Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is bench-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver, the door interlock cuts it independently, and the E-stop drops a latching safety contactor that removes mains from both DC supplies — all hardware mechanisms, and none of them on the control thread, but each requiring a human hand or an opened door. Because the contactor latches, releasing the mushroom restores nothing; only a deliberate START press does, which matters here because `SAFE_HALT` is terminal and the documented recovery is "restart the software". The contactor, START circuit, isolator and door interlock are specified but not yet built, and the current inventory does not establish the switch contact ratings/topology, so it is not ready for powered use.
 
 ## Building and Running Tests
 

@@ -236,7 +236,7 @@ alignment module.
 | Guard | Mechanism | Location |
 |-------|-----------|----------|
 | Max pulse | per-cycle duration check + `Laser::enforce_max_pulse`; real software bound ≈ 100 ms config limit + one fixed 5 ms control cycle + jitter (~105 ms — a flat "≤ 100 ms" is a claim the software cannot make, AGENTS.md §4.1) | `FiringController`, `Laser` |
-| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at the scope-verified one-shot period (nominally ≈99 ms for the reported R/C values and a 0.45 vendor coefficient) with no software or operator involvement — see §3.2 below | wiring, §11a of `HARDWARE_WIRING.md` |
+| Pulse backstop (hardware) | 74HC123 one-shot + 74HC08 AND on the TTL line force-cut a stuck-HIGH GPIO 18 at the measured one-shot period (nominally ≈99 ms for the reported R/C values and a 0.45 vendor coefficient) with no software or operator involvement — see §3.2 below | wiring, §11a of `HARDWARE_WIRING.md` |
 | Cooldown | `cooldown_until_` gates `may_fire()` (configured 10 s; validator floor 1 s) | `FiringController` |
 | Motion blanking | no galvo writes while pulse active; settle required before fire | `FiringController` |
 | Arm switch | `set_armed` + fire path reject when disarmed; GPIO fault → disarmed | `FiringController`, `ArmSwitch` |
@@ -261,11 +261,11 @@ For an HC123 whose manufacturer specifies the 0.45 coefficient at 5 V, the
 nominal period is `0.45 · 220 kΩ · 1 µF ≈ 99 ms`. The full 74HC123 ordering code,
 R/C tolerances, and the ceramic capacitor's effective capacitance are not yet
 recorded; coefficient and tolerance are vendor-dependent, so measure the actual
-period on a scope. The guarantee holds only if the AND gating is present,
-firing stays a single sustained level
+period on the assembled circuit. The guarantee holds only if the AND gating is
+present, firing stays a single sustained level
 (never a PWM burst), and the measured period is what you intend — the
-scope-verification procedure is in `PRE_FLIGHT_CHECKLIST.md` §2 and the wiring
-in `HARDWARE_WIRING.md` §11a. The '123 and the AND gate are single components:
+verification procedure is in `PRE_FLIGHT_CHECKLIST.md` §2 and the wiring and
+measurement method in `HARDWARE_WIRING.md` §11a. The '123 and the AND gate are single components:
 their failure belongs in any FMEA, with the arm switch (cuts 12 V) and E-stop
 (cuts mains) as the outer, operator-driven layers.
 

@@ -8,16 +8,15 @@ laser-targeting wiring. It matches the source code in `src/hal/mcp4922.cpp`,
 `src/control/coordinate_mapper.cpp`. The parts physically reported on hand are
 tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 
-> **Inventory no-go:** the currently reported stock is not a complete, validated
-> build. In particular, the 2 × 3.3 kΩ sense resistors, the 1 kΩ E-stop resistor
-> and the bipolar ±15 V galvo supply were not reported, and switch contact
-> ratings are unknown. Level translation is now **specified** as 2 ×
-> SN74AHCT125N (§9) but the devices are on order, not on hand. The **safety
-> contactor, latching START circuit, mains isolator and enclosure door
-> interlock** of §3 and §6a are specified but neither purchased nor built, and
-> the **galvo driver's differential input topology and common-mode range** (§10)
-> are unverified — that last item invalidates §14 and the coordinate mapping if
-> it turns out wrong. Do not apply power until every reconciliation item in
+> **Verification no-go:** every part the design calls for is on hand, and none
+> of it is verified. No switch contact has been ringed out, no IC marking read,
+> no passive metered, the 74HC123 period has not been measured, and the
+> mains package of §3 is purchased but **not built**. Two unknowns are blocking
+> on their own: the **galvo driver's differential input topology and
+> common-mode range** (§10), which invalidates §14 and the coordinate mapping if
+> it turns out wrong, and the **laser driver's TTL polarity** (§11), because on
+> an active-LOW input every fail-LOW pull-down in §9.3 becomes a fire command.
+> Do not apply power until every reconciliation item in
 > `HARDWARE_INVENTORY.md` is closed.
 
 ---
@@ -104,35 +103,35 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Working laser | 2.5 W, 450 nm, 33 × 70 mm, 12 VDC, forced-air cooled, 3-pin TTL/PWM | 1 | Reported on hand; pinout/TTL levels unverified |
 | Test laser | Low-power visible, electrically compatible with the complete gating chain | 1 | 5 mW, 12 mm module reported; electrical details/class label unverified |
 | Laser PSU | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | 1 | Reported on hand |
-| Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | **Not reported; required** |
-| Safety contactor **K1** | 2 main poles rated for the **combined cold-start inrush** of both DC supplies (LRS-50-12 alone specifies 45 A at 230 VAC), coil matched to the control circuit, ≥1 auxiliary NO for the seal-in path (§3) | 1 | **Not reported; required.** Replaces direct mains switching through the mushroom contact |
-| START button | NO momentary, panel mount — the deliberate restart action (§3) | 1 | **Not reported; required** |
-| STOP button | NC momentary in the coil path, for normal shutdown that is not an E-stop actuation (§3) | 1 | Recommended |
-| Mains isolator + protection | Main isolator, overcurrent protection and RCD coordination per local rules, upstream of everything | 1 set | **Not reported; required.** Design and inspection by a qualified person |
-| Door interlock switch | 2 independent NC contacts with **positive/direct opening action** (IEC 60947-5-1 Annex K), tool-required actuator (§6a) | 1 | **Not reported; required.** Referenced by the checklist but never previously specified |
+| Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | On hand; rails and current rating not yet measured |
+| Safety contactor **K1** | 2 main poles rated for the **combined cold-start inrush** of both DC supplies (LRS-50-12 alone specifies 45 A at 230 VAC), coil matched to the control circuit, ≥1 auxiliary NO for the seal-in path (§3) | 1 | On hand; **not wired.** Pole rating against the combined inrush, coil voltage and auxiliary count not yet confirmed |
+| START button | NO momentary, panel mount — the deliberate restart action (§3) | 1 | On hand; not wired |
+| STOP button | NC momentary in the coil path, for normal shutdown that is not an E-stop actuation (§3) | 1 | On hand; not wired |
+| Mains isolator + protection | Main isolator, overcurrent protection and RCD coordination per local rules, upstream of everything | 1 set | On hand; **not built.** Design and inspection by a qualified person |
+| Door interlock switch | 2 independent NC contacts with **positive/direct opening action** (IEC 60947-5-1 Annex K), tool-required actuator (§6a) | 1 | On hand; contact arrangement and positive-opening marking not yet confirmed |
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
 | Y-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
-| SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | **Specified (§9); on order.** Must be marked `AHCT` — not `AHC`, not `HC` |
-| Laser translation | SN74AHCT125N, a **second physically separate** package, 1 channel used, with the two fail-LOW pull-downs of §9.3 | 1 package (1 of 4 ch) | **Specified (§9); on order.** Package #1 is fully consumed by SPI, so this is a second device, not a spare channel |
+| SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | On hand; **marking not yet read.** Must be marked `AHCT` — not `AHC`, not `HC` |
+| Laser translation | SN74AHCT125N, a **second physically separate** package, 1 channel used, with the two fail-LOW pull-downs of §9.3 | 1 package (1 of 4 ch) | On hand; **marking not yet read.** Package #1 is fully consumed by SPI, so this is a second device, not a spare channel |
 | Monostable | 74HC123, DIP-16 dual retriggerable one-shot | 1 | Reported on hand; manufacturer/order code unverified |
 | AND gate | SN74HC08N, DIP-14 quad 2-input AND | 1 | Reported on hand |
 | Timing resistor | 220 kΩ, 1/2 W | 1 | Reported on hand |
 | Timing capacitor | 1 µF, 50 V monolithic ceramic | 1 | Reported on hand; tolerance/effective capacitance unverified |
 | Logic/DAC decoupling | 100 nF ceramic directly across the supply pins of each MCP4922, SN74AHCT125N, 74HC123, and SN74HC08 | 6 minimum | Value reported; available count unverified |
-| Rail bulk decoupling | 10 µF on the 5 V rail at the logic board | 1 | Not reported; required |
+| Rail bulk decoupling | 10 µF on the 5 V rail at the logic board | 1 | On hand |
 | Arm switch | Lever switch with contacts rated for the measured 12 VDC laser-driver load | 1 | Reported on hand; topology/rating unverified |
 | E-stop | Mushroom actuator with 2 independent NC contacts — pole 1 in the K1 coil circuit, pole 2 for GPIO 25 (§3, §6). A monitored-safety-relay architecture would need a third | 1 | Reported on hand; topology/rating unverified |
 | Arm series resistor | 10 kΩ, 1/2 W | 1 | Reported on hand |
 | Laser-path fail-LOW pull-downs | 10 kΩ, 1/2 W — **three**, one per node: (a) translator input, (b) '123/'08 inputs, (c) laser-driver connector (§9.3) | 3 | Value reported on hand; count unverified |
 | Chip-select pull-ups | 10 kΩ, 1/2 W to **3.3 V** on the CE0 and CE1 translator inputs (§8) | 2 | Value reported on hand; count unverified |
-| E-stop series resistor | 1 kΩ, 1/2 W | 1 | **Not reported; required** |
-| Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | **Not reported; required** |
+| E-stop series resistor | 1 kΩ, 1/2 W | 1 | On hand; value not yet metered |
+| Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | On hand; value not yet metered |
 | Zener clamps | BZX55C3V3, DO-35, 0.5 W — cathode at the sense junction, anode to GND | 2 | Part type reported; count unverified |
 | Sense/debounce capacitors | 100 nF, 50 V monolithic ceramic | 2 | Value reported; count unverified |
-| Mains terminal blocks | DIN-rail terminal blocks, one block per net: unswitched A/B, switched A/B, PE (§3) | 1 strip | **Not reported; required** |
+| Mains terminal blocks | DIN-rail terminal blocks, one block per net: unswitched A/B, switched A/B, PE (§3) | 1 strip | On hand; not installed |
 | Distribution connectors | WAGO 221-413, 3-conductor, max 4 mm² — splicing connectors, **not** terminal blocks and not a barrier between circuits | as required | Reported on hand; count unverified |
-| Enclosure | Laser-safe interlocked case with beam dump | 1 | Required; status not reported |
-| Safety eyewear | Correctly rated for 450 nm and the documented exposure analysis | 1 per person | Required; status not reported |
+| Enclosure | Laser-safe interlocked case with beam dump | 1 | On hand; rating against 450 nm at 2.5 W not yet recorded |
+| Safety eyewear | Correctly rated for 450 nm and the documented exposure analysis | 1 per person | On hand; OD figure and marking not yet recorded |
 
 **Running totals for the parts that appear in more than one circuit.** These are
 the counts to shop against; the rows above are the counts per role.
@@ -311,7 +310,7 @@ is an open no-go item in `HARDWARE_INVENTORY.md`.
 
 | Supply | Output | On K1? | Feeds | Notes |
 |--------|--------|--------|-------|-------|
-| Bipolar galvo supply | **+15 V, 0 V/COM, −15 V** — three conductors, not "±15 V" as one wire | Yes | Galvo driver board | Required by the reported driver; not reported in the current inventory. COM is the reference for both rails and bonds to the common ground (§13) |
+| Bipolar galvo supply | **+15 V, 0 V/COM, −15 V** — three conductors, not "±15 V" as one wire | Yes | Galvo driver board | Required by the reported driver; on hand but not yet measured. COM is the reference for both rails and bonds to the common ground (§13) |
 | Mean Well LRS-50-12 | 12 VDC | Yes | Laser cooling fan directly; laser driver via arm switch + door interlock | Do not use this single-output supply as a substitute for the bipolar ±15 VDC |
 | Pi USB-C supply | 5 VDC | **No** | Raspberry Pi 5 | Deliberately not on the contactor (§3) |
 | 5 V logic rail | 5 VDC, from Pi header pins 2/4 | **No** | Both SN74AHCT125N, both MCP4922 VDD/Vref, 74HC123, SN74HC08 | Derived from the Pi, so it tracks the Pi and survives an E-stop |
@@ -920,7 +919,7 @@ AND gate:
 > 7 = 2Rext/Cext`, while channel 1 is `14 = 1Rext/Cext, 15 = 1Cext`. The order
 > reverses. A previous revision of this document had 14 and 15 swapped, which
 > puts the 220 kΩ on the discharge node instead of the timing node: the one-shot
-> does not time as designed, and the mandatory scope measurement below then
+> does not time as designed, and the mandatory measurement below then
 > corresponds to nothing in the design. **The 220 kΩ goes to pin 14.** Check it
 > against the datasheet of the device actually in your hand before powering the
 > board.
@@ -931,7 +930,7 @@ the full marking on the on-hand IC against its manufacturer's datasheet before
 wiring. Holding 1A LOW is required for a rising edge on 1B to trigger the
 monostable. Tying 1CLR/1RD to the translated fire level holds the channel reset
 while idle and allows the rising fire transition to arm/trigger it; this exact
-behaviour must be included in the scope tests below.
+behaviour must be included in the tests below.
 
 The `1Y → 74HC08` output pull-down (c) is what holds the **laser driver's own**
 TTL pin LOW when the 74HC08 is unpowered, removed from its socket, or its output
@@ -951,11 +950,95 @@ capacitance range:
 The on-hand device's manufacturer/full ordering code and the R/C tolerances are
 not recorded. The coefficient can differ by manufacturer, and the fitted
 monolithic ceramic capacitor's effective capacitance can differ from its label.
-**Measure the assembled circuit on a scope.** If the measured result is around
-99 ms it sits just below the ~105 ms real software bound, so the hardware becomes
-the binding limit and clips legitimate max-length pulses. Any change to the
-timing network requires a new calculation and scope verification; do not rely on
-the nominal marking alone.
+**Measure the assembled circuit.** If the measured result is around 99 ms it
+sits just below the ~105 ms real software bound, so the hardware becomes the
+binding limit and clips legitimate max-length pulses. Any change to the timing
+network requires a new calculation and a fresh measurement; do not rely on the
+nominal marking alone.
+
+**±20% is accurate enough — this is a bound to be known, not a parameter to be
+tuned.** What the measurement rules out is not a 10% error but a
+factor-of-three one. The vendor coefficient is unrecorded, and "1 µF 50 V
+monolithic ceramic" does not state a dielectric: a Y5V or Z5U part can deliver a
+fraction of its nominal capacitance under bias and temperature, which puts t_W
+nearer 30 ms than 99 ms. A short period is not a safety failure — the backstop
+only gets tighter — but it silently truncates every legitimate pulse, so the
+system delivers a fraction of the energy the operator believes it does. A long
+one makes the backstop weaker than the documentation claims. Both are invisible
+without a number.
+
+### Measuring the period
+
+This belongs to **stage 4** of §17: translator, one-shot and AND gate on the
+bench, powered from the Pi's 5 V header rail, with **no laser of any class
+connected** — the laser-driver TTL connector goes nowhere at this stage. No
+mains, no ±15 V, no K1.
+
+**Nothing is rearranged for the measurement.** The timing network, the three
+fail-LOW pull-downs, the trigger pins and the decoupling all stay in their final
+configuration, because a period measured on a different circuit is a period that
+does not apply to this one. A breadboard is acceptable: its stray capacitance is
+picofarads against a 1 µF timing capacitor — one part in a hundred thousand,
+well under the tolerance of the capacitor itself.
+
+**With a scope or logic analyser.** One channel on the 74HC08 1Y output (pin 3),
+×10 probe, trigger on the rising edge, timebase ~20 ms/div. Nothing else needed;
+the probe tolerates the 5 V node directly.
+
+**With the Raspberry Pi itself.** A ~100 ms interval does not need a scope. Add
+a temporary 2:1 divider from the AND output to a spare GPIO — the output is 5 V
+logic and would damage a 3.3 V pin if connected directly:
+
+```
+74HC08 1Y (pin 3) ──┬── 10 kΩ ──────► GND          pull-down (c), already fitted
+                    │
+                    ├── 10 kΩ ──┬─── 10 kΩ ──► GND  temporary measurement divider
+                    │           │
+                    │           └──► GPIO 23 (header pin 16), reads 2.5 V
+                    │
+                    └── laser-driver TTL connector — NOT connected at stage 4
+```
+
+The divider sits in parallel with pull-down (c), presenting 6.67 kΩ to the
+74HC08 — 750 µA at 5 V, far inside its drive capability — and it touches nothing
+upstream, so the timing network is unaffected.
+
+Monitor **both** edges on the sense pin. The AND output rises when GPIO 18 is
+asserted and falls when Q times out, so the interval between the two timestamps
+is `t_W` directly, with nothing to correlate against.
+
+```bash
+gpiodetect                  # the header chip is the one with ~54 lines; on a
+                            # Pi 5 it is not always gpiochip0
+gpiodetect --version        # 1.6.x uses the syntax below; 2.x renames the tools
+
+# terminal 1 — watch both edges of the laser TTL
+gpiomon --format="%e  %s.%n" gpiochip0 23
+
+# terminal 2 — GPIO 18 HIGH and held, simulating a hung control thread
+gpioset --mode=wait gpiochip0 18=1
+```
+
+Terminal 1 prints a rising event and, one `t_W` later, a falling event; the
+difference is the period. Scheduling jitter on a non-RT kernel is of the order
+of a millisecond — **1% of 100 ms**, an order of magnitude better than this
+measurement needs.
+
+`gpioset` drives GPIO 18 through the same libgpiod character-device interface
+the application uses, so this exercises the real path rather than a simulation
+of it. It also claims the line exclusively: **the application must not be
+running.**
+
+The same bench answers the two pass/fail conditions below, which matter more
+than the number: release GPIO 18 immediately instead of holding it, and the
+output must be equally brief (the AND gating is present); hold it, and the
+output must produce exactly one pulse and then stay LOW (the backstop cuts).
+
+**Remove the measurement divider afterwards.** Left fitted it would hand
+software a reading of the actual laser TTL state — precisely the kind of signal
+`AGENTS.md` §4.5b argues against, since it informs the control thread of
+something it cannot act on that the hardware has not already done. Pull-downs
+(a), (b) and (c) stay: those are the circuit.
 
 ### Verification (mandatory before connecting the Class 4 laser)
 
@@ -974,7 +1057,7 @@ the nominal marking alone.
 - [ ] **Timing pins verified against the datasheet:** 220 kΩ on **pin 14**
   (1Rext/Cext), capacitor between pins 15 and 14. Wired to pin 15 instead, the
   measured period is meaningless.
-- [ ] **Period measured** on a scope and recorded; matches intent (§ Timing above).
+- [ ] **Period measured** and recorded; matches intent (§ Timing above).
 - [ ] **No PWM firing:** confirm the firing path drives a single sustained level per pulse — a retriggering burst within t_W would hold the output HIGH and defeat the cap.
 
 ---
@@ -1175,7 +1258,7 @@ it is a separate work package for a qualified person — but it must not be
 | **1** | **Enclosure mechanics.** Case, beam dump, door-interlock switch mounting, PE bonding plan. No electronics. | Door interlock actuates on door movement and cannot be defeated without a tool (§6a) |
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |
-| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 14**, SN74HC08N, pull-downs (a)(b)(c). Scope and dummy load only — no laser of any class. | Every checkbox in §11a passes and **the measured period is recorded** |
+| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 14**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded** |
 | **5** | **Sense networks.** Arm and E-stop dividers, Zeners with the band at the junction, door-interlock contacts. Meter each node **with the GPIO wire disconnected**, then attach. | ≈ 0 V / 2.98 V on arm OFF/ON; ≈ 0 V / 2.53 V on E-stop pressed/released (§5, §6) |
 | **6** | **Mains package.** Isolator, overcurrent protection, RCD, K1, START/STOP, terminal blocks, PE bonding. Designed, built and inspected by a qualified person. | Latching verified: E-stop drops K1; **releasing it does nothing**; only START restores. Both DC rails measured at 0 V with the E-stop pressed (§3) |
 | **7** | **DC supplies, unloaded.** Energise ±15 V and 12 V with nothing connected. | +15 V, 0 V, −15 V and 12 V all within tolerance; COM bonded to common ground (§13) |
