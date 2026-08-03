@@ -101,6 +101,14 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   forward-clamps its node near 0.7 V.
 - [ ] The full 10 kΩ count is present: **6** — one arm series, three laser-path
   fail-LOW pull-downs, two chip-select pull-ups (`HARDWARE_WIRING.md` §2).
+- [ ] **Both `AHCT125` packages pass the input-threshold test** of
+  `HARDWARE_WIRING.md` §9.4: with `V_CC` = 5 V, the output flips at
+  **~1.4–1.5 V**, not at ~2.5 V. The devices on hand carry a marketplace brand
+  and no manufacturer traceability, so the `AHCT` marking certifies nothing and
+  this measurement is the only thing standing between the design and a
+  pin-identical `AHC`/`HC` die. "It switched at 3.3 V" is **not** a pass — an
+  `HC` part typically does too, while failing its own guaranteed 3.5 V `V_IH`.
+  Sourcing both packages from an authorised distributor is recommended (§9.1).
 - [ ] The four SPI outputs use a push-pull translator verified at
   `spi_speed_hz`; GPIO 18 uses a separate `AHCT125` package verified fail-LOW
   through power-up/down, open-wire, **and missing-IC** cases. No translator is
@@ -227,7 +235,7 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 | Enclosure + door interlock | Enclosure closed with beam dump; two positive-opening NC contacts fitted and both paths tested (§6a) |
 | E-Stop + arm switch | Physically installed and functionally tested; sense networks metered before connection |
 | Galvo driver input topology | Differential pair, 2.5 V common mode and differential ±5 V rating all confirmed from the driver's own manual (§10) |
-| Power and logic interfaces | Bipolar ±15 V galvo supply installed; SPI and laser level interfaces electrically and scope verified; all three §9.3 pull-downs individually proven |
+| Power and logic interfaces | Bipolar ±15 V galvo supply installed; both `AHCT125`s pass the §9.4 input-threshold test; SPI and laser level interfaces electrically and scope verified; all three §9.3 pull-downs individually proven |
 | MCP4922 control pins | `/LDAC` grounded, `/SHDN` at +5 V, `dac_reference_voltage` set from the measured rail |
 | 74HC123 pulse-duration backstop | Wired with AND gating, **220 kΩ on pin 15**, and bench-verified (short pulse passes, stuck-HIGH capped, period recorded) |
 | Laser driver TTL polarity | Confirmed **active HIGH** from the module's own documentation |

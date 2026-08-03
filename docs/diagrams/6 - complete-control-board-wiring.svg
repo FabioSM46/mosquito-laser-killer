@@ -111,7 +111,7 @@
   <!-- SPI translator -->
   <rect class="missing-box" x="430" y="320" width="370" height="440" rx="20"/>
   <text class="box-title" x="455" y="355">SN74AHCT125N #1 — SPI</text>
-  <text class="warning" x="455" y="380">ON HAND • marking unread • must be AHCT125</text>
+  <text class="warning" x="455" y="380">ON HAND • untraceable brand • threshold-test per §9.4</text>
   <text class="mono" x="455" y="417">2  1A ← MOSI       1Y  3 → SDI bus</text>
   <text class="mono" x="455" y="467">5  2A ← SCLK       2Y  6 → SCK bus</text>
   <text class="mono" x="455" y="517">9  3A ← CE0        3Y  8 → X /CS</text>
@@ -223,7 +223,7 @@
   <!-- Laser translator -->
   <rect class="missing-box" x="430" y="900" width="370" height="280" rx="20"/>
   <text class="box-title" x="455" y="935">SN74AHCT125N #2 — LASER</text>
-  <text class="warning" x="455" y="960">ON HAND • marking unread • separate package</text>
+  <text class="warning" x="455" y="960">ON HAND • untraceable brand • separate package</text>
   <text class="mono" x="455" y="1006">2 1A ← GPIO18   1Y 3 → FIRE_5V</text>
   <text class="mono-small" x="455" y="1040">1 /OE → GND (permanently LOW)</text>
   <text class="mono-small" x="455" y="1066">14 VCC → +5 V    7 GND → GND</text>

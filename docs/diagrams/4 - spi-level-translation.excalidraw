@@ -35,7 +35,7 @@
       "x": 40,
       "y": 86,
       "strokeColor": "#e03131",
-      "text": "AHCT is load-bearing: AHC and HC are pin-identical but need 3.5 V and reproduce the exact problem this part solves. Read the marking on every device.",
+      "text": "AHCT is load-bearing: AHC and HC are pin-identical but need 3.5 V and reproduce the exact problem this part solves.\nThe devices on hand carry a marketplace brand with NO manufacturer traceability, so the marking certifies nothing.\nQualify each one by the \u00a79.4 threshold test: the output must flip near 1.4\u20131.5 V, not near 2.5 V.",
       "fontSize": 13,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:07:14.281Z",

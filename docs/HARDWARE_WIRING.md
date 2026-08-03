@@ -111,8 +111,8 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Door interlock switch | 2 independent NC contacts with **positive/direct opening action** (IEC 60947-5-1 Annex K), tool-required actuator (§6a) | 1 | On hand; contact arrangement and positive-opening marking not yet confirmed |
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
 | Y-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
-| SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | On hand; **marking not yet read.** Must be marked `AHCT` — not `AHC`, not `HC` |
-| Laser translation | SN74AHCT125N, a **second physically separate** package, 1 channel used, with the two fail-LOW pull-downs of §9.3 | 1 package (1 of 4 ch) | On hand; **marking not yet read.** Package #1 is fully consumed by SPI, so this is a second device, not a spare channel |
+| SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | On hand, untraceable brand; **marking certifies nothing.** Qualify by the §9.4 threshold test |
+| Laser translation | SN74AHCT125N, a **second physically separate** package, 1 channel used, with the two fail-LOW pull-downs of §9.3 | 1 package (1 of 4 ch) | On hand, untraceable brand; **qualify by the §9.4 threshold test.** Package #1 is fully consumed by SPI, so this is a second device, not a spare channel |
 | Monostable | 74HC123, DIP-16 dual retriggerable one-shot | 1 | Reported on hand; manufacturer/order code unverified |
 | AND gate | SN74HC08N, DIP-14 quad 2-input AND | 1 | Reported on hand |
 | Timing resistor | 220 kΩ, 1/2 W | 1 | Reported on hand |
@@ -154,7 +154,7 @@ nothing about the assembled board makes that visible.
 
 The same hazard applies to the logic family: `AHCT`, `AHC`, and `HC` share the
 same pinout and differ by one letter in the marking, but only `AHCT` accepts a
-3.3 V input at a 5 V supply (§9.1). Read the marking on every fitted device.
+3.3 V input at a 5 V supply (§9.1). Read the marking on every fitted device — and, for the two `AHCT125`s, measure the input threshold too (§9.4): the devices on hand have no manufacturer traceability, so their marking is not evidence.
 
 **Sockets and permanence.** DIP sockets add nothing on a breadboard — the
 breadboard is the socket — but on the soldered build they let you swap the
@@ -648,7 +648,39 @@ far beyond the configured `spi_speed_hz`.
 > **`AHCT` is load-bearing.** `AHC` and `HC` share the identical pinout but use
 > CMOS thresholds (`0.7 × VCC` = 3.5 V) and reproduce the exact problem this part
 > exists to solve. A wrong-family substitution is invisible on the assembled
-> board. Read the marking on every fitted device.
+> board.
+>
+> **The marking is not sufficient evidence, and on the devices currently on hand
+> it is not evidence at all.** They were bought under a marketplace brand from a
+> trading company, with no manufacturer traceability (`HARDWARE_INVENTORY.md`),
+> so the letters `AHCT` on the package are a claim by someone who did not make
+> the die. An `AHC`/`HC` die in an `AHCT`-marked package is the cheap
+> substitution and the pinout hides it completely. Read the marking **and** run
+> the threshold test in §9.4.
+
+#### Why this part cannot be qualified on the bench alone
+
+This is the one device in the design whose value is a **datasheet guarantee**
+rather than an observable behaviour, and it is worth being explicit about the
+difference.
+
+The 74HC123's die is checked by measuring its period (§11a): a wrong part shows
+up in the number. The SN74HC08N is an AND gate whose function the §11a tests
+exercise directly. But nothing you can do on a bench establishes
+`V_IH = 2.0 V max at V_CC = 5 V across the full temperature range` — and that
+specification, not any single observation, is what makes it legitimate to drive
+this input from 3.3 V.
+
+A threshold measured on one unit at room temperature is exactly the class of
+evidence this section already rejects for direct wiring: *not valid merely
+because it may appear to work on one bench unit*. An untraceable `AHCT` that
+passes a bench threshold test sits in the same logical position as the direct
+connection it was bought to replace.
+
+**Obtain both packages from an authorised distributor** (Mouser, DigiKey, RS,
+Farnell). The part is well under €1; the laser firing path runs through it. Use
+the threshold test below on whatever is fitted, traceable or not — it still
+catches an outright `HC` die.
 
 Two **physically separate** packages are used:
 
@@ -740,7 +772,23 @@ by trust — which is what makes it safe to work on the wiring downstream.
 
 ### 9.4 Verification before either laser is connected
 
-- [ ] Every fitted device is marked `AHCT`, not `AHC` or `HC`.
+- [ ] Every fitted device is marked `AHCT`, not `AHC` or `HC`. **Necessary, not
+      sufficient** — see §9.1 on the traceability of the devices on hand.
+- [ ] **Input threshold measured on every fitted device.** This is the test the
+      marking cannot substitute for, and it is decisive against a remarked
+      `AHC`/`HC` die. With `V_CC` = 5 V and `/OE` LOW, drive one input from an
+      adjustable divider (a 10 kΩ potentiometer across the 5 V rail is enough)
+      and raise it slowly while watching that channel's output:
+
+      | Output flips at | Verdict |
+      |-----------------|---------|
+      | ~1.4–1.5 V | TTL thresholds — a genuine `AHCT` |
+      | ~2.5 V (half `V_CC`) | CMOS thresholds — an `AHC`/`HC` die. **No-go** |
+
+      Test both packages: they need not be from the same lot. Do **not** accept
+      "it switched when I applied 3.3 V" as a pass — an `HC` part typically
+      switches near 2.5 V and would pass that test while failing its own
+      guaranteed 3.5 V `V_IH`. That is the failure this test exists to catch.
 - [ ] Scope MOSI, SCLK, CE0, CE1 **at the MCP4922 pins** at the configured
       `spi_speed_hz`: valid HIGH/LOW levels, setup/hold met against the MCP4922
       timing spec. For breadboard bring-up, lower `spi_speed_hz` (e.g. 1 MHz) —
@@ -1283,7 +1331,7 @@ it is a separate work package for a qualified person — but it must not be
 
 | Stage | Work | Gate |
 |-------|------|------|
-| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor against its documented value (§2). Read the marking on every IC (`AHCT`, not `AHC`/`HC`). Ring out the mushroom and lever-switch contacts. Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
+| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor against its documented value (§2). Read the marking on every IC (`AHCT`, not `AHC`/`HC`) and threshold-test both `AHCT125`s per §9.4, since their marking is untraceable. Ring out the mushroom and lever-switch contacts. Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
 | **1** | **Enclosure mechanics.** Case, beam dump, door-interlock switch mounting, PE bonding plan. No electronics. | Door interlock actuates on door movement and cannot be defeated without a tool (§6a) |
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |

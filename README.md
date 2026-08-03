@@ -23,7 +23,7 @@ parts.
 | Test laser | 5 mW, 12 mm module | On hand; wavelength, supply, class label, pinout, and TTL compatibility must be recorded before use |
 | Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
-| Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | On hand; **marking not yet read**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
+| Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | On hand, but under a marketplace brand with **no manufacturer traceability**, so the `AHCT` marking certifies nothing — qualify by the §9.4 threshold test, and prefer parts from an authorised distributor. `AHC`/`HC` are pin-identical with 3.5 V thresholds |
 | Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand. `74HC123` is a Hitachi HD74HC123P whose datasheet gives `t_W = R·C`, so the fitted parts are **≈220 ms**, not 99 ms. Actual period must still be measured. The 220 kΩ goes to **pin 15** |
 | Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | On hand; **not wired.** The mushroom must not switch mains directly |
 | Door interlock | Switch with 2 independent NC contacts, positive/direct opening | On hand; contact arrangement unconfirmed |
