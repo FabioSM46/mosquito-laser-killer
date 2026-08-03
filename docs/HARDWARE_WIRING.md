@@ -9,17 +9,16 @@ laser-targeting wiring. It matches the source code in `src/hal/mcp4922.cpp`,
 tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 
 > **Inventory no-go:** the currently reported stock is not a complete, validated
-> build. In particular, 3.3 Ω resistors cannot replace the required 3.3 kΩ
-> resistors; the 1 kΩ E-stop resistor and bipolar ±15 V galvo supply were not
-> reported; and switch contact ratings are unknown. Level translation is now
-> **specified** as 2 × SN74AHCT125N (§9) but the devices are on order, not on
-> hand; the generic four-channel I2C level shifter is excluded from both the SPI
-> and laser paths. The **safety contactor, latching START circuit, mains isolator
-> and enclosure door interlock** of §3 and §6a are specified but neither
-> purchased nor built, and the **galvo driver's differential input topology and
-> common-mode range** (§10) are unverified — that last item invalidates §14 and
-> the coordinate mapping if it turns out wrong. Do not apply power until every
-> reconciliation item in `HARDWARE_INVENTORY.md` is closed.
+> build. In particular, the 2 × 3.3 kΩ sense resistors, the 1 kΩ E-stop resistor
+> and the bipolar ±15 V galvo supply were not reported, and switch contact
+> ratings are unknown. Level translation is now **specified** as 2 ×
+> SN74AHCT125N (§9) but the devices are on order, not on hand. The **safety
+> contactor, latching START circuit, mains isolator and enclosure door
+> interlock** of §3 and §6a are specified but neither purchased nor built, and
+> the **galvo driver's differential input topology and common-mode range** (§10)
+> are unverified — that last item invalidates §14 and the coordinate mapping if
+> it turns out wrong. Do not apply power until every reconciliation item in
+> `HARDWARE_INVENTORY.md` is closed.
 
 ---
 
@@ -127,7 +126,7 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Laser-path fail-LOW pull-downs | 10 kΩ, 1/2 W — **three**, one per node: (a) translator input, (b) '123/'08 inputs, (c) laser-driver connector (§9.3) | 3 | Value reported on hand; count unverified |
 | Chip-select pull-ups | 10 kΩ, 1/2 W to **3.3 V** on the CE0 and CE1 translator inputs (§8) | 2 | Value reported on hand; count unverified |
 | E-stop series resistor | 1 kΩ, 1/2 W | 1 | **Not reported; required** |
-| Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | **Not reported; required. The stocked 3.3 Ω value is unusable here** |
+| Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | **Not reported; required** |
 | Zener clamps | BZX55C3V3, DO-35, 0.5 W — cathode at the sense junction, anode to GND | 2 | Part type reported; count unverified |
 | Sense/debounce capacitors | 100 nF, 50 V monolithic ceramic | 2 | Value reported; count unverified |
 | Mains terminal blocks | DIN-rail terminal blocks, one block per net: unswitched A/B, switched A/B, PE (§3) | 1 strip | **Not reported; required** |
@@ -149,10 +148,10 @@ the counts to shop against; the rows above are the counts per role.
 | 220 kΩ, 1/2 W | **1** | 74HC123 timing, to **pin 14** (§11a) |
 | 1 µF, 50 V ceramic | **1** | 74HC123 timing, pins 15↔14 (§11a) |
 
-The stocked **3.3 Ω** resistors are intentionally not assigned a circuit role.
-Meter every resistor before installation; colour-band confusion between 3.3 Ω
-and 3.3 kΩ would keep both sense inputs LOW and make the documented interlocks
-inoperable.
+Meter every resistor before installation and fit it against the value in the
+table above, not against the bag it came in. A wrong value in either sense
+network holds that input LOW and makes the interlock it reports inoperable, and
+nothing about the assembled board makes that visible.
 
 The same hazard applies to the logic family: `AHCT`, `AHC`, and `HC` share the
 same pinout and differ by one letter in the marking, but only `AHCT` accepts a
@@ -370,9 +369,8 @@ before assigning it this role.
   about 0.9 mA through it continuously. **It still reads HIGH**, which is what
   makes the omission dangerous — the circuit appears to work until the Zener
   fails.
-- **Do not fit the stocked 3.3 Ω part.** It would produce only about 4 mV at
-  GPIO 24, so the Pi could never observe an armed state. Obtain a real 3.3 kΩ
-  resistor and confirm it with a meter before soldering.
+- **Meter the lower leg before soldering it.** An undersized value drops the
+  junction below `V_IH`, so the Pi could never observe an armed state.
 - **100 nF**: filters switch bounce and high-frequency noise.
 - **BZX55C3V3**: **cathode (the banded end) at the junction, anode at GND.** It
   clamps transients above ~3.3 V. Fitted backwards it is a forward-biased diode
@@ -426,7 +424,7 @@ pull-down and the fail-safe property in the table below does not exist.
   resistor.
 - **3.3 kΩ**: pull-down that forces LOW when the contact opens or a wire breaks.
 - The reported inventory contains neither this 3.3 kΩ value nor the 1 kΩ series
-  value. The stocked 3.3 Ω and 10 kΩ resistors are not substitutes; obtain and
+  value, and the stocked 10 kΩ is not a substitute for either. Obtain and
   meter-check the specified parts before building this circuit.
 - **100 nF** + **BZX55C3V3**: debounce and transient clamp, as in the arm
   circuit. **Cathode (banded end) at the junction, anode at GND.** Reversed, it
@@ -760,13 +758,6 @@ by trust — which is what makes it safe to work on the wiring downstream.
 - [ ] Pull the SN74HC08N from its socket → the voltage at the laser-driver TTL
       connector stays LOW. **This tests pull-down (c), and nothing else does.**
 - [ ] Complete the §11a one-shot tests, including the pin-14 timing check.
-
-The generic four-channel IIC/I2C module in `HARDWARE_INVENTORY.md` is
-**excluded** from both paths. Those modules are open-drain with resistive
-pull-ups intended for bidirectional 100–400 kHz I2C: RC-limited rise times are
-orders of magnitude too slow for a 50 ns bit period at 20 MHz, and four channels
-cannot cover five signals. It is retained for future I2C peripherals, not for
-this build.
 
 ---
 
@@ -1180,7 +1171,7 @@ it is a separate work package for a qualified person — but it must not be
 
 | Stage | Work | Gate |
 |-------|------|------|
-| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor (3.3 kΩ vs 3.3 Ω). Read the marking on every IC (`AHCT`, not `AHC`/`HC`). Ring out the mushroom and lever-switch contacts. Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
+| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor against its documented value (§2). Read the marking on every IC (`AHCT`, not `AHC`/`HC`). Ring out the mushroom and lever-switch contacts. Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
 | **1** | **Enclosure mechanics.** Case, beam dump, door-interlock switch mounting, PE bonding plan. No electronics. | Door interlock actuates on door movement and cannot be defeated without a tool (§6a) |
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |

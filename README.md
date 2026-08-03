@@ -24,22 +24,21 @@ parts.
 | Laser power supply | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | On hand; working-laser driver power only |
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
 | Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | Specified; **on order**. `AHCT` is load-bearing — `AHC`/`HC` are pin-identical with 3.5 V thresholds |
-| Level shifter (excluded) | Generic 4-channel IIC/I2C bidirectional 3.3 V ↔ 5 V module | On hand but **excluded** — open-drain with resistive pull-ups for 100–400 kHz I2C, far too slow for a 50 ns bit period, and 4 channels cannot cover 5 signals |
 | Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand; nominal ~99 ms. Manufacturer/tolerances and actual period must be verified. The 220 kΩ goes to **pin 14** |
 | Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | **Not on hand; required.** The mushroom must not switch mains directly |
 | Door interlock | Switch with 2 independent NC contacts, positive/direct opening | **Not on hand; required** |
 | Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
 | Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
-| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, and **3.3 Ω** | On hand. **3.3 Ω is not the required 3.3 kΩ**, and **6× 10 kΩ** are needed |
+| Resistor stock | 1/2 W carbon film: 220 kΩ and 10 kΩ | On hand; quantities not yet recorded. **6× 10 kΩ** are needed |
 | Wiring connectors | WAGO 221-413, 3-conductor | On hand; splicing connectors — not terminal blocks, and never a barrier between circuits |
 
 The documented GPIO sense circuits still require **2× 3.3 kΩ** and **1× 1 kΩ**
-resistors; neither value was reported in the inventory. Do not substitute the
-stocked 3.3 Ω resistor. The safety contactor, latching START circuit, mains
-isolator and door interlock are specified but neither purchased nor built, and the
-galvo driver's **differential input topology and common-mode range** are still
-unverified — that last one invalidates the coordinate mapping if it turns out
-wrong. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
+resistors; neither value was reported in the inventory. The safety contactor,
+latching START circuit, mains isolator and door interlock are specified but
+neither purchased nor built, and the galvo driver's **differential input
+topology and common-mode range** are still unverified — that last one
+invalidates the coordinate mapping if it turns out wrong. These are no-go items
+in `docs/HARDWARE_INVENTORY.md`.
 
 ### Wiring Notes
 
@@ -51,7 +50,7 @@ with drawings in [`docs/diagrams/`](docs/diagrams/README.md). Key points:
 - **RPi 5 GPIO 25** → mushroom E-stop sense (active LOW when pressed). Two NC contacts are required: pole 1 breaks the **safety contactor's coil circuit** — not the mains itself — and pole 2 drives the GPIO sense circuit. The contactor latches, so releasing the mushroom does not restore power; only a deliberate START press does. Configurable via `e_stop_pin`.
 - **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC), with a 10 kΩ pull-up to 3.3 V so both DACs stay deselected at boot.
 - **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC), likewise.
-- **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** go through **SN74AHCT125N #1**. Direct 3.3 V chip-select wiring into a 5 V DAC is not validated, and the generic I2C shifter is excluded.
+- **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** go through **SN74AHCT125N #1**. Direct 3.3 V chip-select wiring into a 5 V DAC is not validated.
 - **Both MCP4922 `/LDAC` (pin 8) → GND and `/SHDN` (pin 9) → +5 V.** Left floating, `/LDAC` produces a silent failure: `write()` returns success, the SPI traffic scopes correctly, and the outputs never move.
 - Both MCP4922 Vref pins tied to **5 V** → 0–5 V per channel, combined as **±5 V differential** per axis. `dac_reference_voltage` must hold the *measured* rail voltage.
 - Galvo scanner powered by a separate **±15 V** supply (three conductors: +15 V, 0 V/COM, −15 V). Confirm from the driver's own manual that `IN+`/`IN−` are a genuine differential pair whose common-mode range admits the 2.5 V the complementary DAC pair presents, and that ±5 V is a *differential* rating.

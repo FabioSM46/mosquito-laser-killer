@@ -95,7 +95,7 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   **1 kΩ** resistors, and in each network the 3.3 kΩ, the 100 nF, the Zener and the
   GPIO wire all meet at **one junction** with the series resistor. Without that
   connection there is no divider — and the pin still reads HIGH, so the omission is
-  silent. The stocked 3.3 Ω parts are segregated and not fitted.
+  silent.
 - [ ] Both BZX55C3V3 clamps are fitted **cathode (banded end) at the sense
   junction, anode to GND**, confirmed with a diode test. Reversed, each one
   forward-clamps its node near 0.7 V.
@@ -103,9 +103,9 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   fail-LOW pull-downs, two chip-select pull-ups (`HARDWARE_WIRING.md` §2).
 - [ ] The four SPI outputs use a push-pull translator verified at
   `spi_speed_hz`; GPIO 18 uses a separate `AHCT125` package verified fail-LOW
-  through power-up/down, open-wire, **and missing-IC** cases. The generic I2C
-  module is not accepted by part name alone. All **three** pull-downs of §9.3 are
-  fitted and each is individually proven:
+  through power-up/down, open-wire, **and missing-IC** cases. No translator is
+  accepted on its part name alone. All **three** pull-downs of §9.3 are fitted
+  and each is individually proven:
   - Disconnect the GPIO 18 wire → laser TTL LOW. *(tests (a))*
   - Pull the `AHCT125` #2 → laser TTL LOW. *(tests (b))*
   - Pull the `SN74HC08N` → voltage at the **laser-driver connector** stays LOW.

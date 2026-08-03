@@ -929,7 +929,7 @@
       "x": 470,
       "y": 540,
       "strokeColor": "#1e1e1e",
-      "text": "Meter every resistor: 3.3 kΩ, NOT the stocked\n3.3 Ω. The Ω part gives ≈ 4 mV at the pin — the\nPi could never observe an armed state.\n\n100 nF debounces the switch. The 10 kΩ limits\ncurrent from the 12 V rail.",
+      "text": "Meter every resistor before soldering. An\nundersized lower leg drops the junction below\nV_IH and the Pi never reads armed.\n\n100 nF debounces the switch. The 10 kΩ limits\ncurrent from the 12 V rail.",
       "fontSize": 12,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.771Z",
