@@ -107,7 +107,7 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  Never switched: the log, both GPIO se
 | Working laser | 2.5 W, 450 nm, 33 × 70 mm, 12 VDC, forced-air cooled, 3-pin TTL/PWM | 1 | Reported on hand; pinout/TTL levels unverified |
 | Test laser | Low-power visible, electrically compatible with the complete gating chain | 1 | 5 mW, 12 mm module reported; electrical details/class label unverified |
 | Laser PSU | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | 1 | Reported on hand |
-| Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | On hand; rails and current rating not yet measured |
+| Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | On hand: **the galvo kit's own supply, with its mating cables** — open-frame board marked `HT-15V30W V2.0-181206`, 30 W total, mains and DC both on **pin headers rather than terminal blocks**, PCB exposed. Rail voltages, per-rail current and the `COM` pin position all unrecorded; `COM` is not yet bonded to the logic ground the DAC pair is referenced to (§13) |
 | Mains cords | Two factory-moulded power cords, one per supply. No plug assembly, no switched mains, no project-side isolator or OCP — the wall socket's RCD and breaker are the upstream protection (§3) | 2 | Not yet fitted |
 | Door interlock switch | **1** NC contact with **positive/direct opening action** (IEC 60947-5-1 Annex K), rated for the driver current at 12 V DC, tool-required actuator (§6a) | 1 | On hand; contact arrangement, DC rating and positive-opening marking not yet confirmed |
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
@@ -877,6 +877,84 @@ The galvo driver board accepts a **differential analog input** for each axis. Th
 > calibration too: command a known angle and measure the actual deflection before
 > trusting the mapping (`CALIBRATION.md`).
 
+### What the board itself shows, and the one test that settles question 1
+
+The vendor's annotated photo of this driver marks **three distinct connector
+groups**. That much is now documented rather than assumed:
+
+| Connector | Vendor label | Position on the board |
+|-----------|--------------|-----------------------|
+| Head, X axis | `HT-X21852` | top left; thick white motor/detector cable |
+| Head, Y axis | `HT-Y21852` | top right; thick white motor/detector cable |
+| Power | **±15V Power Supply** | centre, between the two bulk electrolytics |
+| Signal, X axis | **±5V singal input** *(sic)* | left board edge |
+| Signal, Y axis | **±5V singal input** *(sic)* | right board edge |
+
+The board labelling its own power inlet **±15 V** is independent confirmation
+that the kit supply is bipolar — the marking on the supply itself never said so.
+It settles nothing about the signal topology: a vendor annotation is a claim, and
+"±5 V input" is exactly as ambiguous on the board as it was in the listing.
+
+**Question 1 can be settled today, unpowered, with a continuity meter.** Ring
+every pin of one axis' signal connector against every pin of the ±15 V power
+connector:
+
+| Result | Meaning |
+|--------|---------|
+| **2 signal pins, neither continuous with a power pin** | genuine differential pair — §14 holds |
+| **3 signal pins, exactly one continuous with the power `COM`** | differential pair **plus** a ground pin. Best case: that pin is where §13's common reference lands |
+| **2 signal pins, one continuous with the power `COM`** | **single-ended input.** §14 does not hold. The complementary DAC pair would short one channel to ground, and a unipolar 0–5 V DAC cannot reach the negative half of the range in any case. **Stop and re-plan the analog stage** |
+
+Do this before a DAC output is ever connected. It is the only one of the three
+questions that can be answered without the manual, and it costs a minute.
+
+**Result, 2026-08-09: three pins per axis, and the centre one is continuous with
+the centre pin of the ±15 V inlet.** That is the third row — the best case. Two
+consequences:
+
+- **The single-ended front end is ruled out**, so §14 and the complementary DAC
+  pair survive.
+- **§13 gets simpler.** The driver's signal ground and the supply's `COM` are the
+  same node, and that node is the **centre pin of the power connector** — now
+  identified with no power applied. Bonding `COM` to the Pi's logic ground
+  references the signal inputs at the same time: one wire, not two.
+
+**Both outer pins then read finite to the centre (2026-08-09), so the
+`IN`/`GND`/`NC` case is out as well.** Question 1 is now answered as far as a
+meter can answer it: three pins, centre grounded, two live inputs — an
+`IN+`/`GND`/`IN−` difference-amplifier front end.
+
+Questions 2 and 3 still need the manual or the stage-8 check of §17, but they are
+no longer **connection** risks. Under either reading of "±5 V" the complementary
+DAC pair sits inside the envelope: each channel stays within 0–5 V to ground, and
+the difference stays within ±5 V. What remains uncertain is the **scale** — how
+many degrees the driver gives per volt of difference. A scale error is exactly
+what `CALIBRATION.md` measures, by commanding a known angle and reading the
+actual deflection. Connecting the DACs cannot damage the input; it can only
+produce the wrong number of degrees, and that is caught long before any laser is
+fitted.
+
+### Three practical consequences for the wiring
+
+**The board has a single ±15 V inlet, and the kit's DC harness has two legs.**
+That harness is sized for the two-single-board variant of this kit; with this
+dual board **one leg is left over and must be insulated.** A live ±15 V housing
+loose against the chassis is a short straight across the supply.
+
+**The `±5 V signal input` connectors are fed by the MCP4922 outputs, not by the
+Pi.** The Pi has no analog output at all; the chain is Pi → SPI → `AHCT125` #1 →
+the two MCP4922s → these two connectors. Nothing from a GPIO header ever lands
+here — a 3.3 V logic pin on an input built for ±5 V analog is a wiring error, not
+a shortcut. The centre pin of each connector is the ground already shown to be
+common with the supply's `COM`, so §13's single bond references both axes.
+
+**Which outer pin is `IN+` and which is `IN−` is not established.** Getting it
+backwards inverts that axis: the mirror moves the wrong way. It damages nothing
+and is fixed by swapping the two wires. Resolve it at `CALIBRATION.md` by
+commanding a known deflection — not by guessing from wire colour. The same
+applies to which edge connector is X and which is Y: the vendor photo puts X
+beside `HT-X21852`, but that is worth one command to confirm.
+
 ```
 MCP4922 #1 ChA (X+) ──► X driver IN+
 MCP4922 #1 ChB (X-) ──► X driver IN-
@@ -1394,7 +1472,7 @@ built and metered on SELV alone.
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |
 | **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 15**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded.** In this build that number bounds the beam an E-stop *release* can produce after a hung control thread (§3), so it is a safety figure, not a design check |
 | **5** | **Sense networks, built and metered.** Both dividers are now identical — 10 kΩ series, 3 kΩ lower leg, 100 nF, Zener band at the junction. Feed each tap from a bench source with the GPIO wire **disconnected**. | Each junction ≈ 0 V with its tap open and ≈ 2.77 V with 12 V on the tap (§5, §6) |
-| **6** | **Mains tails and DC supplies, unloaded.** Land `L`/`N`/`⏚` on both supplies from factory-moulded cords, fit the terminal covers, energise with nothing connected downstream. | +15 V, 0 V, −15 V and 12 V all within tolerance; PE continuous from the plug to both supply chassis, the enclosure and both driver chassis (§13) |
+| **6** | **Mains tails and DC supplies, unloaded.** Land `L`/`N`/`⏚` on both supplies from factory-moulded cords and fit the LRS-50-12's terminal cover. The galvo supply is an open-frame board with pin headers and **no cover** (§2): identify its mains end by ringing a header pin to a leg of `F1` **unplugged**, wire it unplugged, land the meter on the *wire ends* away from the PCB, and only then energise. Nothing connected downstream. | 12 V within tolerance; +15 V, 0 V and −15 V within tolerance **and `+15`→`−15` about double `+15`→`COM`** — anything else means the supply is not bipolar and is a no-go for the driver; PE continuous from the plug to both supply chassis, the enclosure and both driver chassis (§13) |
 | **7** | **Interlock chain, with a dummy load.** E-stop NC, arm lever and door contact in series in the `12 V+` conductor, a resistive dummy load in place of the laser driver, both sense taps connected to the Pi. | Opening **any** of the three kills the dummy load. GPIO 25 goes LOW on the E-stop **only**; GPIO 24 goes LOW on any of the three. Releasing the mushroom restores the dummy load — confirm that is understood and that §15's lever-first procedure is written on the enclosure (§3) |
 | **8** | **Galvo driver, no head.** Supplies, ground, and the analog inputs per the topology verified at stage 0. | Commanded DAC pairs produce the expected differential at `IN+`/`IN−` with no clipping or offset (§10, §14) |
 | **9** | **Galvo head connected, no optical source.** | Mirrors centre on start-up and slew to commanded angles without hitting a mechanical limit |

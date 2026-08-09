@@ -27,11 +27,19 @@ Two conventions:
 |----------|----------|----------|------|-------|
 | LRS-50-12 output, **no load** | 12 V ±5 % | **12.18 V** | 2026-08-09 | `SVR` trimmer untouched. This is the reference for every 12 V-derived expectation below |
 | LRS-50-12 output, **under laser-driver load** | ≥ 11.5 V | | | Re-measure at §17 stage 7. A significant sag changes both sense-junction targets |
-| Galvo supply `+15` → `COM` | ≈ +15 V | | | §17 stage 6, unloaded |
-| Galvo supply `COM` → `−15` | ≈ +15 V | | | Red probe on `COM` |
-| Galvo supply `+15` → `−15` | ≈ 2 × the two above | | | If this is not about double, the supply is **not bipolar** — no-go for the galvo driver |
-| Galvo supply rated current per rail | ≥ both axes together | | | From the nameplate, not from the listing |
+| Galvo supply `+15` → `COM` | ≈ +15 V | **+15.1 V** (right-hand pin) | 2026-08-09 | §17 stage 6, unloaded. Probes on the **wire ends** — `HT-15V30W` is open-frame and must not be probed live |
+| Galvo supply `COM` → `−15` | ≈ +15 V | **−15.1 V** (left-hand pin) | 2026-08-09 | Pin order at the housing: `−15` – `COM` – `+15` |
+| Galvo supply `+15` → `−15` | ≈ 2 × the two above | **30.2 V** | 2026-08-09 | Exactly the sum of the two rails, so the centre is a true midpoint with no imbalance. Genuine bipolar supply, confirmed by measurement |
+| Galvo supply rated current per rail | ≥ both axes together | | | The silkscreen gives **30 W total** and nothing per rail. If a cover label exists, record it; otherwise this is a derived figure, not a rating |
 | **5 V logic rail, at an MCP4922 `VDD` pin, under load** | 4.75 – 5.25 V | | | §17 stage 3. **This value goes into `dac_reference_voltage`** in `config/system_config.yaml` — the DAC's full-scale is this rail, not 5.000 V |
+
+> **2026-08-09 — the first energisation of the galvo supply tripped the house
+> RCD.** Cause: a wiring error made during assembly, found and corrected by the
+> builder; the specific error was not captured. The supply then measured clean on
+> the rails above. The LRS-50-12 on the same socket never tripped it, so the
+> installation was never the variable. **Close it properly by repeating the three
+> insulation checks in §6** — the same ones already passed on the LRS — so
+> "it was fixed" becomes "it is proven".
 
 ## 2. GPIO sense networks
 
@@ -76,8 +84,9 @@ Colour bands are a claim; the meter is the record.
 | DAC X channel B, mid-scale | `V₅ᵣₐᵢₗ / 2` | | | |
 | DAC Y channel A, mid-scale | `V₅ᵣₐᵢₗ / 2` | | | |
 | DAC Y channel B, mid-scale | `V₅ᵣₐᵢₗ / 2` | | | If these never move while SPI scopes clean, `/LDAC` is floating (§8) |
-| `AHCT125` #1 threshold test (§9.4) | output HIGH at 1.99 V in | | | Divider: 10 kΩ from 5 V, 2 × 3 kΩ to GND. Output LOW ⇒ `AHC`/`HC` die ⇒ **no-go** |
-| `AHCT125` #2 threshold test (§9.4) | output HIGH at 1.99 V in | | | Both packages must pass; the marking is untraceable and certifies nothing |
+| `AHCT125` #1 threshold test (§9.4) | output **HIGH** with 1.875 V on the input | | | Divider from the parts on hand: 10 kΩ from 5 V, 2 × 3 kΩ in series to GND → `5 × 6/16 = 1.875 V`. Sits between the `AHCT` switching point (~1.4 V) and the `AHC`/`HC` one (~2.5 V). Output LOW ⇒ suspect an `AHC`/`HC` die |
+| `AHCT125` #1, confirmation point | output HIGH with 3.125 V on the input | | | Only needed if the first point read LOW. Divider reversed: 2 × 3 kΩ from 5 V, 10 kΩ to GND. HIGH here but LOW at 1.875 V ⇒ `HC`-class thresholds ⇒ **no-go** |
+| `AHCT125` #2 threshold test (§9.4) | output **HIGH** with 1.875 V on the input | | | Both packages must pass; they need not be from the same lot, and the marking is untraceable |
 
 ## 5. 74HC123 pulse-duration backstop
 
@@ -101,6 +110,19 @@ control thread.
 | LRS `L` → `⏚` | **open** | **open** | 2026-08-09 | |
 | LRS `N` → `⏚` | **open** | **open** | 2026-08-09 | |
 | LRS `L` → `N` | no dead short | **no beep** | 2026-08-09 | A slow rise from the input capacitor is normal |
+| Galvo PSU: mains end identified | a header pin rings to a leg of `F1` | | | **Unplugged.** The fuse end is the AC end — a ten-second check that the two kit cables have not been swapped |
+| Galvo PSU: output header pin count | 3 — `+15`, `COM`, `−15` | | | The supply ships inside the galvo kit, so 3 is expected; 2 would mean single-ended and a **no-go** |
+| Galvo PSU: which output wire is `COM` | the **centre** conductor | **black**, centre position | 2026-08-09 | Established by measurement, not by colour convention. **This is the wire that bonds to the Pi's logic ground** (§13) |
+| Galvo PSU `COM` → Pi / logic ground | bonded per §13 | | | The DAC pair is referenced to Pi ground; the driver measures `IN+ − IN−` against `COM`. Untied, the common mode presented to the driver is arbitrary |
+| Galvo PSU AC pigtail: conductor identification | standard IEC colours | **yellow/green – blue – brown**, in that order at the housing | 2026-08-09 | `PE` – `N` – `L`. Identification is settled by colour; the fuse check below confirms the kit wired its own housing to match |
+| Galvo PSU AC pigtail: brown ↔ a leg of `F1` | continuity | **continuity** | 2026-08-09 | The fuse sits in the **line** conductor, as it must. Housing order confirmed end to end: `PE` (yellow/green) – `N` (blue) – `L` (brown), with `L` on the fuse side |
+| Galvo PSU: `PE` conductor ↔ metal cover | continuity | **continuity** | 2026-08-09 | The supply earths its own case; no hand bonding needed here. A first attempt read open — a plated cover surface, not a missing bond. **Probe screw heads and cut edges, never a painted or plated face**, or this meter reports a missing earth that is actually present |
+| Galvo assembly (plug + WAGOs + pigtail): `L` → `⏚` | **open** | | | Plug out. These three close the RCD trip recorded in §1 — the same checks the LRS already passed |
+| Galvo assembly: `N` → `⏚` | **open** | | | |
+| Galvo assembly: `L` → `N` | no dead short | | | A slow rise from the input capacitor is normal |
+| Galvo driver: signal-input pins per axis | 2 or 3 | **3** | 2026-08-09 | §10. The single-ended disaster case required exactly 2 |
+| Galvo driver: signal pin ↔ power `COM` continuity | no pin continuous, **or** exactly one of three | **centre pin continuous with the ±15 V centre pin** | 2026-08-09 | Best case. Rules out a single-ended front end, and identifies the power connector's **centre pin as `COM`** with no power applied |
+| Galvo driver: outer signal pin → centre `GND`, each side | finite on **both** sides | **both finite** | 2026-08-09 | The `IN`/`GND`/`NC` case is out — two live inputs around a centre ground. Values not captured; the open-vs-finite distinction was the decisive one |
 | Mushroom NC (`1`–`2`), released | closed | | | |
 | Mushroom NC (`1`–`2`), pressed | open | | | |
 | Mushroom NC — DC-13 rating vs measured driver current | rating ≥ current | | | Carries the whole hardware interlock now. An AC-15 figure is not a DC rating |
