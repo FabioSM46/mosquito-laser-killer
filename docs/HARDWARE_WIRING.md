@@ -3,7 +3,8 @@
 **WARNING:** This system controls a **Class 4 laser** (2.5 W, 450 nm). Class 4 lasers cause instantaneous, irreversible eye injury and can ignite materials. Do not apply power to the laser until all enclosures, beam dumps, interlocks, and OD 4+ safety eyewear are in place. Read `AGENTS.md` before modifying code or wiring.
 
 This document is the single source of truth for the **intended** stereoscopic
-laser-targeting wiring. It matches the source code in `src/hal/mcp4922.cpp`,
+laser-targeting wiring. Readings actually taken on the bench — expected value,
+measured value and date — are logged in [`MEASUREMENTS.md`](MEASUREMENTS.md). It matches the source code in `src/hal/mcp4922.cpp`,
 `src/hal/differential_galvo_driver.cpp`, and
 `src/control/coordinate_mapper.cpp`. The parts physically reported on hand are
 tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).

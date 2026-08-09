@@ -6,7 +6,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 
 **Critical domain constraint:** A 2.5W Class 4 laser causes instantaneous, irreversible blindness and fire hazard. Every safety guard is **structurally enforced in code** — never documented as comments or convention.
 
-> The exact reported stock list and unresolved hardware-fit blockers live in [`docs/HARDWARE_INVENTORY.md`](docs/HARDWARE_INVENTORY.md). Full galvanometer / camera / laser parameter tables and the derived engagement envelope live in [`docs/HARDWARE_PARAMETERS.md`](docs/HARDWARE_PARAMETERS.md). Runtime values are validated at startup by `validate_engagement_volume()` (`src/safety/config_validator.cpp`).
+> The exact reported stock list and unresolved hardware-fit blockers live in [`docs/HARDWARE_INVENTORY.md`](docs/HARDWARE_INVENTORY.md); every reading actually taken on the bench is logged in [`docs/MEASUREMENTS.md`](docs/MEASUREMENTS.md). Full galvanometer / camera / laser parameter tables and the derived engagement envelope live in [`docs/HARDWARE_PARAMETERS.md`](docs/HARDWARE_PARAMETERS.md). Runtime values are validated at startup by `validate_engagement_volume()` (`src/safety/config_validator.cpp`).
 
 ### 1.1 Hardware Bill of Materials
 
@@ -372,6 +372,8 @@ mosquito-laser-killer/
 │   └── system_config.yaml       # Runtime configuration (bounding box, settle ms, etc.)
 ├── docs/
 │   ├── HARDWARE_INVENTORY.md    # Reported stock + unresolved hardware no-go items
+│   ├── MEASUREMENTS.md          # Expected vs measured, with dates. What is *proven*,
+│   │                            #   as opposed to what is merely present
 │   ├── HARDWARE_PARAMETERS.md   # Component specs + derived engagement envelope
 │   ├── HARDWARE_WIRING.md       # Physical wiring incl. the 74HC123 backstop (§11a),
 │   │                            #   12 V interlock chain (§3), door interlock (§6a),

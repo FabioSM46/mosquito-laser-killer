@@ -12,7 +12,9 @@ not what is *proven*. Vendor-listing values remain vendor-listing values.
 
 Detailed operating parameters and derived limits remain in
 [`HARDWARE_PARAMETERS.md`](HARDWARE_PARAMETERS.md); the intended circuit is in
-[`HARDWARE_WIRING.md`](HARDWARE_WIRING.md).
+[`HARDWARE_WIRING.md`](HARDWARE_WIRING.md). **Readings actually taken on this
+build are logged in [`MEASUREMENTS.md`](MEASUREMENTS.md)** — that file is the
+record of what is *proven*, and a blank cell in it is an open item here.
 
 ## Optics, motion, and power
 

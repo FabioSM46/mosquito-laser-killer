@@ -54,6 +54,9 @@ verify the logic, backstop and sense circuits first. Mains work is limited to la
 
 - [ ] Every no-go item in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md) is
   closed and the actual fitted part numbers/quantities are recorded.
+- [ ] Every `Measured` cell in [`MEASUREMENTS.md`](MEASUREMENTS.md) is filled.
+  A blank cell there is an unproven value, and this checklist treats it as a
+  **no-go** rather than as a value that is probably fine.
 - [ ] Enclosure is built and fully closed with no laser exit path except the intended beam aperture.
 - [ ] Beam dump or laser-absorbing backstop is installed inside the enclosure.
 - [ ] **The 12 V interlock chain of `HARDWARE_WIRING.md` §3 is built and
