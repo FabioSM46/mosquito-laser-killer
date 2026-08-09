@@ -29,7 +29,7 @@ parts.
 | Door interlock | Switch with 2 independent NC contacts, positive/direct opening | On hand; contact arrangement unconfirmed |
 | Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
 | Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
-| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3.3 kΩ, 1 kΩ | On hand; quantities and values not yet metered. **6× 10 kΩ** are needed |
+| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3 kΩ, 1 kΩ | On hand; quantities and values not yet metered. **6× 10 kΩ** are needed |
 | Wiring connectors | WAGO 221-413, 3-conductor | On hand; splicing connectors — not terminal blocks, and never a barrier between circuits |
 
 **Every part is on hand; none of it is verified.** No switch contact has been

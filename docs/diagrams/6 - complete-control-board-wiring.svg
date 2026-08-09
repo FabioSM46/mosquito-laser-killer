@@ -323,8 +323,8 @@
   <circle class="dot" cx="860" cy="1313" r="7"/>
   <path class="wire signal" d="M860 1313 V1280 H350" marker-end="url(#arrow-blue)"/>
   <path class="wire gnd thin" d="M860 1313 V1365"/>
-  <text class="mono-small" x="885" y="1340">junction → 3.3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND</text>
-  <text class="tiny" x="885" y="1365">Zener cathode/band at junction; anode to GND • released ≈2.53 V</text>
+  <text class="mono-small" x="885" y="1340">junction → 3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND</text>
+  <text class="tiny" x="885" y="1365">Zener cathode/band at junction; anode to GND • released ≈2.48 V</text>
   <path class="wire gnd thin" d="M860 1365 V1405"/>
 
   <!-- Arm + door circuit -->
@@ -344,7 +344,7 @@
   <path class="wire signal thin" d="M1560 1370 H1500"/>
   <circle class="dot" cx="1500" cy="1370" r="7"/>
   <path class="wire signal" d="M1500 1370 H350" marker-end="url(#arrow-blue)"/>
-  <text class="mono-small" x="1245" y="1390">sense junction → 3.3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND; cathode/band at node • armed ≈2.98 V</text>
+  <text class="mono-small" x="1245" y="1390">sense junction → 3 kΩ ∥ 100 nF ∥ BZX55C3V3 → GND; cathode/band at node • armed ≈2.77 V</text>
   <path class="wire gnd thin" d="M1500 1370 V1405"/>
   <path class="wire v12" d="M1970 1329 H2038 V1103 H2095" marker-end="url(#arrow-orange)"/>
 

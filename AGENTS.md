@@ -32,7 +32,7 @@ This project implements a stereoscopic laser-targeting system for in-flight pest
 | Arm switch | Lever switch; topology/DC rating unverified | Must switch laser-driver 12 V power and provide active-HIGH GPIO 24 sense |
 | E-stop | Mushroom button; pole arrangement/contact ratings unverified | Two independent NC contacts: pole 1 in the K1 coil circuit, pole 2 for GPIO 25 (active LOW). A monitored-safety-relay architecture would need a third |
 | Zener diodes | BZX55C3V3, DO-35, 0.5 W; count unverified | Circuit requires 2 for arm/E-stop GPIO clamps — **cathode at the sense junction, anode to GND**; reversed, each forward-clamps its node near 0.7 V |
-| Resistors | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3.3 kΩ, 1 kΩ; all on hand, counts and values unmetered | **6 × 10 kΩ are needed**: 1 arm series, 3 laser-path fail-LOW, 2 chip-select pull-ups. 2 × 3.3 kΩ and 1 × 1 kΩ serve the arm/E-stop sense networks |
+| Resistors | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3 kΩ, 1 kΩ; all on hand, counts and values unmetered | **6 × 10 kΩ are needed**: 1 arm series, 3 laser-path fail-LOW, 2 chip-select pull-ups. 2 × 3 kΩ and 1 × 1 kΩ serve the arm/E-stop sense networks (arm junction ≈ 2.77 V, E-stop ≈ 2.48 V) |
 | Capacitors | 50 V monolithic ceramic: 1 µF and 100 nF; counts unverified | Timing, per-IC decoupling, and input debounce; verify sufficient quantity |
 | Wiring connectors | WAGO 221-413, 3-conductor, max 4 mm²; count unverified | Power/signal distribution; one enclosed connector per electrical net |
 

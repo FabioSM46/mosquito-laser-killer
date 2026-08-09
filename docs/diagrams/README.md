@@ -23,7 +23,7 @@ orient with the overview, then work inward.
   [§17](../HARDWARE_WIRING.md#17-build--bring-up-order); stages 0–5 need no mains
   at all.
 - **A filled black dot is a connection. A crossing without a dot is not.** This
-  matters most in drawing 3: an earlier revision left the 3.3 kΩ divider legs
+  matters most in drawing 3: an earlier revision left the 3 kΩ divider legs
   unconnected, and built that way the GPIO pin still reads HIGH — so the fault is
   invisible until the Zener fails.
 - Pin numbers are PDIP throughout, and are annotated in the drawings only so they

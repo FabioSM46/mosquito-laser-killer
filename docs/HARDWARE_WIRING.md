@@ -125,7 +125,7 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Laser-path fail-LOW pull-downs | 10 kΩ, 1/2 W — **three**, one per node: (a) translator input, (b) '123/'08 inputs, (c) laser-driver connector (§9.3) | 3 | Value reported on hand; count unverified |
 | Chip-select pull-ups | 10 kΩ, 1/2 W to **3.3 V** on the CE0 and CE1 translator inputs (§8) | 2 | Value reported on hand; count unverified |
 | E-stop series resistor | 1 kΩ, 1/2 W | 1 | On hand; value not yet metered |
-| Sense pull-downs | 3.3 kΩ, 1/2 W | 2 | On hand; value not yet metered |
+| Sense pull-downs | 3 kΩ, 1/2 W | 2 | On hand; value not yet metered |
 | Zener clamps | BZX55C3V3, DO-35, 0.5 W — cathode at the sense junction, anode to GND | 2 | Part type reported; count unverified |
 | Sense/debounce capacitors | 100 nF, 50 V monolithic ceramic | 2 | Value reported; count unverified |
 | Mains terminal blocks | DIN-rail terminal blocks, one block per net: unswitched A/B, switched A/B, PE (§3) | 1 strip | On hand; not installed |
@@ -140,7 +140,7 @@ the counts to shop against; the rows above are the counts per role.
 |-------|-------|-------|
 | 10 kΩ, 1/2 W | **6** | 1 arm series + 3 laser-path fail-LOW (a)(b)(c) + 2 chip-select pull-ups |
 | 100 nF, 50 V ceramic | **8** | 6 IC decoupling (2× MCP4922, 2× AHCT125, 74HC123, SN74HC08) + 2 sense debounce |
-| 3.3 kΩ, 1/2 W | **2** | arm sense divider + E-stop sense pull-down |
+| 3 kΩ, 1/2 W | **2** | arm sense divider + E-stop sense pull-down |
 | 1 kΩ, 1/2 W | **1** | E-stop series |
 | BZX55C3V3 | **2** | one clamp per sense junction |
 | 10 µF | **1** | 5 V rail bulk |
@@ -350,7 +350,7 @@ before assigning it this role.
                                                                           │
                               ┌───────────────────── 10 kΩ ◄──────────────┘
                               │
-              GPIO 24 ◄───────┼── junction ──┬── 3.3 kΩ ─────► GND
+              GPIO 24 ◄───────┼── junction ──┬── 3 kΩ ───────► GND
             (RPi pin 18)      │              ├── 100 nF ─────► GND
                               └──────────────┴── BZX55C3V3 ──► GND
                                                  banded (cathode) end at the
@@ -360,16 +360,25 @@ before assigning it this role.
 ### Component notes
 
 - **10 kΩ**: current-limiting series resistor from the 12 V arm signal.
-- **3.3 kΩ**: lower leg of the voltage divider, **connected to the same junction**
+- **3 kΩ**: lower leg of the voltage divider, **connected to the same junction**
   as the 10 kΩ, the 100 nF, the Zener and the GPIO. GPIO 24 sees
-  `12 V × 3.3 kΩ / (10 kΩ + 3.3 kΩ) ≈ 2.98 V` — a valid 3.3 V logic HIGH.
+  `12 V × 3 kΩ / (10 kΩ + 3 kΩ) ≈ 2.77 V` — a valid 3.3 V logic HIGH.
   Without it there is no divider: the GPIO pin sees 12 V through 10 kΩ with the
   Zener as the only thing standing between the rail and a 3.3 V input, drawing
   about 0.9 mA through it continuously. **It still reads HIGH**, which is what
   makes the omission dangerous — the circuit appears to work until the Zener
   fails.
 - **Meter the lower leg before soldering it.** An undersized value drops the
-  junction below `V_IH`, so the Pi could never observe an armed state.
+  junction below `V_IH`, so the Pi could never observe an armed state. Taking
+  `V_IH` at a conservative 2.0 V, the floor for this leg is ≈ 2 kΩ. At 3 kΩ the
+  worst-case stack — both resistors at the far end of ±5% *and* the 12 V rail
+  sagging to 11 V — still lands at ≈ 2.35 V, so the margin is not consumed by
+  tolerance. Anything at or below 2 kΩ is a no-go, whatever the bin says.
+- **The value is 3 kΩ, not 3.3 kΩ, and that is deliberate.** Earlier revisions of
+  this document specified 3.3 kΩ; the stock actually on hand is 3 kΩ, the
+  computed node voltages above are the ones the board produces, and every
+  expected reading in §6, §15 and §17 was recomputed to match. Do not "restore"
+  3.3 kΩ without also restoring 2.98 V / 2.53 V everywhere they appear.
 - **100 nF**: filters switch bounce and high-frequency noise.
 - **BZX55C3V3**: **cathode (the banded end) at the junction, anode at GND.** It
   clamps transients above ~3.3 V. Fitted backwards it is a forward-biased diode
@@ -399,15 +408,15 @@ verify its contact blocks first.
 ```
 3.3 V (RPi) ──► [E-Stop pole 2, NC] ──► 1 kΩ ──┐
                                                │
-              GPIO 25 ◄──────── junction ──────┼── 3.3 kΩ ─────► GND
+              GPIO 25 ◄──────── junction ──────┼── 3 kΩ ───────► GND
             (RPi pin 22)            │          ├── 100 nF ─────► GND
                                    └──────────┴── BZX55C3V3 ──► GND
                                                   banded (cathode) end at the
                                                   junction, anode at GND
 ```
 
-All four legs — the 1 kΩ from the E-stop contact, the 3.3 kΩ, the 100 nF, the
-Zener and the wire to GPIO 25 — meet at **one** junction. The 3.3 kΩ is what
+All four legs — the 1 kΩ from the E-stop contact, the 3 kΩ, the 100 nF, the
+Zener and the wire to GPIO 25 — meet at **one** junction. The 3 kΩ is what
 pulls the pin LOW when the contact opens; wired anywhere else there is no
 pull-down and the fail-safe property in the table below does not exist.
 
@@ -415,23 +424,27 @@ pull-down and the fail-safe property in the table below does not exist.
 
 - **1 kΩ** series (NOT 10 kΩ): the source here is the Pi's own 3.3 V rail, not
   the 12 V of the arm-switch circuit, so the divider must be recomputed.
-  Released-state node voltage: `3.3 V × 3.3 kΩ / (1 kΩ + 3.3 kΩ) ≈ 2.53 V` — a
+  Released-state node voltage: `3.3 V × 3 kΩ / (1 kΩ + 3 kΩ) ≈ 2.48 V` — a
   solid 3.3 V-logic HIGH. An earlier revision of this drawing copied the arm
-  circuit's 10 kΩ, which from 3.3 V yields only ~0.82 V — below V_IH, so the
+  circuit's 10 kΩ, which from 3.3 V yields only ~0.76 V — below V_IH, so the
   input would read "pressed" permanently and the system could never leave the
   E-stop state. If your bench was built from that revision, replace the series
   resistor.
-- **3.3 kΩ**: pull-down that forces LOW when the contact opens or a wire breaks.
-- The reported inventory contains neither this 3.3 kΩ value nor the 1 kΩ series
-  value, and the stocked 10 kΩ is not a substitute for either. Obtain and
-  meter-check the specified parts before building this circuit.
+- **3 kΩ**: pull-down that forces LOW when the contact opens or a wire breaks.
+  Unlike the series leg this one has room: taking `V_IH` at a conservative
+  2.0 V, the floor here is ≈ 1.5 kΩ.
+- Both values are on hand but **neither has been metered**, and the stocked
+  10 kΩ substitutes for neither. Meter both before fitting, and compute the
+  expected junction voltage from the values you actually read rather than from
+  the nominal — that turns the bench check below into a real test of the
+  divider instead of a comparison against a number from a table.
 - **100 nF** + **BZX55C3V3**: debounce and transient clamp, as in the arm
   circuit. **Cathode (banded end) at the junction, anode at GND.** Reversed, it
   forward-clamps the junction near 0.7 V — below `V_IH` — so the pin reads
   "pressed" permanently and the system can never leave `SAFE_HALT`.
 - **Meter both sense networks with the GPIO wire disconnected**, before either is
-  attached to the Pi header. Arm switch OFF/ON must give ≈ 0 V / 2.98 V; E-stop
-  pressed/released must give ≈ 0 V / 2.53 V. A wiring error found with a meter
+  attached to the Pi header. Arm switch OFF/ON must give ≈ 0 V / 2.77 V; E-stop
+  pressed/released must give ≈ 0 V / 2.48 V. A wiring error found with a meter
   costs a minute; the same error found by the Pi can cost a GPIO pin.
 
 ### Operation
@@ -512,7 +525,7 @@ interlock does not obstruct the procedure it protects.
 | Function | GPIO | Pin | Direction | Voltage | Destination |
 |----------|------|-----|-----------|---------|-------------|
 | Laser TTL | GPIO 18 | 12 | Output | 3.3 V → SN74AHCT125N **#2** ch1 (§9) | 74HC123/74HC08 backstop, then verified laser TTL input |
-| Arm switch sense | GPIO 24 | 18 | Input | 2.98 V HIGH | Arm switch voltage divider |
+| Arm switch sense | GPIO 24 | 18 | Input | 2.77 V HIGH | Arm switch voltage divider |
 | E-Stop sense | GPIO 25 | 22 | Input | ≈2.5 V HIGH | E-Stop NC + pull-down |
 | SPI0 MOSI | GPIO 10 | 19 | Output | 3.3 V → SN74AHCT125N **#1** ch1 → 5 V | Both MCP4922 SDI (pin 5) |
 | SPI0 MISO | GPIO 9 | 21 | Input | 3.3 V | Not used by MCP4922 (write-only) |
@@ -1235,7 +1248,7 @@ the supplies are off until someone presses START, and START is the last step.
 4. With the hazardous supplies still off, confirm with a meter:
    - laser-driver TTL connector: **LOW**
    - all four DAC outputs: **≈ 2.5 V** (against the measured rail, §8)
-   - GPIO 25 ≈ 2.53 V, GPIO 24 ≈ 0 V
+   - GPIO 25 ≈ 2.48 V, GPIO 24 ≈ 0 V
 5. Start the application. Verify both camera streams open and that
    `[CONFIG] Aborting` does not appear.
 6. Put on safety eyewear. Confirm the enclosure is closed and the beam path is
@@ -1336,7 +1349,7 @@ it is a separate work package for a qualified person — but it must not be
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |
 | **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 15**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded** |
-| **5** | **Sense networks.** Arm and E-stop dividers, Zeners with the band at the junction, door-interlock contacts. Meter each node **with the GPIO wire disconnected**, then attach. | ≈ 0 V / 2.98 V on arm OFF/ON; ≈ 0 V / 2.53 V on E-stop pressed/released (§5, §6) |
+| **5** | **Sense networks.** Arm and E-stop dividers, Zeners with the band at the junction, door-interlock contacts. Meter each node **with the GPIO wire disconnected**, then attach. | ≈ 0 V / 2.77 V on arm OFF/ON; ≈ 0 V / 2.48 V on E-stop pressed/released (§5, §6) |
 | **6** | **Mains package.** Isolator, overcurrent protection, RCD, K1, START/STOP, terminal blocks, PE bonding. Designed, built and inspected by a qualified person. | Latching verified: E-stop drops K1; **releasing it does nothing**; only START restores. Both DC rails measured at 0 V with the E-stop pressed (§3) |
 | **7** | **DC supplies, unloaded.** Energise ±15 V and 12 V with nothing connected. | +15 V, 0 V, −15 V and 12 V all within tolerance; COM bonded to common ground (§13) |
 | **8** | **Galvo driver, no head.** Supplies, ground, and the analog inputs per the topology verified at stage 0. | Commanded DAC pairs produce the expected differential at `IN+`/`IN−` with no clipping or offset (§10, §14) |

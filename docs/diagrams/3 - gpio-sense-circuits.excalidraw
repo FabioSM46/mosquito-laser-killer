@@ -401,7 +401,7 @@
       "backgroundColor": "#ffd8a8",
       "strokeColor": "#e8590c",
       "label": {
-        "text": "3.3 kΩ"
+        "text": "3 kΩ"
       },
       "fontSize": 14,
       "fontFamily": 2,
@@ -882,7 +882,7 @@
       "x": 1094,
       "y": 410,
       "strokeColor": "#2f9e44",
-      "text": "≈ 2.98 V when armed\n12 V × 3.3 / (10 + 3.3)",
+      "text": "≈ 2.77 V when armed\n12 V × 3 / (10 + 3)",
       "fontSize": 13,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.771Z",
@@ -916,7 +916,7 @@
       "x": 40,
       "y": 540,
       "strokeColor": "#e03131",
-      "text": "The 3.3 kΩ is the lower leg of the divider and it MUST\nland on the junction. Omit it and the pin STILL READS\nHIGH: it sees 12 V through 10 kΩ with the Zener as the\nonly thing between the rail and a 3.3 V input, passing\n~0.9 mA continuously. It \"works\" until the Zener dies.\nThat is what makes the omission dangerous rather than\nmerely wrong.",
+      "text": "The 3 kΩ is the lower leg of the divider and it MUST\nland on the junction. Omit it and the pin STILL READS\nHIGH: it sees 12 V through 10 kΩ with the Zener as the\nonly thing between the rail and a 3.3 V input, passing\n~0.9 mA continuously. It \"works\" until the Zener dies.\nThat is what makes the omission dangerous rather than\nmerely wrong.",
       "fontSize": 12,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.771Z",
@@ -1238,7 +1238,7 @@
       "backgroundColor": "#ffd8a8",
       "strokeColor": "#e8590c",
       "label": {
-        "text": "3.3 kΩ"
+        "text": "3 kΩ"
       },
       "fontSize": 14,
       "fontFamily": 2,
@@ -1719,7 +1719,7 @@
       "x": 1094,
       "y": 1010,
       "strokeColor": "#2f9e44",
-      "text": "≈ 2.53 V when released\n3.3 V × 3.3 / (1 + 3.3)",
+      "text": "≈ 2.48 V when released\n3.3 V × 3 / (1 + 3)",
       "fontSize": 13,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.773Z",
@@ -1732,7 +1732,7 @@
       "x": 40,
       "y": 1140,
       "strokeColor": "#e03131",
-      "text": "Series resistor is 1 kΩ, NOT the arm circuit's 10 kΩ. The\nsource here is the Pi's own 3.3 V rail, so the divider must\nbe recomputed: 10 kΩ would give ≈ 0.82 V, below V_IH, so\nthe pin would read \"pressed\" permanently and the system\ncould never leave SAFE_HALT. If your bench was built from\nan older drawing, replace it.",
+      "text": "Series resistor is 1 kΩ, NOT the arm circuit's 10 kΩ. The\nsource here is the Pi's own 3.3 V rail, so the divider must\nbe recomputed: 10 kΩ would give ≈ 0.76 V, below V_IH, so\nthe pin would read \"pressed\" permanently and the system\ncould never leave SAFE_HALT. If your bench was built from\nan older drawing, replace it.",
       "fontSize": 12,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.773Z",
@@ -1745,7 +1745,7 @@
       "x": 470,
       "y": 1140,
       "strokeColor": "#2f9e44",
-      "text": "Pressed, or a broken wire → the 3.3 kΩ pulls the\npin LOW → SAFE_HALT.\n\nFail-safe: a pressed button and a severed wire\nproduce the same safe state, which is the whole\nreason the pull-down is there.",
+      "text": "Pressed, or a broken wire → the 3 kΩ pulls the\npin LOW → SAFE_HALT.\n\nFail-safe: a pressed button and a severed wire\nproduce the same safe state, which is the whole\nreason the pull-down is there.",
       "fontSize": 12,
       "fontFamily": 2,
       "createdAt": "2026-07-30T10:02:31.773Z",

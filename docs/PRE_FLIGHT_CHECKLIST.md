@@ -91,8 +91,8 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
 - [ ] A correctly rated bipolar ±15 VDC supply is installed for the galvo
   driver. The Mean Well LRS-50-12 remains dedicated to the 12 V laser branch.
-- [ ] The GPIO sense networks contain meter-verified **3.3 kΩ** (×2), 10 kΩ, and
-  **1 kΩ** resistors, and in each network the 3.3 kΩ, the 100 nF, the Zener and the
+- [ ] The GPIO sense networks contain meter-verified **3 kΩ** (×2), 10 kΩ, and
+  **1 kΩ** resistors, and in each network the 3 kΩ, the 100 nF, the Zener and the
   GPIO wire all meet at **one junction** with the series resistor. Without that
   connection there is no divider — and the pin still reads HIGH, so the omission is
   silent.
@@ -130,7 +130,7 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
     from 3.3 V — replace it with 1 kΩ per `docs/HARDWARE_WIRING.md` §6.
   - E-Stop pressed → LOW.
   - Arm switch OFF → LOW.
-  - Arm switch ON → ≈ 2.98 V (HIGH).
+  - Arm switch ON → ≈ 2.77 V (HIGH).
 - [ ] **74HC123 pulse-duration backstop is wired and bench-verified** (see `docs/HARDWARE_WIRING.md` §11a). This is the only enforcer of the pulse-duration bound that is independent of the control thread:
   - The **220 kΩ is on pin 15** (`1Rext/Cext`) and the 1 µF is between pins 14 and
     15. Both channels use the same order — `6 = 2Cext, 7 = 2Rext/Cext` and
