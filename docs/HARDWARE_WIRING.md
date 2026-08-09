@@ -8,10 +8,12 @@ laser-targeting wiring. It matches the source code in `src/hal/mcp4922.cpp`,
 `src/control/coordinate_mapper.cpp`. The parts physically reported on hand are
 tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 
-> **Verification no-go:** every part the design calls for is on hand, and none
-> of it is verified. No switch contact has been ringed out, no IC marking read,
-> no passive metered, the 74HC123 period has not been measured, and the
-> mains package of §3 is purchased but **not built**. Two unknowns are blocking
+> **Verification no-go:** nothing in this build is verified. No switch contact
+> has been ringed out, no IC marking read, no passive metered, and the 74HC123
+> period has not been measured. The safety-contactor architecture of earlier
+> revisions was **abandoned unbuilt**: §3 now specifies a 12 V interlock chain
+> with no latch, and the residual risks that creates are listed there. Two
+> unknowns are blocking
 > on their own: the **galvo driver's differential input topology and
 > common-mode range** (§10), which invalidates §14 and the coordinate mapping if
 > it turns out wrong, and the **laser driver's TTL polarity** (§11), because on
@@ -25,7 +27,7 @@ tracked separately in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md).
 
 1. [System Block Diagram](#1-system-block-diagram)
 2. [Inventory-Aware Wiring Bill of Materials](#2-inventory-aware-wiring-bill-of-materials)
-3. [Mains Power, Safety Contactor & E-Stop](#3-mains-power-safety-contactor--e-stop)
+3. [Mains Power & the 12 V Interlock Chain](#3-mains-power--the-12-v-interlock-chain)
 4. [DC Power Distribution](#4-dc-power-distribution)
 5. [Arming Switch & GPIO 24 Sensing Circuit](#5-arming-switch--gpio-24-sensing-circuit)
 6. [E-Stop GPIO Circuit](#6-e-stop-gpio-circuit)
@@ -53,32 +55,33 @@ order — not build order, which is §17:
 | Drawing | Covers |
 |---------|--------|
 | [1 — system overview](diagrams/1%20-%20system-overview.png) | The whole signal chain end to end, and what each interlock actually removes |
-| [2 — mains power distribution](diagrams/2%20-%20mains-power-distribution.png) | Isolator, K1 contactor, the latching control circuit, DC branches (§3, §4) |
-| [3 — GPIO sense circuits](diagrams/3%20-%20gpio-sense-circuits.png) | Arm and E-stop sense dividers, Zener polarity, door interlock (§5, §6, §6a) |
+| [2 — mains power distribution](diagrams/2%20-%20mains-power-distribution.png) | **STALE** — drawn for the abandoned K1 contactor architecture. Redraw against §3, §4 |
+| [3 — GPIO sense circuits](diagrams/3%20-%20gpio-sense-circuits.png) | **STALE** — the E-stop divider is now 12 V-sourced through a 10 kΩ. Redraw against §5, §6, §6a |
 | [4 — SPI level translation](diagrams/4%20-%20spi-level-translation.png) | AHCT125 #1, both MCP4922s with full pin assignment, galvo inputs (§8, §9, §10) |
 | [5 — laser TTL safety chain](diagrams/5%20-%20laser-ttl-safety-chain.png) | AHCT125 #2, the 74HC123 one-shot, the AND gate, all three pull-downs (§9.3, §11, §11a) |
-| [6 — complete control-board wiring](diagrams/6%20-%20complete-control-board-wiring.png) ([editable SVG](diagrams/6%20-%20complete-control-board-wiring.svg)) | Consolidated Pi-header-to-module wiring, logic rails, sense networks, external connectors, and functional power map (§3–§13) |
+| [6 — complete control-board wiring](diagrams/6%20-%20complete-control-board-wiring.png) ([editable SVG](diagrams/6%20-%20complete-control-board-wiring.svg)) | Consolidated Pi-header-to-module wiring, logic rails, sense networks, external connectors. **Its power map is stale** — redraw against §3 |
 
 The drawings follow this document, not the other way round. Where they disagree,
 this document is correct and the drawing is stale — fix the drawing, and never
 build from a drawing that contradicts it.
 
 ```
-                    ┌── CONTROL CIRCUIT (coil current only) ─────────────┐
-                    │  E-STOP pole 1 NC ─► DOOR NC ─► (START ∥ K1 aux)   │
-                    │                                        │           │
-                    │                                    K1 coil         │
-                    └────────────────────────────────────────┼───────────┘
-                             latching: releasing the E-stop  │
-                             does not restart anything ──────┘
-                                                             ▼
-Mains inlet ─► ISOLATOR / RCD / OCP ─► [K1, two poles] ─┬─► ±15 VDC ─► Galvo driver ─► X/Y galvo head
-  (non-polarised inlet: BOTH live                       │
-   conductors are switched, §3)                         └─► 12 VDC ─┬─► cooling fan (unswitched, §11)
-                                                                    └─► ARM ─► DOOR NC ─► Laser driver ─► 2.5 W 450 nm
+Wall socket ─► ±15 VDC supply ─────────────────────► Galvo driver ─► X/Y galvo head
+  (building RCD/OCP is the                             (unswitched — always live)
+   upstream protection, §3)
+Wall socket ─► LRS-50-12 ─► 12 VDC ─┬─► cooling fan (unswitched, §11)
+                                    │
+                                    └─► [E-STOP NC] ─┬─► [ARM] ─► [DOOR NC] ─► Laser driver ─► 2.5 W 450 nm
+                                                     │                    │
+                                        GPIO 25 ◄────┘       GPIO 24 ◄────┘
+                                        (E-stop only)        (all three)
 
-Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
-                                       circuit and the 5 V logic rail that holds
+  Three contacts in one conductor. No contactor, no latch: releasing the
+  mushroom restores the driver's 12 V, and only SAFE_HALT + GPIO 18 LOW +
+  the §9.3 pull-downs keep the beam off (§3).
+
+Separate USB-C 5 V ─► Raspberry Pi 5.  Never switched: the log, both GPIO sense
+                                       circuits and the 5 V logic rail that holds
                                        the fail-LOW pull-downs defined all
                                        survive an E-stop (§3).
 
@@ -104,11 +107,8 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Test laser | Low-power visible, electrically compatible with the complete gating chain | 1 | 5 mW, 12 mm module reported; electrical details/class label unverified |
 | Laser PSU | Mean Well LRS-50-12, 12 VDC / 4.2 A / 50 W | 1 | Reported on hand |
 | Galvo PSU | Regulated bipolar ±15 VDC supply sized for both driver channels | 1 | On hand; rails and current rating not yet measured |
-| Safety contactor **K1** | 2 main poles rated for the **combined cold-start inrush** of both DC supplies (LRS-50-12 alone specifies 45 A at 230 VAC), coil matched to the control circuit, ≥1 auxiliary NO for the seal-in path (§3) | 1 | On hand; **not wired.** Pole rating against the combined inrush, coil voltage and auxiliary count not yet confirmed |
-| START button | NO momentary, panel mount — the deliberate restart action (§3) | 1 | On hand; not wired |
-| STOP button | NC momentary in the coil path, for normal shutdown that is not an E-stop actuation (§3) | 1 | On hand; not wired |
-| Mains isolator + protection | Main isolator, overcurrent protection and RCD coordination per local rules, upstream of everything | 1 set | On hand; **not built.** Design and inspection by a qualified person |
-| Door interlock switch | 2 independent NC contacts with **positive/direct opening action** (IEC 60947-5-1 Annex K), tool-required actuator (§6a) | 1 | On hand; contact arrangement and positive-opening marking not yet confirmed |
+| Mains cords | Two factory-moulded power cords, one per supply. No plug assembly, no switched mains, no project-side isolator or OCP — the wall socket's RCD and breaker are the upstream protection (§3) | 2 | Not yet fitted |
+| Door interlock switch | **1** NC contact with **positive/direct opening action** (IEC 60947-5-1 Annex K), rated for the driver current at 12 V DC, tool-required actuator (§6a) | 1 | On hand; contact arrangement, DC rating and positive-opening marking not yet confirmed |
 | X-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
 | Y-axis DAC | MCP4922 DIP-14, 12-bit dual DAC | 1 | Reported on hand |
 | SPI translation | SN74AHCT125N, PDIP-14 quad bus buffer — push-pull, non-inverting, TTL input thresholds; carries MOSI, SCLK, CE0, CE1 | 1 package (4 of 4 ch) | On hand, untraceable brand; **marking certifies nothing.** Qualify by the §9.4 threshold test |
@@ -120,15 +120,14 @@ Separate USB-C 5 V ─► Raspberry Pi 5.  NOT on K1: the log, the GPIO 25 sense
 | Logic/DAC decoupling | 100 nF ceramic directly across the supply pins of each MCP4922, SN74AHCT125N, 74HC123, and SN74HC08 | 6 minimum | Value reported; available count unverified |
 | Rail bulk decoupling | 10 µF on the 5 V rail at the logic board | 1 | On hand |
 | Arm switch | Lever switch with contacts rated for the measured 12 VDC laser-driver load | 1 | Reported on hand; topology/rating unverified |
-| E-stop | Mushroom actuator with 2 independent NC contacts — pole 1 in the K1 coil circuit, pole 2 for GPIO 25 (§3, §6). A monitored-safety-relay architecture would need a third | 1 | Reported on hand; topology/rating unverified |
+| E-stop | Mushroom actuator, **1 NC** in the 12 V laser feed (§3). Needs a DC rating for the driver current and the Annex K direct-opening symbol. The shipped NO is left unwired | 1 | On hand: 1 NO (terminals 3–4) + 1 NC (terminals 1–2), generic unmarked blocks. DC rating and Annex K status **unconfirmed** |
 | Arm series resistor | 10 kΩ, 1/2 W | 1 | Reported on hand |
 | Laser-path fail-LOW pull-downs | 10 kΩ, 1/2 W — **three**, one per node: (a) translator input, (b) '123/'08 inputs, (c) laser-driver connector (§9.3) | 3 | Value reported on hand; count unverified |
 | Chip-select pull-ups | 10 kΩ, 1/2 W to **3.3 V** on the CE0 and CE1 translator inputs (§8) | 2 | Value reported on hand; count unverified |
-| E-stop series resistor | 1 kΩ, 1/2 W | 1 | On hand; value not yet metered |
+| E-stop series resistor | 10 kΩ, 1/2 W — the sense is now 12 V-sourced, so it uses the arm circuit's divider (§6) | 1 | On hand; value not yet metered |
 | Sense pull-downs | 3 kΩ, 1/2 W | 2 | On hand; value not yet metered |
 | Zener clamps | BZX55C3V3, DO-35, 0.5 W — cathode at the sense junction, anode to GND | 2 | Part type reported; count unverified |
 | Sense/debounce capacitors | 100 nF, 50 V monolithic ceramic | 2 | Value reported; count unverified |
-| Mains terminal blocks | DIN-rail terminal blocks, one block per net: unswitched A/B, switched A/B, PE (§3) | 1 strip | On hand; not installed |
 | Distribution connectors | WAGO 221-413, 3-conductor, max 4 mm² — splicing connectors, **not** terminal blocks and not a barrier between circuits | as required | Reported on hand; count unverified |
 | Enclosure | Laser-safe interlocked case with beam dump | 1 | On hand; rating against 450 nm at 2.5 W not yet recorded |
 | Safety eyewear | Correctly rated for 450 nm and the documented exposure analysis | 1 per person | On hand; OD figure and marking not yet recorded |
@@ -138,10 +137,9 @@ the counts to shop against; the rows above are the counts per role.
 
 | Value | Total | Where |
 |-------|-------|-------|
-| 10 kΩ, 1/2 W | **6** | 1 arm series + 3 laser-path fail-LOW (a)(b)(c) + 2 chip-select pull-ups |
+| 10 kΩ, 1/2 W | **7** | 1 arm series + **1 E-stop series** + 3 laser-path fail-LOW (a)(b)(c) + 2 chip-select pull-ups |
 | 100 nF, 50 V ceramic | **8** | 6 IC decoupling (2× MCP4922, 2× AHCT125, 74HC123, SN74HC08) + 2 sense debounce |
 | 3 kΩ, 1/2 W | **2** | arm sense divider + E-stop sense pull-down |
-| 1 kΩ, 1/2 W | **1** | E-stop series |
 | BZX55C3V3 | **2** | one clamp per sense junction |
 | 10 µF | **1** | 5 V rail bulk |
 | 220 kΩ, 1/2 W | **1** | 74HC123 timing, to **pin 15** (§11a) |
@@ -170,157 +168,166 @@ a coin flip. Budget a soldered board before either laser is connected.
 
 ---
 
-## 3. Mains Power, Safety Contactor & E-Stop
+## 3. Mains Power & the 12 V Interlock Chain
 
-The E-stop must remove all power that can move the beam or fire the laser. It
-does **not** do that by carrying the mains itself. A latching contactor does the
-switching; the mushroom button breaks the contactor's coil circuit.
+The E-stop must remove the beam. In this build it does that by **breaking the
+laser driver's 12 V supply**, in series with the arm switch and the door
+interlock. There is no switched mains, no contactor and no START button.
 
-> **This section replaces a direct-switching arrangement that was wrong in two
-> independent ways.** Both are recorded here so the mistake is not reintroduced.
+> **This is the second revision of this section. Both earlier designs are
+> recorded so the reasoning is not lost and the mistakes are not reintroduced.**
 >
-> 1. **Inrush.** The Mean Well LRS-50-12 specifies a **45 A cold-start inrush at
->    230 VAC**; the bipolar ±15 V supply adds its own. A mushroom button's
->    contact block is a pilot-duty part rated for a fraction of that. The failure
->    mode is not a blown contact — it is a **welded** one, which leaves an E-stop
->    that looks and feels normal and disconnects nothing.
-> 2. **Automatic restart.** Passing mains directly through the NC contact means
->    *releasing* the mushroom re-energises everything. Restoring power must
->    require a separate deliberate action. See ISO 13850 for the E-stop function
->    itself; the same principle is stated in Machinery Directive 2006/42/EC
->    Annex I §1.2.4.3 (superseded by Regulation (EU) 2023/1230 from 20 January
->    2027). A one-off self-built rig is not machinery placed on the market, so
->    neither instrument is a legal obligation here — they are cited as the design
->    standard, and the engineering reason stands on its own: **this system's own
->    documented recovery from an E-stop is "restart the software," because
->    `SAFE_HALT` is terminal.** An operator who does that with the mushroom
->    released and the arm switch still ON walks `INIT → IDLE → ARMED → TRACKING
->    → FIRING` with no deliberate start action anywhere in the sequence.
+> 1. **Mains through the mushroom contact** — rejected. The LRS-50-12 specifies a
+>    **45 A cold-start inrush at 230 VAC**. A pilot-duty contact block subjected
+>    to that **welds**, leaving an E-stop that looks and feels normal and
+>    disconnects nothing. That objection is fully satisfied by the present
+>    design: the mushroom switches a 12 V DC branch, not mains.
+> 2. **A latching contactor K1 on the mains**, with the mushroom breaking only
+>    its coil circuit — designed, then **abandoned unbuilt.** No contactor was
+>    ever obtained, and this build is done by one person with no qualified
+>    electrician available, which makes a hand-built mains control circuit the
+>    highest-risk work in the project. Specifying an architecture that will not
+>    be built is worse than specifying a weaker one that will: a guard that
+>    exists on the bench beats a guard that exists in a document.
+>
+> **What K1 bought and this does not is the latch.** That gap is real, it is
+> stated in full below, and it has a compensating control.
 
-### Control circuit — contactor coil only, carries coil current
+### Architecture
 
 ```
-Switched conductor A ──► [E-STOP pole 1, NC] ──► [DOOR INTERLOCK, NC, §6a] ──┐
-                                                                             │
-                                     ┌── [START, NO momentary] ──────────────┤
-                                     │              ∥                        │
-                                     │   [K1 auxiliary NO — seal-in]         │
-                                     └───────────────────────────────────────┤
-                                                                             │
-                                                                        [K1 coil]
-                                                                             │
-Conductor B ─────────────────────────────────────────────────────────────────┘
+wall socket ─► LRS-50-12 ─► 12 V+ ─►[E-STOP NC]─┬─►[ARM lever]─►[DOOR NC]─┬─► laser driver +VIN
+                                                │                          │
+                                                │                          └─► 10 kΩ ─► GPIO 24 (§5)
+                                                └─► 10 kΩ ─► GPIO 25 (§6)
+                           12 V− ─────────────────────────────────────────────► laser driver GND
+
+wall socket ─► bipolar ±15 V supply ─► galvo driver        (unswitched, always live)
+separate USB-C ─► Raspberry Pi 5 ─► 5 V logic rail         (unswitched, always live)
 ```
 
-The START button and K1's own auxiliary NO contact sit in **parallel**. Pressing
-START energises the coil; the auxiliary contact then closes and holds the coil
-energised after START is released. Anything that breaks the series path — E-stop,
-door, or loss of mains — drops K1, which opens the auxiliary contact and destroys
-the hold path. **Nothing re-energises K1 except another deliberate START press.**
+Three contacts in series on one conductor. Any one of them opening removes
+`+VIN` from the laser driver, which is the only thing that can produce a beam.
 
-### Power circuit — K1 main contacts, double-pole
+| Contact | Opens when | Effect |
+|---------|-----------|--------|
+| E-stop NC | mushroom pressed | laser driver dead; GPIO 25 LOW → `SAFE_HALT` |
+| Arm lever | operator disarms | laser driver dead; GPIO 24 LOW → disarm to `IDLE` |
+| Door NC | enclosure opened | laser driver dead; GPIO 24 LOW → disarm to `IDLE` |
 
-```
-Conductor A ──► [K1 main pole 1] ──► switched A ──┬──► ±15 VDC galvo supply
-Conductor B ──► [K1 main pole 2] ──► switched B ──┘   └──► 12 VDC LRS-50-12 (laser branch)
+**The two sense taps sit at different points in the chain, and that is the only
+reason the software can tell an emergency from a disarm.** GPIO 25 is tapped
+immediately after the mushroom, so it reports the mushroom alone. GPIO 24 is
+tapped after all three, so it reports "the driver actually has power available".
+A pressed mushroom takes both LOW, and the E-stop path wins because
+`control_step()` polls it before the arm logic.
 
-PE ──── never switched, never fused ──────────────────► both supply PE terminals,
-                                                        enclosure, laser chassis,
-                                                        galvo chassis (§13)
-```
+### Upstream protection is the building's, deliberately
 
-**Both live conductors are broken, not just "L".** If the equipment connects
-through a non-polarised inlet — CEI 23-50 (Italian Type L), Schuko/CEE 7,
-and others are all reversible — then the conductor you labelled "L" is Live only
-half the time it is plugged in. Single-pole switching on such an inlet can break
-Neutral and leave both supplies live-referenced behind an E-stop that reads as
-open. This is why the previous "wire only the Live wire through the E-Stop"
-instruction has been removed. PE is never switched and never fused.
+**Nothing in this project switches, fuses or modifies mains.** Both supplies are
+plug-connected to an existing wall socket, and that socket's RCD and overcurrent
+protection are the upstream protection an earlier revision listed as project
+parts to buy and install.
 
-### Behaviour
+This is the single largest risk reduction available in this build. It is done by
+one person with no electrician; the correct response is to drive the amount of
+mains work towards zero, not to write "have it inspected by a qualified person"
+next to work that will not be inspected. What remains is three screw
+terminations per supply.
 
-| Event | K1 | Galvo ±15 V and laser 12 V | To restore |
-|-------|----|-----------------------------|------------|
-| Mains applied at the isolator | de-energised | **OFF** | press START |
-| START pressed, then released | energised, sealed in | ON | — |
-| E-stop pressed | drops out | **OFF** | release E-stop, **then** press START |
-| E-stop released | stays de-energised | **OFF** | press START |
-| Enclosure door opened (§6a) | drops out | **OFF** | close door, **then** press START |
-| Mains dip or interruption | drops out | **OFF** | press START |
+- Use a **factory-moulded power cord**. Do not assemble a plug.
+- Brown → `L`, blue → `N`, **green/yellow → the supply's earth terminal**, and
+  from there to the enclosure, the laser chassis and the galvo chassis (§13).
+  PE is never switched and never fused.
+- Keep each supply's terminal cover fitted.
+- Worth ten euros: a panel **IEC C14 inlet with integrated fuse and switch**, so
+  the only bare mains conductors are a short run inside a closed box.
 
-The Raspberry Pi is **not** on the contactor. It runs from its own USB-C supply
-so the control software, the GPIO 25 sense circuit (§6) and the 5 V logic rail
-that holds the laser-path pull-downs defined (§9.3) all survive an E-stop. That
-is deliberate: an E-stop should remove the hazard and leave the diagnostics
-running.
+### What this architecture does not do
 
-### Residual risk this architecture does *not* remove
+Every item below is a real reduction against the contactor design. They are
+listed so nobody has to rediscover them, and so the residual risk is owned
+rather than forgotten.
 
-Moving the switching into K1 removes the weld hazard from the mushroom's contact
-and moves it to K1's main poles. A welded main pole means the E-stop drops the
-coil and the supplies stay live. Two mitigations, in increasing order of
-integrity:
+1. **Releasing the mushroom restores the laser driver's 12 V.** There is no
+   latch. What prevents a beam on release is logic state, not the absence of
+   power: `SAFE_HALT` is terminal, GPIO 18 is LOW, and the three fail-LOW
+   pull-downs of §9.3 hold the TTL line down. The case this does *not* cover is
+   a control thread that hung with GPIO 18 **HIGH** — on release the laser then
+   emits for one 74HC123 one-shot period before the backstop cuts it. **This is
+   why the measured one-shot period (§11a) is a safety number in this build**,
+   not merely a design check, and why a period well above 100 ms is worth
+   shortening.
+2. **`SAFE_HALT` is terminal, so recovery means restarting the software** — and
+   restarting with the arm lever still ON walks the state machine
+   `INIT → IDLE → ARMED → TRACKING → FIRING` with no deliberate action anywhere
+   in the sequence. **Required compensating control:** `ArmSwitch` must observe
+   a LOW→HIGH transition before it ever reports armed, so a process that starts
+   with the lever already up stays disarmed until the operator cycles it. That
+   restores in software the deliberate-start property K1 provided in hardware.
+   It is **not yet implemented** and is an open item in
+   `HARDWARE_INVENTORY.md`.
+3. **Mains stays live inside the enclosure at all times.** The mushroom is not
+   an isolator and an E-stop is not a lock-out. To work inside, **unplug both
+   supplies.**
+4. **The galvo ±15 V is never removed.** Mirrors can still move during an
+   E-stop. With the laser unpowered that is not a beam hazard, but the E-stop no
+   longer produces the "both DC rails at 0 V" state the previous commissioning
+   test looked for, and §15 and §17 have been changed accordingly.
+5. **One contact carries the entire hardware interlock.** If the mushroom's NC
+   welds closed, neither the hardware nor the software sees the E-stop — GPIO 25
+   is derived from the same conductor. The defence is **positive/direct opening
+   action** (IEC 60947-5-1 Annex K), which forces the contact open mechanically
+   instead of relying on a spring. The block fitted is a generic unmarked part
+   whose Annex K status is **unconfirmed**. Open no-go item.
 
-- **Minimum:** specify K1 with main contacts rated for the combined inrush (not
-  the steady-state current), and add "press E-stop, confirm both DC rails are
-  actually at 0 V" to the periodic checks — measured, not assumed.
-- **Higher integrity:** a monitored safety relay with dual-channel E-stop inputs
-  and feedback from a **mirror contact** on K1 (IEC 60947-4-1: an NC auxiliary
-  guaranteed not to be closed while any main NO pole is closed). This detects the
-  welded pole and refuses the reset. It needs two NC E-stop contacts for the
-  safety function, so the mushroom would need three contacts in total — or the
-  GPIO 25 sense of §6 moves to a spare auxiliary on K1, which is arguably a
-  better signal anyway: it reports *power actually removed* rather than *button
-  pressed*.
+### The mushroom's contact duty
 
-Choosing between these is a functional-safety decision, not a wiring detail. It
-is an open no-go item in `HARDWARE_INVENTORY.md`.
+The NC block now switches the laser driver's inrush and running current at
+12 V DC. Two things must be confirmed before the Class 4 module is connected:
 
-### Required, and not yet specified or purchased
+- **A DC rating, not an AC one.** Direct current has no zero crossing, so a
+  block marked `AC-15 240 V 3 A` can be rated for far less under DC-13. Measure
+  the driver's actual current draw and check it against the block's DC rating.
+- **Positive opening (Annex K)**, per item 5 above.
 
-- Contactor **K1**: coil voltage matched to the control circuit, **two** main
-  poles rated for the combined cold-start inrush of both supplies, and at least
-  one auxiliary NO for the seal-in path.
-- **START** (NO momentary) and, optionally, a **STOP** (NC momentary) in series
-  with the coil path for normal shutdown that is not an E-stop actuation.
-- Upstream **main isolator**, **overcurrent protection**, and **RCD**
-  coordination per local rules.
-- Enclosure **door interlock** with two NC contacts (§6a).
+The same duty applies to the arm lever and the door contact, which sit in the
+same conductor.
 
 ### Wiring practice
 
-- The mushroom still needs **two independent NC contacts**: pole 1 in the coil
-  circuit above, pole 2 for the GPIO 25 sense circuit of §6. Verify from markings
-  or datasheet that the on-hand assembly has them. Pole 1's duty is now only the
-  coil current, which is far easier to satisfy than the original mains duty — but
-  it still must be rated for it.
-- Use **DIN-rail terminal blocks**, one block per net: unswitched A, unswitched
-  B, switched A, switched B, PE. WAGO 221-413 lever connectors are three-port
-  *splicing* connectors — every port in one connector is the same net, so they
-  are not a substitute for a terminal strip and never a barrier between circuits.
-  If you use them, it is one connector per net with nothing shared.
-- Mains and SELV wiring segregated, strain-relieved, inside an enclosure.
-- Mains work must be designed, performed and inspected by a qualified person
-  under the applicable local rules. Nothing in this document substitutes for
-  that.
+- The mushroom's second contact is a **NO** and is **left unwired.** It cannot
+  carry any part of this function: a NO reaches its safe state by *closing*, so
+  a broken wire leaves it reading "healthy". No wiring arrangement fixes that —
+  it is a property of the contact, not of the circuit.
+- 12 V and SELV wiring segregated from the mains tails, strain-relieved, inside
+  the enclosure.
+- One WAGO 221-413 per net, nothing shared. They are splicing connectors, not a
+  barrier between circuits.
 
 ---
 
 ## 4. DC Power Distribution
 
-| Supply | Output | On K1? | Feeds | Notes |
-|--------|--------|--------|-------|-------|
-| Bipolar galvo supply | **+15 V, 0 V/COM, −15 V** — three conductors, not "±15 V" as one wire | Yes | Galvo driver board | Required by the reported driver; on hand but not yet measured. COM is the reference for both rails and bonds to the common ground (§13) |
-| Mean Well LRS-50-12 | 12 VDC | Yes | Laser cooling fan directly; laser driver via arm switch + door interlock | Do not use this single-output supply as a substitute for the bipolar ±15 VDC |
-| Pi USB-C supply | 5 VDC | **No** | Raspberry Pi 5 | Deliberately not on the contactor (§3) |
+**Nothing is switched by the E-stop except the laser driver's own feed.** All
+three supplies are plug-connected and stay live; the three series contacts of §3
+remove `+VIN` from the laser driver alone.
+
+| Supply | Output | Removed by an E-stop? | Feeds | Notes |
+|--------|--------|-----------------------|-------|-------|
+| Bipolar galvo supply | **+15 V, 0 V/COM, −15 V** — three conductors, not "±15 V" as one wire | **No** | Galvo driver board | Unswitched. Mirrors can still move during an E-stop; with the laser unpowered that is not a beam hazard (§3). On hand but not yet measured. COM is the reference for both rails and bonds to the common ground (§13) |
+| Mean Well LRS-50-12 | 12 VDC | **The supply, no. Its laser-driver branch, yes** | Laser cooling fan directly; laser driver via E-stop + arm lever + door contact | The three contacts sit in the `12 V+` conductor between the supply and the driver. Do not use this single-output supply as a substitute for the bipolar ±15 VDC |
+| Pi USB-C supply | 5 VDC | **No** | Raspberry Pi 5 | A separate supply, so the log, the GPIO sense circuits and the 5 V logic rail all survive an E-stop |
 | 5 V logic rail | 5 VDC, from Pi header pins 2/4 | **No** | Both SN74AHCT125N, both MCP4922 VDD/Vref, 74HC123, SN74HC08 | Derived from the Pi, so it tracks the Pi and survives an E-stop |
 
 Two consequences of that last row are load-bearing:
 
 - **The 5 V logic rail survives an E-stop.** The three fail-LOW pull-downs of
   §9.3, the AND gate and the one-shot all stay powered and defined while the
-  galvo ±15 V and laser 12 V are dead. An E-stop removes the hazard without
-  leaving the control chain in an undefined state.
+  laser driver is dead. An E-stop removes the hazard without leaving the control
+  chain in an undefined state — which matters more here than it did under the
+  contactor design, because releasing the mushroom restores the driver's 12 V
+  and the TTL line must already be held LOW when it does (§3).
 - **The logic rail cannot be live while the Pi is off.** That is why `MOSI` and
   `SCLK` need no external bias (§8) — their translator inputs cannot float while
   the buffer is powered.
@@ -344,7 +351,7 @@ signal. Verify the on-hand lever switch's contact arrangement and DC load rating
 before assigning it this role.
 
 ```
-12 V + (switched by K1, §3) ──► [ARM SPST] ──► [DOOR INTERLOCK NC, §6a] ──┐
+12 V + via [E-STOP NC, §3] ──► [ARM SPST] ──► [DOOR INTERLOCK NC, §6a] ──┐
                                                                           │
                                                        Laser driver +VIN ◄─┤
                                                                           │
@@ -387,7 +394,8 @@ before assigning it this role.
   multimeter reads the polarity in seconds.
 - The arm switch must be rated for the laser driver current (typically < 1 A at
   12 V).
-- **The sense tap is downstream of the door interlock, deliberately.** GPIO 24
+- **The sense tap is downstream of all three contacts, deliberately** — E-stop,
+  lever and door. GPIO 24
   then means "the laser driver actually has power available," not merely "the
   lever is up": opening the enclosure door reads as a *disarm*, which the
   existing `ArmSwitch` → `FiringController::set_armed(false)` path already handles
@@ -399,63 +407,81 @@ before assigning it this role.
 
 ## 6. E-Stop GPIO Circuit
 
-The second independent NC contact on the mushroom E-stop also provides a
-software-monitored E-stop on GPIO 25. The control thread polls this pin every
-cycle; if it goes LOW, the system transitions to `SAFE_HALT`, forces the laser
-LOW, and centers the galvos. Do not assume the on-hand button has this contact:
-verify its contact blocks first.
+The mushroom's single NC contact does the hardware work of §3: it breaks the
+laser driver's 12 V. The software E-stop on GPIO 25 is derived from **the same
+conductor**, tapped immediately after that contact and before the arm lever.
 
 ```
-3.3 V (RPi) ──► [E-Stop pole 2, NC] ──► 1 kΩ ──┐
-                                               │
-              GPIO 25 ◄──────── junction ──────┼── 3 kΩ ───────► GND
-            (RPi pin 22)            │          ├── 100 nF ─────► GND
-                                   └──────────┴── BZX55C3V3 ──► GND
-                                                  banded (cathode) end at the
-                                                  junction, anode at GND
+12 V+ ──► [E-Stop NC] ──┬──► [ARM lever] ──► [DOOR NC] ──► laser driver +VIN
+                        │
+                        └──► 10 kΩ ──┐
+                                     │
+            GPIO 25 ◄──── junction ──┼── 3 kΩ ───────► GND
+          (RPi pin 22)         │     ├── 100 nF ─────► GND
+                               └─────┴── BZX55C3V3 ──► GND
+                                         banded (cathode) end at the
+                                         junction, anode at GND
 ```
 
-All four legs — the 1 kΩ from the E-stop contact, the 3 kΩ, the 100 nF, the
-Zener and the wire to GPIO 25 — meet at **one** junction. The 3 kΩ is what
-pulls the pin LOW when the contact opens; wired anywhere else there is no
-pull-down and the fail-safe property in the table below does not exist.
+`12 V × 3 kΩ / (10 kΩ + 3 kΩ) ≈ 2.77 V` — a valid 3.3 V logic HIGH. The network
+is now **identical to the arm circuit of §5**: same 10 kΩ series leg, same 3 kΩ
+lower leg, same debounce and clamp, same expected voltage. The 1 kΩ series
+resistor of the earlier 3.3 V-sourced design is no longer used anywhere in this
+project.
+
+All five legs — the 10 kΩ from the tap, the 3 kΩ, the 100 nF, the Zener and the
+wire to GPIO 25 — meet at **one** junction. The 3 kΩ is what pulls the pin LOW
+when the contact opens; wired anywhere else there is no pull-down and the
+fail-safe property in the table below does not exist.
+
+### Why the sense comes from the 12 V and not from the button
+
+The earlier design fed this circuit from the Pi's own 3.3 V through a **second**
+NC contact on the mushroom. The mushroom has only one NC, and that one is
+committed to the job that actually removes the hazard.
+
+Tapping the 12 V costs no second contact and is a **truer signal**: it reports
+that the laser feed is live, so it also goes LOW on a dead supply, a pulled 12 V
+wire or a failed LRS-50-12 — conditions under which the system genuinely cannot
+fire and must not report otherwise.
+
+What it gives up is independence. The hardware interlock and the software sense
+now derive from one contact, so a welded NC defeats both at once (§3, item 5),
+and GPIO 25 cannot be exercised on the bench until the 12 V branch exists.
 
 ### Component notes
 
-- **1 kΩ** series (NOT 10 kΩ): the source here is the Pi's own 3.3 V rail, not
-  the 12 V of the arm-switch circuit, so the divider must be recomputed.
-  Released-state node voltage: `3.3 V × 3 kΩ / (1 kΩ + 3 kΩ) ≈ 2.48 V` — a
-  solid 3.3 V-logic HIGH. An earlier revision of this drawing copied the arm
-  circuit's 10 kΩ, which from 3.3 V yields only ~0.76 V — below V_IH, so the
-  input would read "pressed" permanently and the system could never leave the
-  E-stop state. If your bench was built from that revision, replace the series
-  resistor.
+- **10 kΩ** series (NOT the 1 kΩ of the older revision): the source here is the
+  12 V laser feed, not the Pi's 3.3 V rail, so the divider is the arm circuit's.
+  With a 1 kΩ fitted the junction would sit at `12 × 3 / 4 ≈ 9 V`, leaving the
+  Zener as the only thing between that and a 3.3 V input.
 - **3 kΩ**: pull-down that forces LOW when the contact opens or a wire breaks.
-  Unlike the series leg this one has room: taking `V_IH` at a conservative
-  2.0 V, the floor here is ≈ 1.5 kΩ.
-- Both values are on hand but **neither has been metered**, and the stocked
-  10 kΩ substitutes for neither. Meter both before fitting, and compute the
-  expected junction voltage from the values you actually read rather than from
-  the nominal — that turns the bench check below into a real test of the
-  divider instead of a comparison against a number from a table.
-- **100 nF** + **BZX55C3V3**: debounce and transient clamp, as in the arm
-  circuit. **Cathode (banded end) at the junction, anode at GND.** Reversed, it
-  forward-clamps the junction near 0.7 V — below `V_IH` — so the pin reads
-  "pressed" permanently and the system can never leave `SAFE_HALT`.
+  Taking `V_IH` at a conservative 2.0 V, the floor for this leg is ≈ 2 kΩ.
+- **100 nF** + **BZX55C3V3**: debounce and transient clamp. **Cathode (banded
+  end) at the junction, anode at GND.** Reversed it forward-clamps the junction
+  near 0.7 V — below `V_IH` — so the pin reads "pressed" permanently and the
+  system can never leave `SAFE_HALT`.
 - **Meter both sense networks with the GPIO wire disconnected**, before either is
-  attached to the Pi header. Arm switch OFF/ON must give ≈ 0 V / 2.77 V; E-stop
-  pressed/released must give ≈ 0 V / 2.48 V. A wiring error found with a meter
+  attached to the Pi header. Arm OFF/ON must give ≈ 0 V / 2.77 V; E-stop
+  pressed/released must give ≈ 0 V / 2.77 V. A wiring error found with a meter
   costs a minute; the same error found by the Pi can cost a GPIO pin.
 
 ### Operation
 
-| State | Pole 2 contact | GPIO 25 | Software interpretation |
-|-------|----------------|---------|-------------------------|
-| Released (normal) | Closed | ≈ 2.5 V (HIGH) | System OK |
-| Pressed | Open | LOW (pulled down) | Emergency stop → SAFE_HALT |
-| Wire broken | Open | LOW (pulled down) | Emergency stop → SAFE_HALT |
+| State | E-stop contact | 12 V at the tap | GPIO 25 | Software interpretation |
+|-------|----------------|-----------------|---------|-------------------------|
+| Released (normal) | Closed | present | ≈ 2.77 V (HIGH) | System OK |
+| Pressed | Open | absent | LOW (pulled down) | Emergency stop → `SAFE_HALT` |
+| Sense wire broken | — | absent at the junction | LOW (pulled down) | Emergency stop → `SAFE_HALT` |
+| Laser supply off or failed | — | absent | LOW (pulled down) | Emergency stop → `SAFE_HALT` |
 
-This is fail-safe: a broken wire or pressed button produces the same safe state.
+Fail-safe: every one of these produces the same safe state.
+
+**Consequence for start-up order.** GPIO 25 is HIGH only while the 12 V supply is
+energised *and* the mushroom is released. The LRS-50-12 must therefore be plugged
+in and running **before** the application starts, or the first `check()` reads an
+E-stop — and `SAFE_HALT` is terminal. §15 sequences this, and it is the one
+operational cost of sourcing the sense from the 12 V.
 
 ---
 
@@ -466,23 +492,20 @@ revisions of this project referenced door-interlock *testing*
 (`PRE_FLIGHT_CHECKLIST.md` §8) without ever specifying a circuit, which meant the
 interlock existed only as an intention. This section is that circuit.
 
-The interlock uses a switch with **two independent NC contacts**, one in each of
-two paths that are already load-bearing:
+**The interlock now needs one NC contact, not two.** Under the contactor design
+it needed two because there were two circuits to break — the K1 coil circuit and
+the 12 V laser feed. With the contactor gone there is one circuit, so one contact
+does the whole job:
 
 ```
-Contact 1 ──► in series with the E-stop in the K1 coil circuit (§3)
-              door open  →  K1 drops out  →  ±15 V and 12 V both removed
-                        →  restoring power requires a deliberate START press
-
-Contact 2 ──► in series with the arm switch on the 12 V laser feed (§5)
-              door open  →  laser driver +VIN removed directly, independently
-                        of K1, and GPIO 24 reads disarmed (§5)
+Door NC ──► in series with the E-stop and the arm lever on the 12 V laser feed (§3)
+            door open  →  laser driver +VIN removed
+                       →  GPIO 24 reads disarmed (§5)
 ```
 
-Contact 1 removes everything that can move the beam or fire the laser. Contact 2
-removes laser-driver power on its own path, so a welded K1 main pole (§3) does not
-also defeat the door interlock. They are deliberately not redundant copies of each
-other: they fail independently.
+A second NC contact, if the switch has one, is **spare**. Do not invent a use for
+it: a redundant copy of the same contact in the same conductor adds nothing,
+because the conductor is already broken by the first one.
 
 ### This is a hardware-only interlock, and that is the stronger choice
 
@@ -492,17 +515,19 @@ strictly stronger than a pin the control thread polls — the same reasoning
 `AGENTS.md` §4.8 already applies to the arm switch, which is called out there as
 "a true hardware interlock." Adding a software-visible door sense would mean a new
 GPIO, a new HAL interface, a control-loop poll, state-machine wiring and tests, in
-exchange for a signal that cannot do anything the contacts have not already done.
+exchange for a signal that cannot do anything the contact has not already done.
 
-It is nonetheless visible to the software for free: contact 2 sits upstream of the
-GPIO 24 sense tap, so opening the door reads as a disarm and the existing
+It is nonetheless visible to the software for free: the door contact sits upstream
+of the GPIO 24 sense tap, so opening the door reads as a disarm and the existing
 `FiringController::set_armed(false)` path clears targets and rejects fire (§5).
 
 ### Switch requirements
 
-- **Two independent NC contacts**, both with **positive/direct opening action**
+- **At least one NC contact** with **positive/direct opening action**
   (IEC 60947-5-1 Annex K), so that a welded contact is still forced open by the
   door movement rather than relying on a spring.
+- Rated for the laser driver's current at **12 V DC** — a DC rating, not an AC
+  one (§3, "The mushroom's contact duty").
 - Mounted so the actuator cannot be operated by hand while the door is open
   without a tool — an interlock that can be held closed with a fingertip is not
   an interlock.
@@ -511,12 +536,14 @@ GPIO 24 sense tap, so opening the door reads as a disarm and the existing
 
 ### Operational consequence
 
-Every door opening drops the contactor, so closing the door and pressing START is
-part of normal operation. That is the intended behaviour, not an inconvenience to
-engineer around: any work needing the enclosure open is work that must not have
-hazardous power available. Alignment is done with a verified low-power source
-inside the **closed** enclosure (`PRE_FLIGHT_CHECKLIST.md` §5), which is why the
-interlock does not obstruct the procedure it protects.
+Opening the door removes laser-driver power and reads as a disarm. Closing it
+restores power to the driver, but the software has already cleared its targets
+and requires the arm path to come back before it can fire — and once the
+`ArmSwitch` edge requirement of §3 is implemented, the lever must be cycled.
+Any work needing the enclosure open is work that must not have a live laser
+driver. Alignment is done with a verified low-power source inside the **closed**
+enclosure (`PRE_FLIGHT_CHECKLIST.md` §5), which is why the interlock does not
+obstruct the procedure it protects.
 
 ---
 
@@ -526,7 +553,7 @@ interlock does not obstruct the procedure it protects.
 |----------|------|-----|-----------|---------|-------------|
 | Laser TTL | GPIO 18 | 12 | Output | 3.3 V → SN74AHCT125N **#2** ch1 (§9) | 74HC123/74HC08 backstop, then verified laser TTL input |
 | Arm switch sense | GPIO 24 | 18 | Input | 2.77 V HIGH | Arm switch voltage divider |
-| E-Stop sense | GPIO 25 | 22 | Input | ≈2.5 V HIGH | E-Stop NC + pull-down |
+| E-Stop sense | GPIO 25 | 22 | Input | 2.77 V HIGH | 12 V tap after the E-stop NC + divider (§6) |
 | SPI0 MOSI | GPIO 10 | 19 | Output | 3.3 V → SN74AHCT125N **#1** ch1 → 5 V | Both MCP4922 SDI (pin 5) |
 | SPI0 MISO | GPIO 9 | 21 | Input | 3.3 V | Not used by MCP4922 (write-only) |
 | SPI0 SCLK | GPIO 11 | 23 | Output | 3.3 V → SN74AHCT125N **#1** ch2 → 5 V | Both MCP4922 SCK (pin 4) |
@@ -884,9 +911,9 @@ numbers.
 Power path:
 
 ```
-12 V + (K1-switched, §3) ─┬─► [ARM switch] ─► [DOOR INTERLOCK NC, §6a] ─► Laser driver +VIN
-                          │
-                          └─► Laser cooling fan   ← upstream of the arm switch, see below
+12 V + (LRS-50-12) ─┬─► [E-STOP NC, §3] ─► [ARM switch] ─► [DOOR NC, §6a] ─► Laser driver +VIN
+                    │
+                    └─► Laser cooling fan   ← upstream of all three contacts, see below
 12 V − ──────────────────────────────────────────────────────────────────► Laser driver GND
 Laser driver GND ────────────────────────────────────────────────────────► Common GND
 ```
@@ -907,7 +934,7 @@ GPIO 18 ──┬──► SN74AHCT125N #2 1A          [10 kΩ ──► GND]   
 
 ### Safety notes
 
-- The laser driver receives **no power** until K1 is energised (§3), the arm switch is ON, and the enclosure door is closed (§6a). These are the hardware interlocks.
+- The laser driver receives **no power** until all three series contacts of §3 are closed: the E-stop released, the arm switch ON, and the enclosure door closed (§6a). These are the hardware interlocks, and any one of them opening removes `+VIN`. **None of them latches** — see §3 for what that costs.
 - The TTL input is the **software trigger**, but it passes through the pulse-duration backstop of §11a — the laser fires only when GPIO 18 is HIGH, the arm switch is ON, the door is closed, the E-Stop is released, the one-shot has not timed out, and all software safety gates are satisfied.
 - **The driver's TTL polarity has not been established.** Confirm from the
   module's own documentation that the input is **active HIGH** before connecting
@@ -1062,7 +1089,7 @@ without a number.
 This belongs to **stage 4** of §17: translator, one-shot and AND gate on the
 bench, powered from the Pi's 5 V header rail, with **no laser of any class
 connected** — the laser-driver TTL connector goes nowhere at this stage. No
-mains, no ±15 V, no K1.
+mains, no ±15 V, no 12 V.
 
 **Nothing is rearranged for the measurement.** The timing network, the three
 fail-LOW pull-downs, the trigger pins and the decoupling all stay in their final
@@ -1233,57 +1260,76 @@ code = normalized × (4095 / 2)
 
 ## 15. Power-Up / Power-Down Sequence
 
-**Hazardous power comes up last, and the hardware — not the operator — enforces
-that.** Because K1 latches (§3), closing the mains isolator does *not* energise
-the galvo ±15 V or the laser 12 V. There is no ordering an operator can forget:
-the supplies are off until someone presses START, and START is the last step.
+**Nothing sequences hazardous power for you.** Under the abandoned contactor
+design the supplies stayed off until a deliberate START press. With no
+contactor, plugging in energises both supplies, and the laser driver becomes
+live the moment the three series contacts of §3 are all closed. The order below
+is therefore an **operator procedure**, and its first step is the one that
+matters.
 
 ### Power-up
 
-1. Verify the arm switch is **OFF**, the enclosure door is closed, and the E-stop
-   is released.
-2. Close the mains isolator. **K1 stays de-energised — ±15 V and 12 V remain OFF.**
-3. The Pi boots from its own USB-C supply. The 5 V logic rail comes up with it, so
-   the §9.3 pull-downs and the AND gate are defined from the first instant.
-4. With the hazardous supplies still off, confirm with a meter:
+1. **Arm lever OFF. E-stop pressed. Door closed.** Do this *before* anything is
+   plugged in — these contacts are the only thing between a plugged-in supply
+   and a live laser driver.
+2. Plug in the **LRS-50-12** and the **±15 V supply**. Both are now live and stay
+   live until unplugged. The galvo driver has power; the laser driver does not,
+   because the E-stop and the lever are open.
+3. The Pi boots from its own USB-C supply. The 5 V logic rail comes up with it,
+   so the §9.3 pull-downs and the AND gate are defined from the first instant.
+4. Confirm with a meter, before the software runs:
    - laser-driver TTL connector: **LOW**
    - all four DAC outputs: **≈ 2.5 V** (against the measured rail, §8)
-   - GPIO 25 ≈ 2.48 V, GPIO 24 ≈ 0 V
-5. Start the application. Verify both camera streams open and that
-   `[CONFIG] Aborting` does not appear.
-6. Put on safety eyewear. Confirm the enclosure is closed and the beam path is
+   - GPIO 24 ≈ 0 V and GPIO 25 ≈ 0 V — the E-stop is still pressed
+5. **Release the E-stop.** GPIO 25 must rise to **≈ 2.77 V**. GPIO 24 stays at
+   0 V because the lever is still OFF, and the laser driver is still unpowered.
+6. Start the application. Verify both camera streams open and that
+   `[CONFIG] Aborting` does not appear. GPIO 25 must already be HIGH by now:
+   `SAFE_HALT` is terminal, so an application started against a pressed E-stop or
+   an unplugged 12 V supply dies immediately and permanently (§6).
+7. Put on safety eyewear. Confirm the enclosure is closed and the beam path is
    contained.
-7. **Press START.** K1 pulls in and the ±15 V and 12 V supplies energise; the
-   galvos take up their commanded centre.
-8. Turn the arm switch **ON** only when ready to run.
+8. Turn the arm lever **ON** only when ready to run. **This is the moment the
+   laser driver first receives power.**
 
-Steps 4 and 5 happen before step 7 by design: the logic has demonstrated a
-centred galvo pair and a LOW laser TTL *before* anything hazardous has power.
+Steps 4 and 5 precede step 6 by design: the logic demonstrates a centred galvo
+pair and a LOW laser TTL *before* the software can command anything.
 
 ### Power-down
 
-1. Turn the arm switch **OFF**.
-2. Wait 10 seconds — the firing cooldown, and time for the fan to pull heat out of
-   the module (the fan runs while the 12 V branch is live, §11).
-3. Press **STOP**, or the E-stop. K1 drops out; ±15 V and 12 V are removed.
-4. Trigger software shutdown (`sudo shutdown now`).
-5. After the Pi halts, open the mains isolator.
+1. Turn the arm lever **OFF**. The laser driver loses power.
+2. Wait 10 seconds — the firing cooldown, and time for the fan to pull heat out
+   of the module (the fan runs while the 12 V branch is live, §11).
+3. Trigger software shutdown (`sudo shutdown now`).
+4. After the Pi halts, **unplug both supplies.**
 
 ### Emergency
 
-Press the mushroom E-Stop at any time. K1 drops out, removing ±15 V and 12 V: the
-laser driver cannot emit and the galvos cannot move. GPIO 25 goes LOW and the
-software enters `SAFE_HALT`. The Pi keeps running on its own supply, so the log of
-what happened survives.
+Press the mushroom at any time. The laser driver loses `+VIN` and cannot emit.
+GPIO 25 goes LOW and the software enters `SAFE_HALT`. The Pi keeps running on its
+own supply, so the log of what happened survives.
 
-**Releasing the mushroom does nothing.** K1's hold path is broken and only a
-deliberate START press restores power (§3).
+**Releasing the mushroom restores the laser driver's 12 V. There is no latch in
+this build** (§3). Nothing fires on release, because the software is in the
+terminal `SAFE_HALT` state with GPIO 18 LOW and the §9.3 pull-downs holding the
+TTL line down — *unless* the control thread had hung with GPIO 18 HIGH, in which
+case the laser emits for one 74HC123 one-shot period before the backstop cuts
+it.
 
-`SAFE_HALT` is terminal, so recovery also requires restarting the software. **Put
-the arm switch OFF before you do.** The software cannot know an E-stop occurred
-before it started; restarting with the mushroom released and the arm switch still
-ON is exactly the automatic-restart path §3 exists to eliminate, and it would take
-the state machine from `INIT` to `ARMED` with no deliberate arming action.
+**So after any E-stop: turn the arm lever OFF before releasing the mushroom.**
+This is a procedure, not a hardware guard, and it is the weakest link in this
+architecture. It exists because nothing enforces a deliberate restart until the
+`ArmSwitch` LOW→HIGH edge requirement of §3 is implemented.
+
+`SAFE_HALT` is terminal, so recovery also requires restarting the software.
+Restarting it with the mushroom released and the arm lever still ON takes the
+state machine from `INIT` to `FIRING` with no deliberate action anywhere in the
+sequence.
+
+### For any work inside the enclosure
+
+**Unplug both supplies.** The mushroom is not an isolator — mains and both DC
+supplies stay live while it is pressed. An E-stop is not a lock-out.
 
 ---
 
@@ -1329,37 +1375,28 @@ Never leave the laser connected and the arm switch ON during software or wiring 
 ## 17. Build & Bring-Up Order
 
 The section numbering above is a **reading** order. It is not a build order, and
-following it as one would put live mains in the work area at step 3 — while the
-circuits are still on a breadboard and before the mushroom's contacts have been
-verified.
+following it as one would put a live laser feed on the bench before the
+interlock chain and the pulse-duration backstop have been proven.
 
 Build in **risk order** instead. Each stage has a gate; do not start the next
 stage until the gate passes.
 
-**Stages 0 to 5 require no mains at all.** The 5 V logic rail comes from the Pi
-header (§4), so the whole logic and interlock chain can be built and verified on
-SELV. The mains package may be *designed and fabricated* in parallel at any time —
-it is a separate work package for a qualified person — but it must not be
-*energised in the work area* until stage 6.
+**Stages 0 to 5 require no mains and no 12 V at all.** The 5 V logic rail comes
+from the Pi header (§4), so the whole logic chain and both sense networks can be
+built and metered on SELV alone.
 
 | Stage | Work | Gate |
 |-------|------|------|
-| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor against its documented value (§2). Read the marking on every IC (`AHCT`, not `AHC`/`HC`) and threshold-test both `AHCT125`s per §9.4, since their marking is untraceable. Ring out the mushroom and lever-switch contacts. Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
+| **0** | **Freeze and inspect.** Reconcile every drawing against this document. Meter every resistor against its documented value (§2). Read the marking on every IC (`AHCT`, not `AHC`/`HC`) and threshold-test both `AHCT125`s per §9.4, since their marking is untraceable. Ring out the mushroom, lever and door contacts, and check the mushroom NC for a **DC rating** and the **Annex K** direct-opening symbol (§3). Obtain the galvo driver manual (§10). | Every part identified by measurement rather than by the bag it came in; §10's three questions answered from the manual |
 | **1** | **Enclosure mechanics.** Case, beam dump, door-interlock switch mounting, PE bonding plan. No electronics. | Door interlock actuates on door movement and cannot be defeated without a tool (§6a) |
 | **2** | **Pi alone.** USB-C only. Toggle GPIO 18/24/25, watch edges with `gpiomon`. No 5 V rail, nothing else connected. | Every pin behaves; `gpiomon` timestamps are sane |
 | **3** | **DAC island.** 5 V logic rail, AHCT125 #1, both MCP4922s **including `/LDAC` to GND and `/SHDN` to +5 V**, CE0/CE1 pull-ups. | All four DAC outputs ≈ 2.5 V; the 5 V rail measured at the DAC pin under load and written into `dac_reference_voltage` (§8) |
-| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 15**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded** |
-| **5** | **Sense networks.** Arm and E-stop dividers, Zeners with the band at the junction, door-interlock contacts. Meter each node **with the GPIO wire disconnected**, then attach. | ≈ 0 V / 2.77 V on arm OFF/ON; ≈ 0 V / 2.48 V on E-stop pressed/released (§5, §6) |
-| **6** | **Mains package.** Isolator, overcurrent protection, RCD, K1, START/STOP, terminal blocks, PE bonding. Designed, built and inspected by a qualified person. | Latching verified: E-stop drops K1; **releasing it does nothing**; only START restores. Both DC rails measured at 0 V with the E-stop pressed (§3) |
-| **7** | **DC supplies, unloaded.** Energise ±15 V and 12 V with nothing connected. | +15 V, 0 V, −15 V and 12 V all within tolerance; COM bonded to common ground (§13) |
+| **4** | **Pulse-duration backstop.** AHCT125 #2, 74HC123 with the **220 kΩ on pin 15**, SN74HC08N, pull-downs (a)(b)(c). Instrumentation and dummy load only — no laser of any class. A scope, a logic analyser or the Pi's own `gpiomon` all work; the method is in §11a. | Every checkbox in §11a passes and **the measured period is recorded.** In this build that number bounds the beam an E-stop *release* can produce after a hung control thread (§3), so it is a safety figure, not a design check |
+| **5** | **Sense networks, built and metered.** Both dividers are now identical — 10 kΩ series, 3 kΩ lower leg, 100 nF, Zener band at the junction. Feed each tap from a bench source with the GPIO wire **disconnected**. | Each junction ≈ 0 V with its tap open and ≈ 2.77 V with 12 V on the tap (§5, §6) |
+| **6** | **Mains tails and DC supplies, unloaded.** Land `L`/`N`/`⏚` on both supplies from factory-moulded cords, fit the terminal covers, energise with nothing connected downstream. | +15 V, 0 V, −15 V and 12 V all within tolerance; PE continuous from the plug to both supply chassis, the enclosure and both driver chassis (§13) |
+| **7** | **Interlock chain, with a dummy load.** E-stop NC, arm lever and door contact in series in the `12 V+` conductor, a resistive dummy load in place of the laser driver, both sense taps connected to the Pi. | Opening **any** of the three kills the dummy load. GPIO 25 goes LOW on the E-stop **only**; GPIO 24 goes LOW on any of the three. Releasing the mushroom restores the dummy load — confirm that is understood and that §15's lever-first procedure is written on the enclosure (§3) |
 | **8** | **Galvo driver, no head.** Supplies, ground, and the analog inputs per the topology verified at stage 0. | Commanded DAC pairs produce the expected differential at `IN+`/`IN−` with no clipping or offset (§10, §14) |
 | **9** | **Galvo head connected, no optical source.** | Mirrors centre on start-up and slew to commanded angles without hitting a mechanical limit |
 | **10** | **Cameras and calibration.** By-path identification and labelling, stereo calibration, dry-run tracking. | `PRE_FLIGHT_CHECKLIST.md` §3 and §4 complete |
 | **11** | **Verified low-power alignment source**, inside the **closed** interlocked enclosure. | `PRE_FLIGHT_CHECKLIST.md` §5 complete |
-| **12** | **Class 4 module.** | Only after a final electrical, laser-safety and functional-safety review, with eyewear, beam dump and every no-go item in `HARDWARE_INVENTORY.md` closed |
-
-Two stages are the ones most likely to be skipped under time pressure, and both
-are the reason the rest of the document exists: **stage 4's recorded one-shot
-period** is the only measurement that turns the pulse-duration backstop from a
-schematic into a guarantee, and **stage 6's latching check** is the only one that
-proves an E-stop release cannot restart the machine.
+| **12** | **Class 4 module.** | Only after a final electrical, laser-safety and functional-safety review, with eyewear, beam dump and every no-go item in `HARDWARE_INVENTORY.md` closed — including the `ArmSwitch` edge requirement of §3, which is the only thing that makes a restart deliberate |

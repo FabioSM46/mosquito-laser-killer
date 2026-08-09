@@ -6,11 +6,11 @@ orient with the overview, then work inward.
 | Drawing | Covers | Document sections |
 |---------|--------|-------------------|
 | `1 - system-overview` | The whole signal chain end to end, plus what each interlock actually removes | all |
-| `2 - mains-power-distribution` | Mains inlet, isolator/OCP/RCD, K1 contactor, the latching control circuit, DC branches | [§3](../HARDWARE_WIRING.md#3-mains-power-safety-contactor--e-stop), [§4](../HARDWARE_WIRING.md#4-dc-power-distribution) |
-| `3 - gpio-sense-circuits` | Arm and E-stop sense dividers, Zener polarity, door interlock | [§5](../HARDWARE_WIRING.md#5-arming-switch--gpio-24-sensing-circuit), [§6](../HARDWARE_WIRING.md#6-e-stop-gpio-circuit), [§6a](../HARDWARE_WIRING.md#6a-enclosure-door-interlock) |
+| `2 - mains-power-distribution` | **STALE.** Drawn for the abandoned K1 contactor architecture. §3 now specifies a 12 V interlock chain with no switched mains — redraw or delete | [§3](../HARDWARE_WIRING.md#3-mains-power--the-12-v-interlock-chain), [§4](../HARDWARE_WIRING.md#4-dc-power-distribution) |
+| `3 - gpio-sense-circuits` | **STALE.** The E-stop divider is now 12 V-sourced through a 10 kΩ, not 3.3 V through a 1 kΩ — redraw. Arm divider, Zener polarity, door interlock | [§5](../HARDWARE_WIRING.md#5-arming-switch--gpio-24-sensing-circuit), [§6](../HARDWARE_WIRING.md#6-e-stop-gpio-circuit), [§6a](../HARDWARE_WIRING.md#6a-enclosure-door-interlock) |
 | `4 - spi-level-translation` | AHCT125 #1, both MCP4922s with full pin assignment, galvo driver inputs | [§8](../HARDWARE_WIRING.md#8-spi-bus--mcp4922-dac-wiring), [§9](../HARDWARE_WIRING.md#9-logic-level-translation), [§10](../HARDWARE_WIRING.md#10-galvo-driver-connections) |
 | `5 - laser-ttl-safety-chain` | AHCT125 #2, the 74HC123 one-shot, the AND gate, all three fail-LOW pull-downs | [§9.3](../HARDWARE_WIRING.md#93-the-laser-path-must-fail-low-at-every-stage-not-just-the-first), [§11](../HARDWARE_WIRING.md#11-laser-module-wiring), [§11a](../HARDWARE_WIRING.md#11a-laser-ttl-pulse-duration-backstop-74hc123) |
-| `6 - complete-control-board-wiring` | Consolidated pin-to-pin sheet: Pi header, complete interface board, sense circuits, external modules, and functional power map | [§3](../HARDWARE_WIRING.md#3-mains-power-safety-contactor--e-stop)–[§13](../HARDWARE_WIRING.md#13-grounding--shielding) |
+| `6 - complete-control-board-wiring` | Consolidated pin-to-pin sheet: Pi header, complete interface board, sense circuits, external modules. **Its power map is stale** — redraw against §3 | [§3](../HARDWARE_WIRING.md#3-mains-power--the-12-v-interlock-chain)–[§13](../HARDWARE_WIRING.md#13-grounding--shielding) |
 
 ## Rules
 

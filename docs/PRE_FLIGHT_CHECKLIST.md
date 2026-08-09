@@ -27,7 +27,7 @@ The following software and hardware-abstraction components are present and pass 
 | Motion blanking | Implemented | No galvo writes while the laser is ON. |
 | Arm switch gating | Implemented | `FiringController` rejects targets/fire when disarmed. |
 | Watchdog | Implemented | Absolute 25 ms heartbeat timeout (deliberately independent of `target_fps`) with a bounded startup grace → `SAFE_HALT` and laser OFF. |
-| E-Stop | Implemented in software; hardware pending verification | Active-low GPIO 25. The intended physical circuit requires two independent NC contacts, including a mains-rated disconnect pole; the on-hand mushroom button's contacts/ratings are not yet recorded. |
+| E-Stop | Implemented in software; hardware pending verification | Active-low GPIO 25. The mushroom's **single NC** breaks the laser driver's 12 V feed; GPIO 25 is a 10 kΩ/3 kΩ divider tapped on that same conductor (§3, §6). Mains is never switched. **Nothing latches** — releasing the mushroom restores the driver's 12 V, and the `ArmSwitch` edge requirement that would replace the latch is not implemented. |
 | Coordinate bounds | Implemented | 3D box + galvo cone + DAC voltage scale; out-of-range commands are rejected, not clamped. |
 | RAII shutdown | Implemented | Laser forced LOW, galvos centered on destruction or error. |
 | Signal shutdown | Implemented | SIGINT/SIGTERM poll flag in all threads. |
@@ -50,30 +50,30 @@ The following software and hardware-abstraction components are present and pass 
 Do not plug in the 230 V AC until every item below is complete. Note that most of
 these items do not need mains at all: `HARDWARE_WIRING.md` §17 stages 0–5 run
 entirely on SELV, because the 5 V logic rail comes from the Pi header. Build and
-verify the logic, backstop and sense circuits first; the mains package is stage 6.
+verify the logic, backstop and sense circuits first. Mains work is limited to landing `L`/`N`/`⏚` on the two supplies (§17 stage 6); nothing in this project switches or fuses mains.
 
 - [ ] Every no-go item in [`HARDWARE_INVENTORY.md`](HARDWARE_INVENTORY.md) is
   closed and the actual fitted part numbers/quantities are recorded.
 - [ ] Enclosure is built and fully closed with no laser exit path except the intended beam aperture.
 - [ ] Beam dump or laser-absorbing backstop is installed inside the enclosure.
-- [ ] **The mains switching architecture of `HARDWARE_WIRING.md` §3 is built and
-  commissioned by a qualified person.** Mains does not pass through the mushroom
-  contact: a safety contactor K1 does the switching, both live conductors are
-  broken, and the mushroom breaks only the coil circuit. Commission by measuring:
-  - Closing the isolator leaves K1 de-energised — both DC rails at 0 V.
-  - START energises K1 and it seals in when START is released.
-  - E-stop pressed → K1 drops → **both DC rails measured at 0 V**, not assumed.
-  - **E-stop released → nothing happens.** Only a START press restores power. If
-    releasing the mushroom re-energises the supplies, this is a **no-go**.
-- [ ] The mushroom assembly is verified to provide two independent NC contacts:
-  pole 1 in the K1 coil circuit, pole 2 driving GPIO 25. Pole 1 must be rated for
-  the coil current.
+- [ ] **The 12 V interlock chain of `HARDWARE_WIRING.md` §3 is built and
+  commissioned with a dummy load in place of the laser driver.** E-stop NC, arm
+  lever and door NC in series in the `12 V+` conductor. Commission by measuring:
+  - Opening **any one** of the three kills the dummy load.
+  - GPIO 25 goes LOW on the **E-stop only**; GPIO 24 goes LOW on any of the three.
+  - **Releasing the mushroom restores the dummy load.** There is no latch. Confirm
+    this is understood and that the §15 procedure — *lever OFF before releasing
+    the mushroom* — is written on the enclosure.
+- [ ] **The mushroom's single NC is qualified for the duty it carries.** It is
+  the entire hardware interlock and GPIO 25 derives from the same conductor, so a
+  welded contact defeats both. Rung out (closed at rest, open when pressed);
+  checked against a **DC-13** rating for the measured driver current, not an AC
+  rating; and checked for the **direct-opening** symbol of IEC 60947-5-1 Annex K.
+  The NO the actuator ships with is **left unwired, not repurposed** — a NO
+  reaches its safe state by closing, so a broken wire reads healthy.
 - [ ] **The enclosure door interlock of `HARDWARE_WIRING.md` §6a is fitted and
-  tested.** Two independent positive-opening NC contacts:
-  - Door opened → K1 drops → both DC rails at 0 V; closing the door alone does
-    not restore power, START is required.
-  - Door opened → laser-driver +VIN removed on its own path, and GPIO 24 reads
-    disarmed.
+  tested.** One positive-opening NC contact, DC-rated, in the same conductor:
+  - Door opened → laser-driver +VIN removed, and GPIO 24 reads disarmed.
   - The actuator cannot be held closed by hand without a tool.
 - [ ] **The galvo driver's own manual confirms all three points in
   `HARDWARE_WIRING.md` §10**: `IN+`/`IN−` are a genuine differential pair, the
@@ -91,8 +91,9 @@ verify the logic, backstop and sense circuits first; the mains package is stage 
   switches 12 V to the laser driver **and** feeds the GPIO 24 sensing circuit.
 - [ ] A correctly rated bipolar ±15 VDC supply is installed for the galvo
   driver. The Mean Well LRS-50-12 remains dedicated to the 12 V laser branch.
-- [ ] The GPIO sense networks contain meter-verified **3 kΩ** (×2), 10 kΩ, and
-  **1 kΩ** resistors, and in each network the 3 kΩ, the 100 nF, the Zener and the
+- [ ] The GPIO sense networks contain meter-verified **3 kΩ** (×2) and **10 kΩ**
+  (×2) resistors — both networks are now identical and both junctions read
+  ≈ 2.77 V — and in each network the 3 kΩ, the 100 nF, the Zener and the
   GPIO wire all meet at **one junction** with the series resistor. Without that
   connection there is no divider — and the pin still reads HIGH, so the omission is
   silent.
@@ -231,8 +232,10 @@ Do not connect the 2.5 W Class 4 laser until all of the following are true:
 |------|-----------------|
 | Inventory reconciliation | Every no-go item in `HARDWARE_INVENTORY.md` closed; fitted parts and ratings recorded |
 | Build order followed | `HARDWARE_WIRING.md` §17 stages 0–11 complete, each gate passed in order |
-| Mains architecture | Contactor K1, latching START circuit, double-pole isolation, isolator/OCP/RCD built and inspected by a qualified person; **E-stop release does not restart** and both DC rails measure 0 V while pressed |
-| Enclosure + door interlock | Enclosure closed with beam dump; two positive-opening NC contacts fitted and both paths tested (§6a) |
+| Interlock chain | E-stop NC, arm lever and door NC in series in the `12 V+` conductor, commissioned against a dummy load: any one opening kills the load; GPIO 25 LOW on the E-stop only; GPIO 24 LOW on any of the three (§3) |
+| Non-restart | **`ArmSwitch` requires a LOW→HIGH edge before it reports armed** (`AGENTS.md` §4.8). Nothing latches in this build, so this is the only structural barrier to a restart re-arming by itself. Until it is implemented this row is a **no-go** |
+| Mains terminations | `L`/`N`/`⏚` landed on both supplies from factory-moulded cords, terminal covers fitted, PE continuity verified from the plug pin to both supply chassis, the enclosure and both driver chassis |
+| Enclosure + door interlock | Enclosure closed with beam dump; one positive-opening, DC-rated NC contact fitted and tested (§6a) |
 | E-Stop + arm switch | Physically installed and functionally tested; sense networks metered before connection |
 | Galvo driver input topology | Differential pair, 2.5 V common mode and differential ±5 V rating all confirmed from the driver's own manual (§10) |
 | Power and logic interfaces | Bipolar ±15 V galvo supply installed; both `AHCT125`s pass the §9.4 input-threshold test; SPI and laser level interfaces electrically and scope verified; all three §9.3 pull-downs individually proven |

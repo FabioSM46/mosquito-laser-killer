@@ -25,17 +25,18 @@ parts.
 | DACs | 2× MCP4922 DIP-14, dual-channel 12-bit | On hand; one DAC per galvo axis |
 | Level translation | 2× **SN74AHCT125N** PDIP-14 quad bus buffer — one package for SPI, a second for GPIO 18 | On hand, but under a marketplace brand with **no manufacturer traceability**, so the `AHCT` marking certifies nothing — qualify by the §9.4 threshold test, and prefer parts from an authorised distributor. `AHC`/`HC` are pin-identical with 3.5 V thresholds |
 | Pulse backstop logic | 74HC123 DIP-16 + SN74HC08N DIP-14; 220 kΩ 1/2 W + 1 µF 50 V monolithic ceramic timing parts | On hand. `74HC123` is a Hitachi HD74HC123P whose datasheet gives `t_W = R·C`, so the fitted parts are **≈220 ms**, not 99 ms. Actual period must still be measured. The 220 kΩ goes to **pin 15** |
-| Safety contactor + START | 2-pole contactor rated for the *combined* cold-start inrush, ≥1 auxiliary NO, plus a START button and mains isolator/OCP/RCD | On hand; **not wired.** The mushroom must not switch mains directly |
-| Door interlock | Switch with 2 independent NC contacts, positive/direct opening | On hand; contact arrangement unconfirmed |
-| Switches | Lever switch + mushroom button | On hand; contact topology and ratings remain unverified |
+| Mains switchgear | **None.** Nothing in this project switches, fuses or modifies mains; both supplies plug into an existing wall socket whose RCD and breaker are the upstream protection | The contactor/START architecture of earlier revisions was abandoned unbuilt — see `docs/HARDWARE_WIRING.md` §3 for what that costs |
+| Door interlock | Switch with **1** NC contact, positive/direct opening, DC-rated | On hand; contact arrangement, DC rating and Annex K marking unconfirmed |
+| Switches | Lever switch + mushroom button | Both unverified. The mushroom has **1 NO + 1 NC**; its single NC breaks the laser driver's 12 V feed, and the NO is left unwired |
 | Input protection | BZX55C3V3 0.5 W Zeners; 100 nF 50 V monolithic ceramic capacitors | On hand; quantities not yet recorded |
-| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3 kΩ, 1 kΩ | On hand; quantities and values not yet metered. **6× 10 kΩ** are needed |
+| Resistor stock | 1/2 W carbon film: 220 kΩ, 10 kΩ, 3 kΩ | On hand; quantities and values not yet metered. **7× 10 kΩ** are needed |
 | Wiring connectors | WAGO 221-413, 3-conductor | On hand; splicing connectors — not terminal blocks, and never a barrier between circuits |
 
 **Every part is on hand; none of it is verified.** No switch contact has been
 ringed out, no IC marking read, no passive metered, and the 74HC123 period has
-not been measured. The safety contactor, latching START circuit, mains
-isolator and door interlock are purchased but **not built**, and the galvo
+not been measured. The E-stop chain and door interlock are **not built**, and
+nothing in the build latches — releasing the mushroom restores the laser
+driver's 12 V (`docs/HARDWARE_WIRING.md` §3). The galvo
 driver's **differential input topology and common-mode range** are still
 unconfirmed — that last one invalidates the coordinate mapping if it turns out
 wrong. These are no-go items in `docs/HARDWARE_INVENTORY.md`.
@@ -47,7 +48,7 @@ with drawings in [`docs/diagrams/`](docs/diagrams/README.md). Key points:
 
 - **RPi 5 GPIO 18** → **SN74AHCT125N #2** (`/OE` tied LOW) → 74HC123 monostable + SN74HC08N AND-gate pulse-duration backstop → verified working-laser TTL input. Configurable via `laser_pin`. **Three** 10 kΩ fail-LOW pull-downs, one per node: translator input, translator output, and the laser-driver connector — each covers a case none of the others reaches. See AGENTS.md §4.1 and `docs/HARDWARE_WIRING.md` §9.3, §11a.
 - **RPi 5 GPIO 24** → lever-switch sense circuit (active HIGH when armed). The same switch must also interrupt 12 V power to the laser driver; verify its contact arrangement and DC rating first. The door interlock is in series with it, upstream of the sense tap, so an open door reads as a disarm. Configurable via `arm_switch_pin`.
-- **RPi 5 GPIO 25** → mushroom E-stop sense (active LOW when pressed). Two NC contacts are required: pole 1 breaks the **safety contactor's coil circuit** — not the mains itself — and pole 2 drives the GPIO sense circuit. The contactor latches, so releasing the mushroom does not restore power; only a deliberate START press does. Configurable via `e_stop_pin`.
+- **RPi 5 GPIO 25** → E-stop sense (active LOW when pressed). The mushroom's **single NC** sits in the laser driver's 12 V feed, in series with the arm lever and the door contact; GPIO 25 is a 10 kΩ/3 kΩ divider tapped on that conductor immediately after the mushroom, reading ≈ 2.77 V when released. Mains is never switched, and **nothing latches** — see `docs/HARDWARE_WIRING.md` §3. Configurable via `e_stop_pin`.
 - **RPi 5 SPI0 CE0** (pin 24) → MCP4922 #1 `/CS` (X-axis DAC), with a 10 kΩ pull-up to 3.3 V so both DACs stay deselected at boot.
 - **RPi 5 SPI0 CE1** (pin 26) → MCP4922 #2 `/CS` (Y-axis DAC), likewise.
 - **RPi 5 SPI0 MOSI, SCLK, CE0, and CE1** go through **SN74AHCT125N #1**. Direct 3.3 V chip-select wiring into a 5 V DAC is not validated.
@@ -56,7 +57,7 @@ with drawings in [`docs/diagrams/`](docs/diagrams/README.md). Key points:
 - Galvo scanner powered by a separate **±15 V** supply (three conductors: +15 V, 0 V/COM, −15 V). Confirm from the driver's own manual that `IN+`/`IN−` are a genuine differential pair whose common-mode range admits the 2.5 V the complementary DAC pair presents, and that ±5 V is a *differential* rating.
 - Laser driver powered by **12 V** through the arm switch and door interlock; the cooling fan is wired **upstream** of the arm switch so it runs whenever the 12 V branch is live.
 
-For the complete mains, contactor, E-Stop, arm switch, door interlock, GPIO input,
+For the complete mains, E-Stop, arm switch, door interlock, GPIO input,
 and SPI wiring details — plus the risk-ordered build sequence in §17 — see
 [`docs/HARDWARE_WIRING.md`](docs/HARDWARE_WIRING.md).
 
@@ -196,7 +197,7 @@ The system implements structurally-enforced safety guards (see `AGENTS.md` for f
 
 ### Known residual risk
 
-Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is bench-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the verified arm switch cuts 12 V to the driver, the door interlock cuts it independently, and the E-stop drops a latching safety contactor that removes mains from both DC supplies — all hardware mechanisms, and none of them on the control thread, but each requiring a human hand or an opened door. Because the contactor latches, releasing the mushroom restores nothing; only a deliberate START press does, which matters here because `SAFE_HALT` is terminal and the documented recovery is "restart the software". The contactor, START circuit, isolator and door interlock are specified but not yet built, and the current inventory does not establish the switch contact ratings/topology, so it is not ready for powered use.
+Every *software* path that can end a pulse runs on the **control thread** — if that thread stalls with the pin HIGH, no software turns the laser off, and the E-stop GPIO poll is on the same thread. That failure mode is covered by the **74HC123 retriggerable monostable + 74HC08 AND gate on the TTL line** (see the BOM above and `docs/HARDWARE_WIRING.md` §11a): once the assembled period is bench-verified, a stuck-HIGH GPIO 18 is force-cut at that measured deadline with no software or operator involvement. The residual risk is that the one-shot and AND gate are themselves single components — their wiring must be verified per `docs/PRE_FLIGHT_CHECKLIST.md` §2, and a failure of either must be considered in any FMEA. The operator interlocks stay as outer layers: the E-stop, the arm lever and the door contact all sit in series in the laser driver's 12 V feed, so any one of them removes its power — all hardware mechanisms, none of them on the control thread, but each requiring a human hand or an opened door. **Nothing latches:** releasing the mushroom restores that 12 V, and because `SAFE_HALT` is terminal the documented recovery is "restart the software" — which, done with the lever still ON, re-arms with no deliberate action. The compensating control (an `ArmSwitch` LOW→HIGH edge requirement) is specified in `AGENTS.md` §4.8 and **not yet implemented**. None of the interlock chain is built and the switch contact ratings/topology are unestablished, so it is not ready for powered use.
 
 ## Building and Running Tests
 
